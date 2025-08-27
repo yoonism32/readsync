@@ -554,7 +554,16 @@
         applyHashResume();   // jump if #nbp=xx.x present
         maybeShowRestore();
         addProgressBar();
-        if (localStorage.getItem('nb_overlay') !== 'false') createHelp();
+
+        // Hide help overlay by default on iOS devices
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const overlayPref = localStorage.getItem('nb_overlay');
+
+        if (!isIOS && overlayPref !== 'false') {
+            createHelp();
+        } else if (isIOS && overlayPref === 'true') {
+            createHelp();
+        }
 
         // Start ReadSync features
         setTimeout(() => {
