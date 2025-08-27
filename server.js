@@ -71,25 +71,34 @@ app.use(express.static('public'));
 
 
 /* ---------------------- Postgres (Supabase-friendly) ---------------------- */
+const { URL } = require('url');
+
 const raw = process.env.DATABASE_URL || '';
 if (!raw) {
-    console.error('DATABASE_URL is not set'); process.exit(1);
+    console.error('DATABASE_URL is not set');
+    process.exit(1);
 }
 
-// Ensure sslmode=no-verify in the URL (overrides “self-signed” issues)
-let urlStr = raw;
-try {
-    const u = new URL(raw);
-    if (!u.searchParams.has('sslmode')) u.searchParams.set('sslmode', 'no-verify');
-    urlStr = u.toString();
-} catch {
-    // fallback if DATABASE_URL is not a standard URL (rare)
-    if (!/sslmode=/.test(raw)) urlStr = raw + (raw.includes('?') ? '&' : '?') + 'sslmode=no-verify';
+// Always coerce sslmode to no-verify to avoid self-signed chain issues
+function forceNoVerify(dbUrl) {
+    try {
+        const u = new URL(dbUrl);
+        u.searchParams.set('sslmode', 'no-verify');  // force it
+        return u.toString();
+    } catch {
+        // fallback if the string isn’t fully URL-parseable
+        if (/sslmode=/.test(dbUrl)) {
+            return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
+        }
+        return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
+    }
 }
+
+const connectionString = forceNoVerify(raw);
 
 const pool = new Pool({
-    connectionString: urlStr,
-    ssl: { rejectUnauthorized: false },     // belt-and-suspenders for node-postgres
+    connectionString,
+    ssl: { rejectUnauthorized: false }, // also tell node-postgres not to verify
     max: Number(process.env.PG_POOL_MAX || 10),
     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
     connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10000),
@@ -100,7 +109,6 @@ pool.on('error', (err) => {
     console.error('PG pool error:', err);
 });
 
-// Optional: health endpoint
 app.get('/healthz', async (_req, res) => {
     try { await pool.query('select 1'); res.json({ ok: true }); }
     catch (e) { res.status(500).json({ ok: false, error: e.message }); }
