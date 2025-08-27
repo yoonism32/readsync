@@ -12,61 +12,98 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
-/* ---------------------- Postgres ------------------------ */
-const rawDbUrl = process.env.DATABASE_URL || '';
+// /* ---------------------- Postgres ------------------------ */
+// const rawDbUrl = process.env.DATABASE_URL || '';
 
-/**
- * Use SSL for any cloud DB (Supabase, Railway, RDS, etc.) or when in production.
- * Also ensure the connection string includes ?sslmode=require to keep pg happy.
- */
-const mustUseSSL =
-    /supabase\.com|railway\.app|amazonaws\.com|azure|googleapis\.com|cloudsql|pooler\./i.test(rawDbUrl) ||
-    process.env.NODE_ENV === 'production';
+// /**
+//  * Use SSL for any cloud DB (Supabase, Railway, RDS, etc.) or when in production.
+//  * Also ensure the connection string includes ?sslmode=require to keep pg happy.
+//  */
+// const mustUseSSL =
+//     /supabase\.com|railway\.app|amazonaws\.com|azure|googleapis\.com|cloudsql|pooler\./i.test(rawDbUrl) ||
+//     process.env.NODE_ENV === 'production';
 
-const connectionString =
-    rawDbUrl && !/sslmode=/i.test(rawDbUrl)
-        ? `${rawDbUrl}${rawDbUrl.includes('?') ? '&' : '?'}sslmode=require`
-        : rawDbUrl;
+// const connectionString =
+//     rawDbUrl && !/sslmode=/i.test(rawDbUrl)
+//         ? `${rawDbUrl}${rawDbUrl.includes('?') ? '&' : '?'}sslmode=require`
+//         : rawDbUrl;
+
+// const pool = new Pool({
+//     connectionString,
+//     // tune as needed via envs; these defaults are safe
+//     max: Number(process.env.PG_POOL_MAX || 10),
+//     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30_000),
+//     connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10_000),
+//     keepAlive: true,
+//     // For Supabase/most managed PG with self-signed chain:
+//     ssl: mustUseSSL ? { rejectUnauthorized: false } : false,
+// });
+
+// // helpful error logging so we can see if the pool drops connections
+// pool.on('error', (err) => {
+//     console.error('❌ PG Pool error (probably a network issue or idle timeout):', err);
+// });
+
+// /**
+//  * Optional: quick connection assertion at boot so we fail fast if DATABASE_URL is wrong.
+//  * Comment this out if you prefer the app to boot even if DB is briefly unavailable.
+//  */
+// (async function assertDbConnection() {
+//     try {
+//         await pool.query('select 1');
+//         console.log('✅ PostgreSQL connected');
+//     } catch (e) {
+//         console.error('❌ DB connection failed at startup:', e);
+//         // Exit non-zero so the platform restarts the container
+//         process.exit(1);
+//     }
+// })();
+
+// /* --- tiny healthcheck endpoint for Railway/uptime checks --- */
+// app.get('/healthz', async (_req, res) => {
+//     try {
+//         await pool.query('select 1');
+//         res.json({ ok: true });
+//     } catch (e) {
+//         res.status(500).json({ ok: false, error: e.message });
+//     }
+// });
+
+
+/* ---------------------- Postgres (Supabase-friendly) ---------------------- */
+const raw = process.env.DATABASE_URL || '';
+if (!raw) {
+    console.error('DATABASE_URL is not set'); process.exit(1);
+}
+
+// Ensure sslmode=no-verify in the URL (overrides “self-signed” issues)
+let urlStr = raw;
+try {
+    const u = new URL(raw);
+    if (!u.searchParams.has('sslmode')) u.searchParams.set('sslmode', 'no-verify');
+    urlStr = u.toString();
+} catch {
+    // fallback if DATABASE_URL is not a standard URL (rare)
+    if (!/sslmode=/.test(raw)) urlStr = raw + (raw.includes('?') ? '&' : '?') + 'sslmode=no-verify';
+}
 
 const pool = new Pool({
-    connectionString,
-    // tune as needed via envs; these defaults are safe
+    connectionString: urlStr,
+    ssl: { rejectUnauthorized: false },     // belt-and-suspenders for node-postgres
     max: Number(process.env.PG_POOL_MAX || 10),
-    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30_000),
-    connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10_000),
+    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
+    connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10000),
     keepAlive: true,
-    // For Supabase/most managed PG with self-signed chain:
-    ssl: mustUseSSL ? { rejectUnauthorized: false } : false,
 });
 
-// helpful error logging so we can see if the pool drops connections
 pool.on('error', (err) => {
-    console.error('❌ PG Pool error (probably a network issue or idle timeout):', err);
+    console.error('PG pool error:', err);
 });
 
-/**
- * Optional: quick connection assertion at boot so we fail fast if DATABASE_URL is wrong.
- * Comment this out if you prefer the app to boot even if DB is briefly unavailable.
- */
-(async function assertDbConnection() {
-    try {
-        await pool.query('select 1');
-        console.log('✅ PostgreSQL connected');
-    } catch (e) {
-        console.error('❌ DB connection failed at startup:', e);
-        // Exit non-zero so the platform restarts the container
-        process.exit(1);
-    }
-})();
-
-/* --- tiny healthcheck endpoint for Railway/uptime checks --- */
+// Optional: health endpoint
 app.get('/healthz', async (_req, res) => {
-    try {
-        await pool.query('select 1');
-        res.json({ ok: true });
-    } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-    }
+    try { await pool.query('select 1'); res.json({ ok: true }); }
+    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
 
