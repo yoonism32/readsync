@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.0.1
+// @version      4.2
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC
 // @match        https://novelbin.com/b/*/
 // @match        https://novelbin.com/b/*/*
@@ -45,8 +45,8 @@
     const READSYNC_API_KEY = 'demo-api-key-12345';
     const READSYNC_DEVICE_ID = generateDeviceId();
     const READSYNC_DEVICE_LABEL = getDeviceLabel();
-    const SYNC_DEBOUNCE_MS = 3000;  // Wait 3s before syncing progress
-    const COMPARE_CHECK_MS = 5000;   // Check for conflicts every 5s
+    const SYNC_DEBOUNCE_MS = 500;   // Wait 0.5s before syncing progress (much faster)
+    const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
 
     const page = document.scrollingElement || document.documentElement;
 
@@ -412,6 +412,11 @@
                     debouncedSync(candidate);
                 }
             }
+
+            // Also sync on significant progress jumps (for fast scrollers)
+            if (Math.abs(current - prev) > 5) {  // If jumped more than 5%
+                debouncedSync(current);
+            }
         }, { passive: true });
     }
 
@@ -569,7 +574,7 @@
         setTimeout(() => {
             checkForSyncConflict();
             compareInterval = setInterval(checkForSyncConflict, COMPARE_CHECK_MS);
-        }, 2000);
+        }, 1000);  // Start checking sooner too
     }
     if (document.readyState === 'loading') {
         addEventListener('DOMContentLoaded', boot, { once: true });
