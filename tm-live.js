@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.2
+// @version      4.4
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC
 // @match        https://novelbin.com/b/*/
 // @match        https://novelbin.com/b/*/*
@@ -41,7 +41,7 @@
     // ReadSync Settings
     // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
     // const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';
-    const READSYNC_API_BASE = 'https://zesty-exploration-readsync.up.railway.app/api/v1';
+    const READSYNC_API_BASE = 'https://sweet-imagination-readsync-production.up.railway.app/api/v1';
     const READSYNC_API_KEY = 'demo-api-key-12345';
     const READSYNC_DEVICE_ID = generateDeviceId();
     const READSYNC_DEVICE_LABEL = getDeviceLabel();
@@ -476,7 +476,7 @@
             <li>📱 Cross-device progress sync</li>
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
-            <li>📊 Dashboard at <a href="https://zesty-exploration-readsync.up.railway.app" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
+            <li>📊 Dashboard at <a href="https://sweet-imagination-readsync-production.up.railway.app" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
           </ul>
         </div>
         <div style="margin-top:12px;padding-top:8px;border-top:1px solid #555;font-size:13px;opacity:0.8">
