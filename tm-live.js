@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.4
+// @version      4.5.1
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC
 // @match        https://novelbin.com/b/*/
 // @match        https://novelbin.com/b/*/*
@@ -37,6 +37,7 @@
     const RESTORE_LIMIT = 90;       // restore if <90%, clear if ≥90
     const BANNER_SHOW_MAX_PCT = 10; // show restore banner only if current scroll ≤ 10%
     const IGNORE_LOW_PCT = 1;       // ignore saving tiny noise at very top
+    const QUIET_SYNC = true;        // silent on succesful syncs; still shows errors
 
     // ReadSync Settings
     // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
@@ -103,7 +104,7 @@
 
             if (response.ok) {
                 const result = await response.json();
-                if (result.updated) {
+                if (result.updated && !QUIET_SYNC) {
                     updateBadgeStatus('📡 Synced');
                 }
                 return result;
@@ -275,18 +276,21 @@
     }
 
     function updateBadgeStatus(text, isError = false) {
-        if (nbBadge) {
-            nbBadge.textContent = text;
-            nbBadge.style.background = isError ? '#dc2626' : '#1f2937';
-            nbBadge.classList.remove('nb-hidden');
-            setTimeout(() => {
-                if (nbBadge) {
-                    nbBadge.textContent = 'READSYNC OK';
-                    nbBadge.style.background = '#1f2937';
-                    nbBadge.classList.add('nb-hidden');
-                }
-            }, 2000);
-        }
+        if (!nbBadge) return
+        // In quiet mode, ignore success messages. Errors still show in red.
+        if (QUIET_SYNC && !isError) return;
+
+        nbBadge.textContent = text;
+        nbBadge.style.background = isError ? '#dc2626' : '#1f2937';
+        nbBadge.classList.remove('nb-hidden');
+
+        setTimeout(() => {
+            if (nbBadge) {
+                nbBadge.textContent = 'READSYNC OK';
+                nbBadge.style.background = '#1f2937';
+                nbBadge.classList.add('nb-hidden');
+            }
+        }, 2000);
     }
 
     /* ========= Notifier ========= */
@@ -476,7 +480,7 @@
             <li>📱 Cross-device progress sync</li>
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
-            <li>📊 Dashboard at <a href="https://sweet-imagination-readsync-production.up.railway.app" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
+            <li>📊 Dashboard at <a href="https://sweet-imagination-readsync-production.up.railway.app/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
           </ul>
         </div>
         <div style="margin-top:12px;padding-top:8px;border-top:1px solid #555;font-size:13px;opacity:0.8">
