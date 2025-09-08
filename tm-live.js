@@ -1,26 +1,16 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.5.1
+// @version      4.7.1
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC
-// @match        https://novelbin.com/b/*/
-// @match        https://novelbin.com/b/*/*
-// @match        https://novelbin.com/b/*/chapter-*
-// @match        https://novelbin.com/b/*/cchapter-*
-// @match        https://www.novelbin.com/b/*/chapter-*
-// @match        https://www.novelbin.com/b/*/cchapter-*
-// @match        https://novelbin.me/b/*/chapter-*
-// @match        https://novelbin.me/b/*/cchapter-*
-// @match        https://www.novelbin.me/b/*/chapter-*
-// @match        https://www.novelbin.me/b/*/cchapter-*
-// @match        https://novelbin.net/b/*/chapter-*
-// @match        https://novelbin.net/b/*/cchapter-*
-// @match        https://www.novelbin.net/b/*/chapter-*
-// @match        https://www.novelbin.net/b/*/cchapter-*
-// @match        https://novelbin.org/b/*/chapter-*
-// @match        https://novelbin.org/b/*/cchapter-*
-// @match        https://www.novelbin.org/b/*/chapter-*
-// @match        https://www.novelbin.org/b/*/cchapter-*
+// @match        https://novelbin.com/b/*/*chapter-*
+// @match        https://www.novelbin.com/b/*/*chapter-*
+// @match        https://novelbin.me/b/*/*chapter-*
+// @match        https://www.novelbin.me/b/*/*chapter-*
+// @match        https://novelbin.net/b/*/*chapter-*
+// @match        https://www.novelbin.net/b/*/*chapter-*
+// @match        https://novelbin.org/b/*/*chapter-*
+// @match        https://www.novelbin.org/b/*/*chapter-*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -28,9 +18,13 @@
 (function () {
     'use strict';
 
+    /* ===== Debug helper (logs only) ===== */
+    const LOG_TAG = 'ReadSync';
+    const log = (...args) => { try { console.debug(`[${LOG_TAG}]`, ...args); } catch { } };
+
     /* ===== Settings ===== */
     const STEP = 60;
-    const AUTO_PIX = 12;
+    const AUTO_PIX = 6;
     const AUTO_MS = 20;
     const PCT_DECIMALS = 1;
     const BADGE_AUTOHIDE_MS = 2500;
@@ -42,18 +36,56 @@
     // ReadSync Settings
     // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
     // const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';
-    const READSYNC_API_BASE = 'https://sweet-imagination-readsync-production.up.railway.app/api/v1';
+    const READSYNC_API_BASE = 'https://readsync-n7zp.onrender.com/api/v1';
     const READSYNC_API_KEY = 'demo-api-key-12345';
     const READSYNC_DEVICE_ID = generateDeviceId();
     const READSYNC_DEVICE_LABEL = getDeviceLabel();
     const SYNC_DEBOUNCE_MS = 500;   // Wait 0.5s before syncing progress (much faster)
     const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
 
-    const page = document.scrollingElement || document.documentElement;
+    log('Script start', { path: location.pathname, href: location.href, deviceId: READSYNC_DEVICE_ID, deviceLabel: READSYNC_DEVICE_LABEL });
 
-    // Normalize for storage so /cchapter-XX and /chapter-XX share the same key
-    const normalizedPath = location.pathname.replace('/cchapter-', '/chapter-');
+    // === iOS fix: robustly find the real scroll container ===
+    function findScrollEl() {
+        const candidates = [
+            document.scrollingElement,
+            document.documentElement,
+            document.body,
+            ...Array.from(document.querySelectorAll('main, article, #content, .content, .reader, [data-scroll], [role="main"]'))
+        ].filter(Boolean);
+
+        for (const el of candidates) {
+            const sh = el.scrollHeight, ch = el.clientHeight;
+            if (sh - ch > 200) return el;
+        }
+        // Fallback to the tallest scrollable node
+        let best = document.scrollingElement || document.documentElement;
+        let bestDelta = (best.scrollHeight - best.clientHeight);
+        for (const el of document.querySelectorAll('body *')) {
+            try {
+                const delta = el.scrollHeight - el.clientHeight;
+                if (delta > bestDelta + 200) { best = el; bestDelta = delta; }
+            } catch { }
+        }
+        return best;
+    }
+
+    let page = findScrollEl();
+    const recheckScrollEl = () => { page = findScrollEl(); log('Re-evaluated scroll element', page); };
+    window.addEventListener('resize', recheckScrollEl, { passive: true });
+    new MutationObserver(() => recheckScrollEl()).observe(document.body, { childList: true, subtree: true });
+
+    /* ========= Normalization helpers ========= */
+    function normalizePath(path) {
+        return path.replace(/\/c+chapter-/, '/chapter-');
+    }
+    function normalizeUrl(href) {
+        return href.replace(/#.*$/, '').replace(/\/c+chapter-/, '/chapter-');
+    }
+
+    const normalizedPath = normalizePath(location.pathname);
     const storeKey = "nb_scrollpos:" + normalizedPath;
+    log('Normalization', { raw: location.pathname, normalizedPath, storeKey });
 
     let syncTimeout = null;
     let compareInterval = null;
@@ -69,6 +101,7 @@
             const randomId = Math.random().toString(36).substr(2, 6);
             deviceId = `${browserInfo}-${randomId}`;
             localStorage.setItem('readsync_device_id', deviceId);
+            log('Generated new device id', deviceId);
         }
         return deviceId;
     }
@@ -83,34 +116,43 @@
 
     /* ========= ReadSync API Functions ========= */
     async function syncProgress(percent) {
+        log('syncProgress invoked', { percent });
         const chapterInfo = parseChapter(location.pathname);
+        log('parseChapter result (syncProgress)', chapterInfo);
         if (!chapterInfo) return;
 
         const payload = {
             user_key: READSYNC_API_KEY,
             device_id: READSYNC_DEVICE_ID,
             device_label: READSYNC_DEVICE_LABEL,
-            novel_url: location.href.replace(/#.*$/, ''),
+            novel_url: normalizeUrl(location.href),   // ✅ normalized here
             percent: percent,
             seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000)
         };
 
         try {
+            log('Sending payload', payload);
             const response = await fetch(`${READSYNC_API_BASE}/progress`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
+            log('Fetch response', { status: response.status });
             if (response.ok) {
                 const result = await response.json();
+                log('Server JSON', result);
                 if (result.updated && !QUIET_SYNC) {
                     updateBadgeStatus('📡 Synced');
                 }
                 return result;
+            } else {
+                const text = await response.text().catch(() => '');
+                log('Non-OK response body', text);
+                updateBadgeStatus('⚠️ Sync Error', true);
             }
         } catch (error) {
-            console.warn('ReadSync: Failed to sync progress', error);
+            console.warn(`[${LOG_TAG}] Failed to sync progress`, error);
             updateBadgeStatus('⚠️ Sync Error', true);
         }
     }
@@ -118,20 +160,21 @@
     async function checkForSyncConflict() {
         const novelId = normalizeNovelId(location.href);
         if (!novelId) return;
-
+        log('compare check', { novelId, deviceId: READSYNC_DEVICE_ID });
         try {
             const response = await fetch(
                 `${READSYNC_API_BASE}/compare?user_key=${READSYNC_API_KEY}&novel_id=${novelId}&device_id=${READSYNC_DEVICE_ID}`
             );
-
+            log('compare response', { status: response.status });
             if (response.ok) {
                 const result = await response.json();
+                log('compare JSON', result);
                 if (result.should_prompt_jump && result.global_state) {
                     showSyncBanner(result.global_state);
                 }
             }
         } catch (error) {
-            console.warn('ReadSync: Failed to check for conflicts', error);
+            console.warn(`[${LOG_TAG}] Failed to check for conflicts`, error);
         }
     }
 
@@ -141,6 +184,7 @@
     }
 
     function showSyncBanner(globalState) {
+        log('showSyncBanner', globalState);
         if (syncBanner) syncBanner.remove();
 
         syncBanner = document.createElement('div');
@@ -159,7 +203,6 @@
       </div>
     `;
 
-        // Add styles for banner
         if (!document.querySelector('#sync-banner-styles')) {
             const style = document.createElement('style');
             style.id = 'sync-banner-styles';
@@ -208,7 +251,7 @@
             const targetPercent = globalState.percent;
 
             if (targetUrl.includes(`chapter-${globalState.chapter_num}`)) {
-                const h = Math.max(1, page.scrollHeight - innerHeight);
+                const h = Math.max(1, page.scrollHeight - page.clientHeight);
                 page.scrollTop = (targetPercent / 100) * h;
                 notify(`Jumped to ${targetPercent.toFixed(1)}%`);
             } else {
@@ -273,11 +316,11 @@
         setTimeout(() => nbBadge.classList.add('nb-hidden'), BADGE_AUTOHIDE_MS);
 
         injectDiscoverableResumeButton();
+        log('Badge injected');
     }
 
     function updateBadgeStatus(text, isError = false) {
         if (!nbBadge) return
-        // In quiet mode, ignore success messages. Errors still show in red.
         if (QUIET_SYNC && !isError) return;
 
         nbBadge.textContent = text;
@@ -308,15 +351,15 @@
 
     /* ========= Helpers ========= */
     const pctNow = () => {
-        const h = Math.max(1, page.scrollHeight - innerHeight);
+        const h = Math.max(1, page.scrollHeight - page.clientHeight);
         const frac = page.scrollTop / h;
         return Math.max(0, Math.min(100, frac * 100));
     };
 
-    // Debounced sync function
     const debouncedSync = (percent) => {
         if (syncTimeout) clearTimeout(syncTimeout);
         syncTimeout = setTimeout(() => {
+            log('debouncedSync fire', { percent });
             syncProgress(percent);
         }, SYNC_DEBOUNCE_MS);
     };
@@ -326,16 +369,20 @@
         const m = location.hash && location.hash.match(/nbp=([\d.]+)/i);
         if (!m) return;
         const p = Math.max(0, Math.min(100, parseFloat(m[1])));
-        const h = Math.max(1, page.scrollHeight - innerHeight);
+        const h = Math.max(1, page.scrollHeight - page.clientHeight);
         page.scrollTop = (p / 100) * h;
         setTimeout(() => { page.scrollTop = (p / 100) * h; }, 500);
+        log('applyHashResume', { p });
     }
 
-    // Parse current chapter token ("chapter" or "cchapter"), number
+    // Parse current chapter token (any number of "c"s before "chapter"), number
     function parseChapter(pathname) {
-        const m = pathname.match(/\/b\/[^/]+\/(c?chapter)-(\d+)(?:-\2)?(?:-[^/]*)?\/?$/i);
-        if (!m) return null;
-        return { token: m[1], num: parseInt(m[2], 10) };
+        const m = pathname.match(
+            /\/b\/[^/]+\/((c*)chapter)-(\d+)(?:-\3)?(?:-[^/]*)?\/?$/i
+        );
+        if (!m) { log('parseChapter no match', { pathname }); return null; }
+        const res = { token: m[1], num: parseInt(m[3], 10) };
+        return res;
     }
 
     // Build next/prev path preserving token and slug
@@ -355,17 +402,19 @@
         restoreBtn.className = 'nb-restore';
         restoreBtn.textContent = `Restore scroll position (${saved.toFixed(PCT_DECIMALS)}%) ↓`;
         restoreBtn.onclick = () => {
-            const h = Math.max(1, page.scrollHeight - innerHeight);
+            const h = Math.max(1, page.scrollHeight - page.clientHeight);
             restored = true;
             page.scrollTop = (saved / 100) * h;
             restoreBtn.remove();
             restoreBtn = null;
         };
         document.body.appendChild(restoreBtn);
+        log('showRestoreButton', { saved });
     }
 
     function maybeShowRestore() {
         const saved = parseFloat(localStorage.getItem(storeKey) || "0");
+        log('maybeShowRestore', { saved, storeKey });
         if (saved > 0 && saved < RESTORE_LIMIT) {
             if (pctNow() <= BANNER_SHOW_MAX_PCT) showRestoreButton(saved);
             const onScrollHide = () => {
@@ -392,13 +441,12 @@
         const first = pctNow();
         bar.style.width = `${first}%`;
         if (nbPill) nbPill.textContent = `${first.toFixed(PCT_DECIMALS)}%`;
+        log('progress bar init', { first });
 
-        // Sync initial progress
-        if (first > IGNORE_LOW_PCT) {
-            debouncedSync(first);
-        }
+        // iOS fix: always register an early heartbeat (even at 0%)
+        setTimeout(() => { log('early heartbeat', { first }); syncProgress(first); }, 800);
 
-        addEventListener('scroll', () => {
+        function onAnyScroll() {
             const current = pctNow();
             bar.style.width = `${current}%`;
             if (nbPill) nbPill.textContent = `${current.toFixed(PCT_DECIMALS)}%`;
@@ -417,20 +465,24 @@
                 }
             }
 
-            // Also sync on significant progress jumps (for fast scrollers)
-            if (Math.abs(current - prev) > 5) {  // If jumped more than 5%
+            if (Math.abs(current - prev) > 5) {
+                log('big scroll delta, syncing', { prev, current });
                 debouncedSync(current);
             }
-        }, { passive: true });
+        }
+
+        addEventListener('scroll', onAnyScroll, { passive: true });
+        page.addEventListener('scroll', onAnyScroll, { passive: true });
+        log('scroll listeners attached');
     }
 
     /* ========= Auto-scroll ========= */
     let autoOn = false, autoTimer = null;
     function toggleAuto() {
-        if (autoOn) { clearInterval(autoTimer); autoOn = false; notify('Auto-Scroll Disabled'); }
+        if (autoOn) { clearInterval(autoTimer); autoOn = false; notify('Auto-Scroll Disabled'); log('auto-scroll off'); }
         else {
             autoTimer = setInterval(() => scrollBy(0, AUTO_PIX), AUTO_MS);
-            autoOn = true; notify('Auto-Scroll Enabled');
+            autoOn = true; notify('Auto-Scroll Enabled'); log('auto-scroll on');
         }
     }
 
@@ -480,7 +532,7 @@
             <li>📱 Cross-device progress sync</li>
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
-            <li>📊 Dashboard at <a href="https://sweet-imagination-readsync-production.up.railway.app/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
+            <li>📊 Dashboard at <a href="https://readsync-n7zp.onrender.com/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
           </ul>
         </div>
         <div style="margin-top:12px;padding-top:8px;border-top:1px solid #555;font-size:13px;opacity:0.8">
@@ -488,9 +540,10 @@
         </div>
       </div>`;
         document.body.appendChild(overlay);
+        log('help overlay created');
     }
     function toggleHelp() {
-        if (overlay) { overlay.remove(); overlay = null; localStorage.setItem('nb_overlay', 'false'); }
+        if (overlay) { overlay.remove(); overlay = null; localStorage.setItem('nb_overlay', 'false'); log('help overlay hidden'); }
         else { createHelp(); localStorage.setItem('nb_overlay', 'true'); }
     }
 
@@ -547,6 +600,7 @@
                 if (navigator.clipboard?.writeText) {
                     await navigator.clipboard.writeText(url);
                     notify(`Copied resume link (${p.toFixed(PCT_DECIMALS)}%)`);
+                    log('resume link copied', { url });
                 } else {
                     prompt('Copy resume link:', url);
                 }
@@ -555,18 +609,20 @@
             }
             hideButton();
         });
+        log('discoverable button injected');
     }
 
     /* ========= Boot ========= */
     function boot() {
+        log('boot()');
         injectBadge();
-        applyHashResume();   // jump if #nbp=xx.x present
+        applyHashResume();
         maybeShowRestore();
         addProgressBar();
 
-        // Hide help overlay by default on iOS devices
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         const overlayPref = localStorage.getItem('nb_overlay');
+        log('env', { isIOS, overlayPref });
 
         if (!isIOS && overlayPref !== 'false') {
             createHelp();
@@ -574,11 +630,11 @@
             createHelp();
         }
 
-        // Start ReadSync features
         setTimeout(() => {
             checkForSyncConflict();
             compareInterval = setInterval(checkForSyncConflict, COMPARE_CHECK_MS);
-        }, 1000);  // Start checking sooner too
+            log('conflict checker started', { intervalMs: COMPARE_CHECK_MS });
+        }, 1000);
     }
     if (document.readyState === 'loading') {
         addEventListener('DOMContentLoaded', boot, { once: true });
@@ -588,14 +644,43 @@
     window.addEventListener('beforeunload', () => {
         if (syncTimeout) clearTimeout(syncTimeout);
         if (compareInterval) clearInterval(compareInterval);
+        log('beforeunload cleanup');
     });
+
+    // iOS-friendly final save
+    function sendFinal(percent) {
+        try {
+            const chapterInfo = parseChapter(location.pathname);
+            if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
+            const payload = {
+                user_key: READSYNC_API_KEY,
+                device_id: READSYNC_DEVICE_ID,
+                device_label: READSYNC_DEVICE_LABEL,
+                novel_url: normalizeUrl(location.href),   // ✅ normalized here too
+                percent: percent,
+                seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000)
+            };
+            const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
+            if (navigator.sendBeacon) {
+                const ok = navigator.sendBeacon(`${READSYNC_API_BASE}/progress`, blob);
+                log('sendBeacon', { ok, percent });
+            } else {
+                log('sendBeacon not available');
+            }
+        } catch (e) {
+            log('sendFinal error', e);
+        }
+    }
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') { log('visibilitychange -> hidden'); sendFinal(pctNow()); }
+    });
+    window.addEventListener('pagehide', () => { log('pagehide'); sendFinal(pctNow()); });
 
     /* ========= Keys ========= */
     document.onkeydown = function (e) {
         const t = e.target;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
 
-        // Ctrl+Shift+X => copy resume link
         if (e.key.toLowerCase() === 'x' && e.ctrlKey && e.shiftKey) {
             const p = pctNow();
             const clean = location.href.replace(/#.*$/, '');
@@ -605,6 +690,7 @@
                     if (navigator.clipboard?.writeText) {
                         await navigator.clipboard.writeText(url);
                         notify(`Copied resume link (${p.toFixed(PCT_DECIMALS)}%)`);
+                        log('resume link hotkey copied', { url });
                     } else {
                         prompt('Copy resume link:', url);
                     }
