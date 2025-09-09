@@ -1,546 +1,1529 @@
-// server.js
+// server.js - Enhanced ReadSync API Server
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
+const { URL } = require('url');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 /* ---------------------- Middleware ---------------------- */
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
-// /* ---------------------- Postgres ------------------------ */
-// const rawDbUrl = process.env.DATABASE_URL || '';
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+  });
+  next();
+});
 
-// /**
-//  * Use SSL for any cloud DB (Supabase, Railway, RDS, etc.) or when in production.
-//  * Also ensure the connection string includes ?sslmode=require to keep pg happy.
-//  */
-// const mustUseSSL =
-//     /supabase\.com|railway\.app|amazonaws\.com|azure|googleapis\.com|cloudsql|pooler\./i.test(rawDbUrl) ||
-//     process.env.NODE_ENV === 'production';
-
-// const connectionString =
-//     rawDbUrl && !/sslmode=/i.test(rawDbUrl)
-//         ? `${rawDbUrl}${rawDbUrl.includes('?') ? '&' : '?'}sslmode=require`
-//         : rawDbUrl;
-
-// const pool = new Pool({
-//     connectionString,
-//     // tune as needed via envs; these defaults are safe
-//     max: Number(process.env.PG_POOL_MAX || 10),
-//     idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30_000),
-//     connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10_000),
-//     keepAlive: true,
-//     // For Supabase/most managed PG with self-signed chain:
-//     ssl: mustUseSSL ? { rejectUnauthorized: false } : false,
-// });
-
-// // helpful error logging so we can see if the pool drops connections
-// pool.on('error', (err) => {
-//     console.error('❌ PG Pool error (probably a network issue or idle timeout):', err);
-// });
-
-// /**
-//  * Optional: quick connection assertion at boot so we fail fast if DATABASE_URL is wrong.
-//  * Comment this out if you prefer the app to boot even if DB is briefly unavailable.
-//  */
-// (async function assertDbConnection() {
-//     try {
-//         await pool.query('select 1');
-//         console.log('✅ PostgreSQL connected');
-//     } catch (e) {
-//         console.error('❌ DB connection failed at startup:', e);
-//         // Exit non-zero so the platform restarts the container
-//         process.exit(1);
-//     }
-// })();
-
-// /* --- tiny healthcheck endpoint for Railway/uptime checks --- */
-// app.get('/healthz', async (_req, res) => {
-//     try {
-//         await pool.query('select 1');
-//         res.json({ ok: true });
-//     } catch (e) {
-//         res.status(500).json({ ok: false, error: e.message });
-//     }
-// });
-
-
-/* ---------------------- Postgres (Supabase-friendly) ---------------------- */
-const { URL } = require('url');
-
+/* ---------------------- Database Connection ---------------------- */
 const raw = process.env.DATABASE_URL || '';
 if (!raw) {
-    console.error('DATABASE_URL is not set');
-    process.exit(1);
+  console.error('DATABASE_URL environment variable is required');
+  process.exit(1);
 }
 
-// Always coerce sslmode to no-verify to avoid self-signed chain issues
 function forceNoVerify(dbUrl) {
-    try {
-        const u = new URL(dbUrl);
-        u.searchParams.set('sslmode', 'no-verify');  // force it
-        return u.toString();
-    } catch {
-        // fallback if the string isn’t fully URL-parseable
-        if (/sslmode=/.test(dbUrl)) {
-            return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
-        }
-        return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
-    }
+  try {
+    const u = new URL(dbUrl);
+    u.searchParams.set('sslmode', 'no-verify');
+    return u.toString();
+  } catch {
+    if (/sslmode=/.test(dbUrl)) return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
+    return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
+  }
 }
 
 const connectionString = forceNoVerify(raw);
 
 const pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false }, // also tell node-postgres not to verify
-    max: Number(process.env.PG_POOL_MAX || 10),
-    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
-    connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10000),
-    keepAlive: true,
+  connectionString,
+  ssl: { rejectUnauthorized: false },
+  max: Number(process.env.PG_POOL_MAX || 20),
+  idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
+  connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10000),
+  keepAlive: true,
+  statement_timeout: 30000,
+  query_timeout: 30000,
 });
 
-pool.on('error', (err) => {
-    console.error('PG pool error:', err);
-});
+pool.on('error', (err) => console.error('PostgreSQL pool error:', err));
+pool.on('connect', () => console.log('New PostgreSQL connection established'));
 
-app.get('/healthz', async (_req, res) => {
-    try { await pool.query('select 1'); res.json({ ok: true }); }
-    catch (e) { res.status(500).json({ ok: false, error: e.message }); }
-});
+/* ---------------------- Error Handling Utilities ---------------------- */
+const handleDbError = (res, error, operation) => {
+  console.error(`${operation} error:`, error);
+  
+  // Common PostgreSQL error codes
+  switch (error.code) {
+    case '23503': return res.status(400).json({ error: 'Referenced record not found' });
+    case '23505': return res.status(409).json({ error: 'Duplicate entry' });
+    case '23514': return res.status(400).json({ error: 'Check constraint violation' });
+    case '42P01': return res.status(500).json({ error: 'Table does not exist' });
+    default: 
+      return res.status(500).json({ 
+        error: 'Database error', 
+        detail: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      });
+  }
+};
 
+const withTransaction = async (callback) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
 
-/* ---------------------- Schema Init --------------------- */
+/* ---------------------- Validation Middleware ---------------------- */
+const validateApiKey = async (req, res, next) => {
+  const user_key = req.body?.user_key || req.query?.user_key;
+  if (!user_key) {
+    return res.status(401).json({ error: 'API key required' });
+  }
+
+  try {
+    const result = await pool.query('SELECT id, display_name FROM users WHERE api_key = $1', [user_key]);
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: 'Invalid API key' });
+    }
+    
+    req.user = result.rows[0];
+    next();
+  } catch (error) {
+    handleDbError(res, error, 'API key validation');
+  }
+};
+
+const validateNovelId = (req, res, next) => {
+  const { novelId } = req.params;
+  if (!novelId || typeof novelId !== 'string' || novelId.length > 200) {
+    return res.status(400).json({ error: 'Invalid novel ID format' });
+  }
+  next();
+};
+
+const validatePagination = (req, res, next) => {
+  const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+  const offset = Math.max(0, Number(req.query.offset || 0));
+  req.pagination = { limit, offset };
+  next();
+};
+
+/* ---------------------- Database Schema Initialization ---------------------- */
 async function initDatabase() {
-    const client = await pool.connect();
-    try {
-        // Users
-        await client.query(`
+  const client = await pool.connect();
+  try {
+    console.log('Initializing database schema...');
+
+    // Enable UUID extension
+    await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+
+    // Users table
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
-        display_name TEXT,
-        api_key TEXT UNIQUE,
+        display_name TEXT NOT NULL,
+        api_key TEXT UNIQUE NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-        // Devices
-        await client.query(`
+    // Devices table
+    await client.query(`
       CREATE TABLE IF NOT EXISTS devices (
         id TEXT PRIMARY KEY,
-        user_id TEXT,
-        device_label TEXT,
+        user_id TEXT NOT NULL,
+        device_label TEXT NOT NULL,
+        device_type TEXT DEFAULT 'unknown',
         user_agent TEXT,
         last_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id)
+        active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     `);
 
-        // Novels
-        await client.query(`
+    // Novels catalog
+    await client.query(`
       CREATE TABLE IF NOT EXISTS novels (
         id TEXT PRIMARY KEY,
-        title TEXT,
+        title TEXT NOT NULL,
         primary_url TEXT,
+        author TEXT,
+        genre TEXT,
+        description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
 
-        // Progress snapshots
-        await client.query(`
+    // Progress snapshots (time-series data)
+    await client.query(`
       CREATE TABLE IF NOT EXISTS progress_snapshots (
-        id SERIAL PRIMARY KEY,
-        user_id TEXT,
-        device_id TEXT,
-        novel_id TEXT,
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
         chapter_token TEXT,
         chapter_num INTEGER,
         chapter_slug_extra TEXT,
-        percent REAL,
+        percent NUMERIC(5,2) NOT NULL CHECK (percent >= 0 AND percent <= 100),
         url TEXT,
-        seconds_on_page INTEGER,
+        seconds_on_page INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (user_id) REFERENCES users (id),
-        FOREIGN KEY (device_id) REFERENCES devices (id),
-        FOREIGN KEY (novel_id) REFERENCES novels (id)
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (device_id) REFERENCES devices (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
       )
     `);
 
-        // Indexes
-        await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_progress_user_novel
-      ON progress_snapshots (user_id, novel_id, created_at DESC)
-    `);
-        await client.query(`
-      CREATE INDEX IF NOT EXISTS idx_progress_device
-      ON progress_snapshots (device_id, novel_id, created_at DESC)
+    // User novel metadata
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS user_novel_meta (
+        user_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'reading' CHECK (status IN ('reading', 'completed', 'on-hold', 'dropped', 'removed')),
+        favorite BOOLEAN DEFAULT FALSE,
+        rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+        notes TEXT,
+        started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        completed_at TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, novel_id),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+      )
     `);
 
-        // Demo user
-        await client.query(`
+    // Bookmarks
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
+        chapter_url TEXT NOT NULL,
+        percent NUMERIC(5,2) NOT NULL CHECK (percent >= 0 AND percent <= 100),
+        bookmark_type TEXT DEFAULT 'position' CHECK (bookmark_type IN ('position', 'highlight', 'note', 'favorite')),
+        title TEXT,
+        note TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE,
+        UNIQUE (user_id, novel_id, chapter_url, percent)
+      )
+    `);
+
+    // Reading sessions
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS reading_sessions (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        session_type TEXT DEFAULT 'manual' CHECK (session_type IN ('auto', 'manual', 'imported')),
+        start_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        end_time TIMESTAMP,
+        start_percent NUMERIC(5,2) CHECK (start_percent >= 0 AND start_percent <= 100),
+        end_percent NUMERIC(5,2) CHECK (end_percent >= 0 AND end_percent <= 100),
+        time_spent_seconds INTEGER DEFAULT 0 CHECK (time_spent_seconds >= 0),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE,
+        FOREIGN KEY (device_id) REFERENCES devices (id) ON DELETE CASCADE
+      )
+    `);
+
+    // Performance indexes
+    const indexes = [
+      'CREATE INDEX IF NOT EXISTS idx_progress_user_novel ON progress_snapshots (user_id, novel_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_progress_device ON progress_snapshots (device_id, novel_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_progress_created_at ON progress_snapshots (created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_bookmarks_user_novel ON bookmarks (user_id, novel_id, created_at DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_sessions_user ON reading_sessions (user_id, start_time DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_sessions_novel ON reading_sessions (novel_id, start_time DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices (user_id, active, last_seen DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_user_novel_meta_status ON user_novel_meta (user_id, status, updated_at DESC)',
+    ];
+
+    for (const indexQuery of indexes) {
+      await client.query(indexQuery);
+    }
+
+    // Insert demo user
+    await client.query(`
       INSERT INTO users (id, display_name, api_key)
       VALUES ('demo-user', 'Demo User', 'demo-api-key-12345')
-      ON CONFLICT (id) DO NOTHING
+      ON CONFLICT (id) DO UPDATE SET
+        display_name = EXCLUDED.display_name,
+        api_key = EXCLUDED.api_key
     `);
 
-        console.log('Database initialized successfully');
-    } catch (error) {
-        console.error('Database initialization error:', error);
-        throw error;
-    } finally {
-        client.release();
-    }
+    console.log('Database schema initialized successfully');
+  } catch (error) {
+    console.error('Database initialization failed:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
-/* ---------------------- Helpers ------------------------- */
+/* ---------------------- Utility Functions ---------------------- */
 function normalizeNovelId(url) {
-    const match = url.match(/\/b\/([^/]+)/);
-    return match ? `novelbin:${match[1].toLowerCase()}` : null;
+  const match = url.match(/\/b\/([^/]+)/);
+  return match ? `novelbin:${match[1].toLowerCase()}` : null;
 }
 
 function extractNovelTitle(url) {
-    const match = url.match(/\/b\/([^/]+)/);
-    if (!match) return 'Unknown Novel';
-    return match[1].replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+  const match = url.match(/\/b\/([^/]+)/);
+  if (!match) return 'Unknown Novel';
+  return match[1].replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
 function parseChapterFromUrl(url) {
-    const m = url.match(/\/(c?chapter)-(\d+)(?:-\d+)?/i);
-    if (!m) return null;
-    return { token: m[1], num: parseInt(m[2], 10) };
+  const m = url.match(/\/(c*chapter)-(\d+)(?:-\d+)?/i);
+  if (!m) return null;
+  return { token: m[1], num: parseInt(m[2], 10) };
 }
 
 async function getLatestStates(client, userId, novelId) {
-    // Global latest across devices
-    const globalResult = await client.query(
-        `
-      SELECT p.*, d.device_label, d.last_seen AS device_last_seen
-      FROM progress_snapshots p
-      JOIN devices d ON p.device_id = d.id
-      WHERE p.user_id = $1 AND p.novel_id = $2
-      ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
-      LIMIT 1
-    `,
-        [userId, novelId]
-    );
+  // Get global latest state across all devices
+  const globalResult = await client.query(`
+    SELECT p.*, d.device_label, d.last_seen AS device_last_seen
+    FROM progress_snapshots p
+    JOIN devices d ON p.device_id = d.id
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE
+    ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
+    LIMIT 1
+  `, [userId, novelId]);
 
-    // Latest per device
-    const deviceResult = await client.query(
-        `
-      SELECT DISTINCT ON (p.device_id) p.*, d.device_label
-      FROM progress_snapshots p
-      JOIN devices d ON p.device_id = d.id
-      WHERE p.user_id = $1 AND p.novel_id = $2
-      ORDER BY p.device_id, p.created_at DESC
-    `,
-        [userId, novelId]
-    );
+  // Get latest state per device
+  const deviceResult = await client.query(`
+    SELECT DISTINCT ON (p.device_id) p.*, d.device_label
+    FROM progress_snapshots p
+    JOIN devices d ON p.device_id = d.id
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE
+    ORDER BY p.device_id, p.created_at DESC
+  `, [userId, novelId]);
 
-    const latest_global =
-        globalResult.rows.length > 0
-            ? {
-                chapter_num: globalResult.rows[0].chapter_num,
-                chapter_token: globalResult.rows[0].chapter_token,
-                percent: globalResult.rows[0].percent,
-                device_id: globalResult.rows[0].device_id,
-                device_label: globalResult.rows[0].device_label,
-                url: globalResult.rows[0].url,
-                ts: globalResult.rows[0].created_at,
-            }
-            : null;
+  const latest_global = globalResult.rows.length > 0 ? {
+    chapter_num: globalResult.rows[0].chapter_num,
+    chapter_token: globalResult.rows[0].chapter_token,
+    percent: parseFloat(globalResult.rows[0].percent),
+    device_id: globalResult.rows[0].device_id,
+    device_label: globalResult.rows[0].device_label,
+    url: globalResult.rows[0].url,
+    timestamp: globalResult.rows[0].created_at,
+  } : null;
 
-    const latest_per_device = {};
-    deviceResult.rows.forEach((row) => {
-        latest_per_device[row.device_id] = {
-            chapter_num: row.chapter_num,
-            chapter_token: row.chapter_token,
-            percent: row.percent,
-            device_label: row.device_label,
-            url: row.url,
-            ts: row.created_at,
-        };
-    });
+  const latest_per_device = {};
+  deviceResult.rows.forEach((row) => {
+    latest_per_device[row.device_id] = {
+      chapter_num: row.chapter_num,
+      chapter_token: row.chapter_token,
+      percent: parseFloat(row.percent),
+      device_label: row.device_label,
+      url: row.url,
+      timestamp: row.created_at,
+    };
+  });
 
-    return { latest_global, latest_per_device };
+  return { latest_global, latest_per_device };
 }
 
-/* ---------------------- API Routes ---------------------- */
-
-// 0) Healthcheck
+/* ---------------------- Health Check Routes ---------------------- */
 app.get('/health', async (req, res) => {
-    try {
-        await pool.query('SELECT 1');
-        res.json({ ok: true });
-    } catch (e) {
-        res.status(500).json({ ok: false, error: e.message });
-    }
+  try {
+    const start = Date.now();
+    await pool.query('SELECT 1');
+    const dbLatency = Date.now() - start;
+    
+    res.json({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      database: { connected: true, latency: `${dbLatency}ms` },
+      uptime: process.uptime(),
+      memory: process.memoryUsage()
+    });
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'unhealthy', 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
-// 1) Upsert progress
-app.post('/api/v1/progress', async (req, res) => {
-    const {
-        user_key,
-        device_id,
-        device_label,
-        novel_url,
-        percent,
-        seconds_on_page = 0,
-    } = req.body;
+app.get('/healthz', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    res.status(503).json({ ok: false, error: error.message });
+  }
+});
 
-    const client = await pool.connect();
-    try {
-        // Validate user
-        const userResult = await client.query('SELECT id FROM users WHERE api_key = $1', [user_key]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid API key' });
-        }
+/* ---------------------- Authentication Routes ---------------------- */
+app.get('/api/v1/auth/whoami', validateApiKey, (req, res) => {
+  res.json({
+    id: req.user.id,
+    display_name: req.user.display_name,
+    authenticated: true
+  });
+});
 
-        const user_id = userResult.rows[0].id;
-        const novel_id = normalizeNovelId(novel_url);
-        const novel_title = extractNovelTitle(novel_url);
-        const chapterInfo = parseChapterFromUrl(novel_url);
+/* ---------------------- Core Progress API ---------------------- */
+app.post('/api/v1/progress', validateApiKey, async (req, res) => {
+  const { device_id, device_label, novel_url, percent, seconds_on_page = 0 } = req.body;
 
-        if (!novel_id || !chapterInfo) {
-            return res.status(400).json({ error: 'Invalid novel URL format' });
-        }
+  if (!device_id || !device_label || !novel_url || percent == null) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: device_id, device_label, novel_url, percent' 
+    });
+  }
 
-        // Upsert device
-        await client.query(
-            `
-        INSERT INTO devices (id, user_id, device_label, last_seen)
-        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+  const user_id = req.user.id;
+  const novel_id = normalizeNovelId(novel_url);
+  const novel_title = extractNovelTitle(novel_url);
+  const chapterInfo = parseChapterFromUrl(novel_url);
+
+  if (!novel_id || !chapterInfo) {
+    return res.status(400).json({ error: 'Invalid novel URL format' });
+  }
+
+  const percentValue = Math.max(0, Math.min(100, Number(percent)));
+
+  try {
+    const result = await withTransaction(async (client) => {
+      // Upsert device with type detection
+      const deviceType = /iPad|iPhone|iPod/.test(req.get('User-Agent')) ? 'mobile' : 
+                        /Android/.test(req.get('User-Agent')) ? 'mobile' : 'desktop';
+
+      await client.query(`
+        INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
         ON CONFLICT (id) DO UPDATE SET
           device_label = EXCLUDED.device_label,
-          last_seen = CURRENT_TIMESTAMP
-      `,
-            [device_id, user_id, device_label]
-        );
+          device_type = EXCLUDED.device_type,
+          user_agent = EXCLUDED.user_agent,
+          last_seen = CURRENT_TIMESTAMP,
+          active = TRUE
+      `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
-        // Upsert novel
-        await client.query(
-            `
+      // Upsert novel
+      await client.query(`
         INSERT INTO novels (id, title, primary_url)
         VALUES ($1, $2, $3)
-        ON CONFLICT (id) DO NOTHING
-      `,
-            [novel_id, novel_title, novel_url]
-        );
+        ON CONFLICT (id) DO UPDATE SET
+          title = EXCLUDED.title,
+          primary_url = EXCLUDED.primary_url
+      `, [novel_id, novel_title, novel_url]);
 
-        // Max-progress policy
-        const last = await client.query(
-            `
-        SELECT percent, chapter_num
+      // Ensure user novel metadata exists
+      await client.query(`
+        INSERT INTO user_novel_meta (user_id, novel_id, started_at)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, novel_id) DO NOTHING
+      `, [user_id, novel_id]);
+
+      // Check if we should update (max-progress policy)
+      const lastProgress = await client.query(`
+        SELECT percent, chapter_num, created_at
         FROM progress_snapshots
         WHERE user_id = $1 AND device_id = $2 AND novel_id = $3
         ORDER BY created_at DESC
         LIMIT 1
-      `,
-            [user_id, device_id, novel_id]
-        );
+      `, [user_id, device_id, novel_id]);
 
-        let shouldUpdate = true;
-        if (last.rows.length > 0) {
-            const prev = last.rows[0];
-            if (prev.chapter_num === chapterInfo.num && percent <= prev.percent) shouldUpdate = false;
-            if (chapterInfo.num < prev.chapter_num) shouldUpdate = false;
-            if (percent <= 1 && prev.percent > 10 && prev.chapter_num === chapterInfo.num) shouldUpdate = false;
+      let shouldUpdate = true;
+      if (lastProgress.rows.length > 0) {
+        const prev = lastProgress.rows[0];
+        // Don't update if going backwards in same chapter
+        if (prev.chapter_num === chapterInfo.num && percentValue <= parseFloat(prev.percent)) {
+          shouldUpdate = false;
         }
+        // Don't update if going to earlier chapter
+        if (chapterInfo.num < prev.chapter_num) {
+          shouldUpdate = false;
+        }
+        // Ignore noise at chapter start if previously made progress
+        if (percentValue <= 1 && parseFloat(prev.percent) > 10 && prev.chapter_num === chapterInfo.num) {
+          shouldUpdate = false;
+        }
+      }
 
-        if (shouldUpdate) {
-            await client.query(
-                `
+      if (shouldUpdate) {
+        await client.query(`
           INSERT INTO progress_snapshots
             (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `,
-                [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percent, novel_url, seconds_on_page]
-            );
-        }
+        `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page]);
+      }
 
-        const states = await getLatestStates(client, user_id, novel_id);
-        res.json({
-            status: 'ok',
-            updated: shouldUpdate,
-            latest_global: states.latest_global,
-            latest_per_device: states.latest_per_device,
+      return await getLatestStates(client, user_id, novel_id);
+    });
+
+    res.json({
+      status: 'success',
+      updated: true,
+      novel_id,
+      ...result
+    });
+
+  } catch (error) {
+    handleDbError(res, error, 'Progress update');
+  }
+});
+
+app.get('/api/v1/progress', validateApiKey, async (req, res) => {
+  const { novel_id } = req.query;
+  
+  if (!novel_id) {
+    return res.status(400).json({ error: 'novel_id parameter required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const states = await getLatestStates(client, req.user.id, novel_id);
+      res.json(states);
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    handleDbError(res, error, 'Get progress');
+  }
+});
+
+app.get('/api/v1/compare', validateApiKey, async (req, res) => {
+  const { novel_id, device_id } = req.query;
+  
+  if (!novel_id || !device_id) {
+    return res.status(400).json({ error: 'novel_id and device_id parameters required' });
+  }
+
+  try {
+    const client = await pool.connect();
+    try {
+      const states = await getLatestStates(client, req.user.id, novel_id);
+      const deviceState = states.latest_per_device[device_id];
+      const globalState = states.latest_global;
+
+      if (!deviceState || !globalState) {
+        return res.json({
+          device_state: deviceState || null,
+          global_state: globalState || null,
+          should_prompt_jump: false,
         });
-    } catch (error) {
-        console.error('Progress update error:', error);
-        res.status(500).json({ error: 'Database error', detail: error.message });
+      }
+
+      const chapterDiff = globalState.chapter_num - deviceState.chapter_num;
+      const percentDiff = globalState.percent - deviceState.percent;
+
+      let shouldPrompt = false;
+      if (chapterDiff > 0) shouldPrompt = true;
+      else if (chapterDiff === 0 && percentDiff >= 5.0) shouldPrompt = true;
+
+      // Don't prompt if this device is the most advanced
+      if (globalState.device_id === device_id) shouldPrompt = false;
+
+      res.json({
+        device_state: deviceState,
+        global_state: globalState,
+        delta: { chapters_ahead: chapterDiff, percent_diff: percentDiff },
+        should_prompt_jump: shouldPrompt,
+      });
     } finally {
-        client.release();
+      client.release();
     }
+  } catch (error) {
+    handleDbError(res, error, 'Compare progress');
+  }
 });
 
-// 2) Get latest progress for a novel
-app.get('/api/v1/progress', async (req, res) => {
-    const { user_key, novel_id } = req.query;
+/* ---------------------- Novel Management ---------------------- */
+app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) => {
+  const { include_removed, status, favorite } = req.query;
+  const { limit, offset } = req.pagination;
 
+  try {
     const client = await pool.connect();
     try {
-        const userResult = await client.query('SELECT id FROM users WHERE api_key = $1', [user_key]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid API key' });
-        }
+      let whereConditions = ['p.user_id = $1'];
+      let params = [req.user.id];
+      let paramIndex = 1;
 
-        const states = await getLatestStates(client, userResult.rows[0].id, novel_id);
-        res.json(states);
-    } catch (error) {
-        console.error('Get progress error:', error);
-        res.status(500).json({ error: 'Database error', detail: error.message });
-    } finally {
-        client.release();
-    }
-});
+      if (include_removed !== 'true') {
+        whereConditions.push(`COALESCE(m.status, 'reading') <> 'removed'`);
+      }
 
-// 3) Compare states (ahead/behind logic)
-app.get('/api/v1/compare', async (req, res) => {
-    const { user_key, novel_id, device_id } = req.query;
+      if (status) {
+        whereConditions.push(`COALESCE(m.status, 'reading') = $${++paramIndex}`);
+        params.push(status);
+      }
 
-    const client = await pool.connect();
-    try {
-        const userResult = await client.query('SELECT id FROM users WHERE api_key = $1', [user_key]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid API key' });
-        }
+      if (favorite === 'true') {
+        whereConditions.push(`m.favorite = TRUE`);
+      }
 
-        const states = await getLatestStates(client, userResult.rows[0].id, novel_id);
-        const deviceState = states.latest_per_device[device_id];
-        const globalState = states.latest_global;
+      const whereClause = whereConditions.length > 1 ? `WHERE ${whereConditions.join(' AND ')}` : `WHERE ${whereConditions[0]}`;
 
-        if (!deviceState || !globalState) {
-            return res.json({
-                device_state: deviceState || null,
-                global_state: globalState || null,
-                should_prompt_jump: false,
-            });
-        }
-
-        const chapterDiff = globalState.chapter_num - deviceState.chapter_num;
-        const percentDiff = globalState.percent - deviceState.percent;
-
-        let shouldPrompt = false;
-        if (chapterDiff > 0) shouldPrompt = true;
-        else if (chapterDiff === 0 && percentDiff >= 5.0) shouldPrompt = true;
-
-        if (globalState.device_id === device_id) shouldPrompt = false;
-
-        res.json({
-            device_state: deviceState,
-            global_state: globalState,
-            delta: { chapters_ahead: chapterDiff, percent_diff: percentDiff },
-            should_prompt_jump: shouldPrompt,
-        });
-    } catch (error) {
-        console.error('Compare error:', error);
-        res.status(500).json({ error: 'Database error', detail: error.message });
-    } finally {
-        client.release();
-    }
-});
-
-// 4) List all novels for dashboard (most recent first)
-app.get('/api/v1/novels', async (req, res) => {
-    const { user_key } = req.query;
-
-    const client = await pool.connect();
-    try {
-        const userResult = await client.query('SELECT id FROM users WHERE api_key = $1', [user_key]);
-        if (userResult.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid API key' });
-        }
-
-        const user_id = userResult.rows[0].id;
-
-        // Most recent activity per novel
-        const novelsResult = await client.query(
-            `
+      const novelsResult = await client.query(`
+        WITH latest AS (
+          SELECT DISTINCT ON (novel_id) novel_id, created_at
+          FROM progress_snapshots
+          WHERE user_id = $1
+          ORDER BY novel_id, created_at DESC
+        )
         SELECT
           n.id,
           n.title,
           n.primary_url,
-          MAX(p.created_at) AS last_seen
+          n.author,
+          n.genre,
+          l.created_at AS last_activity,
+          COALESCE(m.status, 'reading') AS status,
+          COALESCE(m.favorite, FALSE) AS favorite,
+          COALESCE(m.rating, 0) AS rating,
+          m.notes,
+          m.started_at,
+          m.completed_at
         FROM novels n
-        JOIN progress_snapshots p ON n.id = p.novel_id
-        WHERE p.user_id = $1
-        GROUP BY n.id, n.title, n.primary_url
-        ORDER BY last_seen DESC
-      `,
-            [user_id]
-        );
+        JOIN latest l ON n.id = l.novel_id
+        LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
+        LEFT JOIN progress_snapshots p ON p.user_id = $1 AND p.novel_id = n.id
+        ${whereClause}
+        GROUP BY n.id, n.title, n.primary_url, n.author, n.genre, l.created_at,
+                 m.status, m.favorite, m.rating, m.notes, m.started_at, m.completed_at
+        ORDER BY l.created_at DESC
+        LIMIT $${++paramIndex} OFFSET $${++paramIndex}
+      `, [...params, limit, offset]);
 
-        const results = [];
-        for (const novel of novelsResult.rows) {
-            const states = await getLatestStates(client, user_id, novel.id);
-            results.push({
-                novel_id: novel.id,
-                title: novel.title,
-                primary_url: novel.primary_url,
-                latest_global: states.latest_global,
-                latest_per_device: states.latest_per_device,
-            });
+      const results = [];
+      for (const novel of novelsResult.rows) {
+        const states = await getLatestStates(client, req.user.id, novel.id);
+        results.push({
+          novel_id: novel.id,
+          title: novel.title,
+          primary_url: novel.primary_url,
+          author: novel.author,
+          genre: novel.genre,
+          status: novel.status,
+          favorite: novel.favorite,
+          rating: novel.rating,
+          notes: novel.notes,
+          started_at: novel.started_at,
+          completed_at: novel.completed_at,
+          last_activity: novel.last_activity,
+          latest_global: states.latest_global,
+          latest_per_device: states.latest_per_device,
+        });
+      }
+
+      res.json({
+        novels: results,
+        pagination: {
+          limit,
+          offset,
+          total: results.length,
+          has_more: results.length === limit
         }
-
-        res.json(results);
-    } catch (error) {
-        console.error('Novels list error:', error);
-        res.status(500).json({ error: 'Database error', detail: error.message });
+      });
     } finally {
-        client.release();
+      client.release();
     }
+  } catch (error) {
+    handleDbError(res, error, 'List novels');
+  }
 });
 
-/* ------------------ Debug convenience route ------------- */
-// Most recent snapshot across all novels for this API key
-app.get('/api/v1/debug/last', async (req, res) => {
-    const { user_key } = req.query;
+app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+  const { status } = req.body;
+  
+  const allowedStatuses = ['reading', 'completed', 'on-hold', 'dropped', 'removed'];
+  if (!allowedStatuses.includes(status)) {
+    return res.status(400).json({ 
+      error: 'Invalid status', 
+      allowed: allowedStatuses 
+    });
+  }
+
+  try {
+    await withTransaction(async (client) => {
+      const updates = { status, updated_at: 'CURRENT_TIMESTAMP' };
+      
+      if (status === 'completed') {
+        updates.completed_at = 'CURRENT_TIMESTAMP';
+      }
+
+      await client.query(`
+        INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at, completed_at)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP, ${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'NULL'})
+        ON CONFLICT (user_id, novel_id) DO UPDATE SET
+          status = EXCLUDED.status,
+          updated_at = CURRENT_TIMESTAMP,
+          completed_at = CASE WHEN EXCLUDED.status = 'completed' THEN CURRENT_TIMESTAMP ELSE user_novel_meta.completed_at END
+      `, [req.user.id, novelId, status]);
+
+      // Add completion snapshot for completed novels
+      if (status === 'completed') {
+        await client.query(`
+          INSERT INTO progress_snapshots (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
+          SELECT $1, 'system', $2, 'chapter',
+                 COALESCE(MAX(chapter_num), 1), 100,
+                 COALESCE(MAX(url), ''), 0
+          FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2
+        `, [req.user.id, novelId]);
+      }
+    });
+
+    res.json({ success: true, status });
+  } catch (error) {
+    handleDbError(res, error, 'Update novel status');
+  }
+});
+
+app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+  const { hard = false } = req.body;
+
+  try {
+    await withTransaction(async (client) => {
+      if (hard) {
+        // Hard delete: remove all associated data
+        await client.query('DELETE FROM bookmarks WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
+        await client.query('DELETE FROM reading_sessions WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
+        await client.query('DELETE FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
+        await client.query('DELETE FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
+      } else {
+        // Soft delete: mark as removed
+        await client.query(`
+          INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at)
+          VALUES ($1, $2, 'removed', CURRENT_TIMESTAMP)
+          ON CONFLICT (user_id, novel_id) DO UPDATE SET
+            status = 'removed',
+            updated_at = CURRENT_TIMESTAMP
+        `, [req.user.id, novelId]);
+      }
+    });
+
+    res.json({ 
+      success: true, 
+      removed: true, 
+      hard_delete: hard 
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Delete novel');
+  }
+});
+
+/* ---------------------- Additional Novel Endpoints ---------------------- */
+app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+
+  try {
+    await pool.query(`
+      INSERT INTO user_novel_meta (user_id, novel_id, favorite, updated_at)
+      VALUES ($1, $2, TRUE, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, novel_id) DO UPDATE SET
+        favorite = TRUE,
+        updated_at = CURRENT_TIMESTAMP
+    `, [req.user.id, novelId]);
+
+    res.json({ success: true, favorited: true });
+  } catch (error) {
+    handleDbError(res, error, 'Favorite novel');
+  }
+});
+
+app.delete('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+
+  try {
+    await pool.query(`
+      UPDATE user_novel_meta 
+      SET favorite = FALSE, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND novel_id = $2
+    `, [req.user.id, novelId]);
+
+    res.json({ success: true, favorited: false });
+  } catch (error) {
+    handleDbError(res, error, 'Unfavorite novel');
+  }
+});
+
+app.get('/api/v1/novels/completed', validateApiKey, validatePagination, async (req, res) => {
+  const { limit, offset } = req.pagination;
+
+  try {
+    const result = await pool.query(`
+      SELECT n.id, n.title, n.primary_url, n.author, n.genre,
+             m.completed_at, m.rating, m.notes, m.favorite
+      FROM user_novel_meta m
+      JOIN novels n ON n.id = m.novel_id
+      WHERE m.user_id = $1 AND m.status = 'completed'
+      ORDER BY m.completed_at DESC
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limit, offset]);
+
+    res.json({
+      novels: result.rows,
+      pagination: { limit, offset, total: result.rows.length }
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get completed novels');
+  }
+});
+
+app.get('/api/v1/novels/favorites', validateApiKey, validatePagination, async (req, res) => {
+  const { limit, offset } = req.pagination;
+
+  try {
+    const result = await pool.query(`
+      SELECT n.id, n.title, n.primary_url, n.author, n.genre,
+             m.status, m.rating, m.notes, m.updated_at
+      FROM user_novel_meta m
+      JOIN novels n ON n.id = m.novel_id
+      WHERE m.user_id = $1 AND m.favorite = TRUE AND m.status <> 'removed'
+      ORDER BY m.updated_at DESC
+      LIMIT $2 OFFSET $3
+    `, [req.user.id, limit, offset]);
+
+    res.json({
+      novels: result.rows,
+      pagination: { limit, offset, total: result.rows.length }
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get favorite novels');
+  }
+});
+
+app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+  const { notes } = req.body;
+
+  try {
+    await pool.query(`
+      INSERT INTO user_novel_meta (user_id, novel_id, notes, updated_at)
+      VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+      ON CONFLICT (user_id, novel_id) DO UPDATE SET
+        notes = EXCLUDED.notes,
+        updated_at = CURRENT_TIMESTAMP
+    `, [req.user.id, novelId, notes || null]);
+
+    res.json({ success: true });
+  } catch (error) {
+    handleDbError(res, error, 'Update novel notes');
+  }
+});
+
+/* ---------------------- Bookmarks API ---------------------- */
+app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT id, chapter_url, percent, bookmark_type, title, note, created_at
+      FROM bookmarks
+      WHERE user_id = $1 AND novel_id = $2
+      ORDER BY created_at DESC
+    `, [req.user.id, novelId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    handleDbError(res, error, 'Get novel bookmarks');
+  }
+});
+
+app.get('/api/v1/bookmarks', validateApiKey, validatePagination, async (req, res) => {
+  const { limit, offset } = req.pagination;
+  const { bookmark_type } = req.query;
+
+  try {
+    let query = `
+      SELECT b.id, b.novel_id, n.title, b.chapter_url, b.percent, 
+             b.bookmark_type, b.title AS bookmark_title, b.note, b.created_at
+      FROM bookmarks b
+      JOIN novels n ON n.id = b.novel_id
+      WHERE b.user_id = $1
+    `;
+    const params = [req.user.id];
+
+    if (bookmark_type) {
+      query += ` AND b.bookmark_type = ${params.length + 1}`;
+      params.push(bookmark_type);
+    }
+
+    query += ` ORDER BY b.created_at DESC LIMIT ${params.length + 1} OFFSET ${params.length + 2}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      bookmarks: result.rows,
+      pagination: { limit, offset, total: result.rows.length }
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get bookmarks');
+  }
+});
+
+app.post('/api/v1/bookmarks', validateApiKey, async (req, res) => {
+  const { novel_id, chapter_url, percent, bookmark_type = 'position', title, note } = req.body;
+
+  if (!novel_id || !chapter_url || percent == null) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: novel_id, chapter_url, percent' 
+    });
+  }
+
+  const validTypes = ['position', 'highlight', 'note', 'favorite'];
+  if (!validTypes.includes(bookmark_type)) {
+    return res.status(400).json({ 
+      error: 'Invalid bookmark_type', 
+      allowed: validTypes 
+    });
+  }
+
+  const percentValue = Math.max(0, Math.min(100, Number(percent)));
+
+  try {
+    const result = await withTransaction(async (client) => {
+      // Ensure novel exists
+      await client.query(`
+        INSERT INTO novels (id, title, primary_url)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (id) DO NOTHING
+      `, [novel_id, extractNovelTitle(chapter_url), chapter_url]);
+
+      // Create bookmark
+      const insertResult = await client.query(`
+        INSERT INTO bookmarks (user_id, novel_id, chapter_url, percent, bookmark_type, title, note)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, created_at
+      `, [req.user.id, novel_id, chapter_url, percentValue, bookmark_type, title || null, note || null]);
+
+      return insertResult.rows[0];
+    });
+
+    res.status(201).json({ 
+      success: true, 
+      id: result.id,
+      created_at: result.created_at 
+    });
+  } catch (error) {
+    if (error.code === '23505') {
+      return res.status(409).json({ error: 'Bookmark already exists at this position' });
+    }
+    handleDbError(res, error, 'Create bookmark');
+  }
+});
+
+app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
+  const { bookmarkId } = req.params;
+  const { percent, bookmark_type, title, note } = req.body;
+
+  const validTypes = ['position', 'highlight', 'note', 'favorite'];
+  if (bookmark_type && !validTypes.includes(bookmark_type)) {
+    return res.status(400).json({ 
+      error: 'Invalid bookmark_type', 
+      allowed: validTypes 
+    });
+  }
+
+  try {
+    const updates = [];
+    const params = [req.user.id];
+    let paramIndex = 1;
+
+    if (percent != null) {
+      updates.push(`percent = ${++paramIndex}`);
+      params.push(Math.max(0, Math.min(100, Number(percent))));
+    }
+    if (bookmark_type) {
+      updates.push(`bookmark_type = ${++paramIndex}`);
+      params.push(bookmark_type);
+    }
+    if (title !== undefined) {
+      updates.push(`title = ${++paramIndex}`);
+      params.push(title);
+    }
+    if (note !== undefined) {
+      updates.push(`note = ${++paramIndex}`);
+      params.push(note);
+    }
+
+    if (updates.length === 0) {
+      return res.json({ success: true, message: 'No changes provided' });
+    }
+
+    params.push(Number(bookmarkId));
+
+    const result = await pool.query(`
+      UPDATE bookmarks
+      SET ${updates.join(', ')}
+      WHERE user_id = $1 AND id = ${params.length}
+      RETURNING id
+    `, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Bookmark not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    handleDbError(res, error, 'Update bookmark');
+  }
+});
+
+app.delete('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
+  const { bookmarkId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      DELETE FROM bookmarks 
+      WHERE user_id = $1 AND id = $2
+      RETURNING id
+    `, [req.user.id, Number(bookmarkId)]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Bookmark not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    handleDbError(res, error, 'Delete bookmark');
+  }
+});
+
+/* ---------------------- Reading Sessions API ---------------------- */
+app.get('/api/v1/sessions', validateApiKey, validatePagination, async (req, res) => {
+  const { limit, offset } = req.pagination;
+  const { novel_id, device_id } = req.query;
+
+  try {
+    let query = `
+      SELECT s.id, s.novel_id, n.title, s.device_id, d.device_label, s.session_type,
+             s.start_time, s.end_time, s.start_percent, s.end_percent, s.time_spent_seconds
+      FROM reading_sessions s
+      JOIN novels n ON n.id = s.novel_id
+      JOIN devices d ON d.id = s.device_id
+      WHERE s.user_id = $1
+    `;
+    const params = [req.user.id];
+
+    if (novel_id) {
+      query += ` AND s.novel_id = ${params.length + 1}`;
+      params.push(novel_id);
+    }
+    if (device_id) {
+      query += ` AND s.device_id = ${params.length + 1}`;
+      params.push(device_id);
+    }
+
+    query += ` ORDER BY s.start_time DESC LIMIT ${params.length + 1} OFFSET ${params.length + 2}`;
+    params.push(limit, offset);
+
+    const result = await pool.query(query, params);
+
+    res.json({
+      sessions: result.rows,
+      pagination: { limit, offset, total: result.rows.length }
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get reading sessions');
+  }
+});
+
+app.get('/api/v1/sessions/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      SELECT s.id, s.device_id, d.device_label, s.session_type,
+             s.start_time, s.end_time, s.start_percent, s.end_percent, s.time_spent_seconds
+      FROM reading_sessions s
+      JOIN devices d ON d.id = s.device_id
+      WHERE s.user_id = $1 AND s.novel_id = $2
+      ORDER BY s.start_time DESC
+    `, [req.user.id, novelId]);
+
+    res.json(result.rows);
+  } catch (error) {
+    handleDbError(res, error, 'Get novel sessions');
+  }
+});
+
+app.get('/api/v1/sessions/active', validateApiKey, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT s.id, s.novel_id, n.title, s.device_id, d.device_label,
+             s.start_time, s.start_percent,
+             EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - s.start_time))::int AS duration_seconds
+      FROM reading_sessions s
+      JOIN novels n ON n.id = s.novel_id
+      JOIN devices d ON d.id = s.device_id
+      WHERE s.user_id = $1 AND s.end_time IS NULL
+      ORDER BY s.start_time DESC
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    handleDbError(res, error, 'Get active sessions');
+  }
+});
+
+app.post('/api/v1/sessions', validateApiKey, async (req, res) => {
+  const { novel_id, device_id, session_type = 'manual', start_time, start_percent } = req.body;
+
+  if (!novel_id || !device_id) {
+    return res.status(400).json({ 
+      error: 'Missing required fields: novel_id, device_id' 
+    });
+  }
+
+  const validTypes = ['auto', 'manual', 'imported'];
+  if (!validTypes.includes(session_type)) {
+    return res.status(400).json({ 
+      error: 'Invalid session_type', 
+      allowed: validTypes 
+    });
+  }
+
+  try {
+    const result = await pool.query(`
+      INSERT INTO reading_sessions (user_id, novel_id, device_id, session_type, start_time, start_percent)
+      VALUES ($1, $2, $3, $4, COALESCE($5::timestamp, CURRENT_TIMESTAMP), $6)
+      RETURNING id, start_time
+    `, [
+      req.user.id, 
+      novel_id, 
+      device_id, 
+      session_type, 
+      start_time || null, 
+      start_percent != null ? Number(start_percent) : null
+    ]);
+
+    res.status(201).json({ 
+      success: true, 
+      id: result.rows[0].id,
+      start_time: result.rows[0].start_time 
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Start reading session');
+  }
+});
+
+app.put('/api/v1/sessions/:sessionId/end', validateApiKey, async (req, res) => {
+  const { sessionId } = req.params;
+  const { end_time, end_percent, time_spent_seconds } = req.body;
+
+  try {
+    const sessionResult = await pool.query(`
+      SELECT start_time FROM reading_sessions 
+      WHERE id = $1 AND user_id = $2 AND end_time IS NULL
+    `, [Number(sessionId), req.user.id]);
+
+    if (sessionResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Active session not found' });
+    }
+
+    const startTime = new Date(sessionResult.rows[0].start_time);
+    const endTime = end_time ? new Date(end_time) : new Date();
+    const calculatedDuration = time_spent_seconds != null ? 
+      Number(time_spent_seconds) : 
+      Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
+
+    await pool.query(`
+      UPDATE reading_sessions
+      SET end_time = COALESCE($1::timestamp, CURRENT_TIMESTAMP),
+          end_percent = $2,
+          time_spent_seconds = $3
+      WHERE id = $4 AND user_id = $5
+    `, [
+      end_time || null, 
+      end_percent != null ? Number(end_percent) : null, 
+      calculatedDuration, 
+      Number(sessionId), 
+      req.user.id
+    ]);
+
+    res.json({ 
+      success: true, 
+      duration_seconds: calculatedDuration 
+    });
+  } catch (error) {
+    handleDbError(res, error, 'End reading session');
+  }
+});
+
+/* ---------------------- Device Management ---------------------- */
+app.get('/api/v1/devices', validateApiKey, async (req, res) => {
+  const { include_inactive } = req.query;
+
+  try {
+    const result = await pool.query(`
+      SELECT id, device_label, device_type, last_seen, active,
+             (SELECT COUNT(*) FROM progress_snapshots WHERE device_id = d.id) AS total_snapshots,
+             (SELECT MAX(created_at) FROM progress_snapshots WHERE device_id = d.id) AS last_activity
+      FROM devices d
+      WHERE user_id = $1 ${include_inactive === 'true' ? '' : 'AND active = TRUE'}
+      ORDER BY last_seen DESC
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    handleDbError(res, error, 'Get devices');
+  }
+});
+
+app.put('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
+  const { deviceId } = req.params;
+  const { device_label, active } = req.body;
+
+  try {
+    const updates = [];
+    const params = [req.user.id];
+    let paramIndex = 1;
+
+    if (device_label) {
+      updates.push(`device_label = ${++paramIndex}`);
+      params.push(device_label);
+    }
+    if (active !== undefined) {
+      updates.push(`active = ${++paramIndex}`);
+      params.push(Boolean(active));
+    }
+
+    if (updates.length === 0) {
+      return res.json({ success: true, message: 'No changes provided' });
+    }
+
+    updates.push(`last_seen = CURRENT_TIMESTAMP`);
+    params.push(deviceId);
+
+    const result = await pool.query(`
+      UPDATE devices 
+      SET ${updates.join(', ')}
+      WHERE user_id = $1 AND id = ${params.length}
+      RETURNING id
+    `, params);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    handleDbError(res, error, 'Update device');
+  }
+});
+
+app.delete('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
+  const { deviceId } = req.params;
+
+  try {
+    const result = await pool.query(`
+      UPDATE devices 
+      SET active = FALSE, last_seen = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND id = $2
+      RETURNING id
+    `, [req.user.id, deviceId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Device not found' });
+    }
+
+    res.json({ success: true, deactivated: true });
+  } catch (error) {
+    handleDbError(res, error, 'Deactivate device');
+  }
+});
+
+/* ---------------------- Statistics API ---------------------- */
+app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
+  try {
     const client = await pool.connect();
     try {
-        const u = await client.query('SELECT id FROM users WHERE api_key = $1', [user_key]);
-        if (u.rows.length === 0) return res.status(401).json({ error: 'Invalid API key' });
-        const user_id = u.rows[0].id;
+      const [
+        totalNovels,
+        statusCounts,
+        avgProgress,
+        sessionStats,
+        bookmarkCount,
+        deviceCount
+      ] = await Promise.all([
+        client.query(`
+          SELECT COUNT(DISTINCT novel_id) AS total
+          FROM progress_snapshots WHERE user_id = $1
+        `, [req.user.id]),
+        
+        client.query(`
+          SELECT status, COUNT(*) AS count
+          FROM user_novel_meta 
+          WHERE user_id = $1 AND status <> 'removed'
+          GROUP BY status
+        `, [req.user.id]),
+        
+        client.query(`
+          WITH latest AS (
+            SELECT DISTINCT ON (novel_id) novel_id, percent
+            FROM progress_snapshots
+            WHERE user_id = $1
+            ORDER BY novel_id, created_at DESC
+          )
+          SELECT ROUND(AVG(percent), 2) AS avg_progress
+          FROM latest
+        `, [req.user.id]),
+        
+        client.query(`
+          SELECT 
+            COUNT(*) AS total_sessions,
+            COALESCE(SUM(time_spent_seconds), 0) AS total_seconds,
+            ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
+          FROM reading_sessions 
+          WHERE user_id = $1 AND end_time IS NOT NULL
+        `, [req.user.id]),
+        
+        client.query(`
+          SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1
+        `, [req.user.id]),
+        
+        client.query(`
+          SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE
+        `, [req.user.id])
+      ]);
 
-        const r = await client.query(
-            `
-        SELECT p.*, d.device_label, n.title
-        FROM progress_snapshots p
-        JOIN devices d ON d.id = p.device_id
-        JOIN novels n  ON n.id = p.novel_id
-        WHERE p.user_id = $1
-        ORDER BY p.created_at DESC
-        LIMIT 1
-      `,
-            [user_id]
-        );
+      const statusMap = {};
+      statusCounts.rows.forEach(row => {
+        statusMap[row.status] = Number(row.count);
+      });
 
-        res.json({ last: r.rows[0] || null });
-    } catch (e) {
-        console.error('Debug last error:', e);
-        res.status(500).json({ error: 'Database error', detail: e.message });
+      res.json({
+        total_novels: Number(totalNovels.rows[0]?.total || 0),
+        novels_by_status: {
+          reading: statusMap.reading || 0,
+          completed: statusMap.completed || 0,
+          'on-hold': statusMap['on-hold'] || 0,
+          dropped: statusMap.dropped || 0
+        },
+        avg_progress: Number(avgProgress.rows[0]?.avg_progress || 0),
+        reading_sessions: {
+          total: Number(sessionStats.rows[0]?.total_sessions || 0),
+          total_time_seconds: Number(sessionStats.rows[0]?.total_seconds || 0),
+          avg_session_seconds: Number(sessionStats.rows[0]?.avg_session_seconds || 0)
+        },
+        total_bookmarks: Number(bookmarkCount.rows[0]?.total || 0),
+        active_devices: Number(deviceCount.rows[0]?.total || 0)
+      });
     } finally {
-        client.release();
+      client.release();
     }
+  } catch (error) {
+    handleDbError(res, error, 'Get statistics summary');
+  }
 });
 
-/* ---------------------- Static UI ----------------------- */
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
+  const { from, to, days = 30 } = req.query;
+  
+  const fromDate = from ? new Date(from) : new Date(Date.now() - (Number(days) * 24 * 60 * 60 * 1000));
+  const toDate = to ? new Date(to) : new Date();
+
+  try {
+    const result = await pool.query(`
+      WITH date_range AS (
+        SELECT generate_series($2::date, $3::date, '1 day'::interval)::date AS date
+      ),
+      daily_snapshots AS (
+        SELECT 
+          DATE(created_at) AS date,
+          COUNT(*) AS snapshot_events,
+          COUNT(DISTINCT novel_id) AS novels_touched
+        FROM progress_snapshots
+        WHERE user_id = $1 
+          AND created_at >= $2 
+          AND created_at <= $3 + interval '1 day'
+        GROUP BY DATE(created_at)
+      ),
+      daily_sessions AS (
+        SELECT 
+          DATE(start_time) AS date,
+          COUNT(*) AS sessions,
+          COALESCE(SUM(time_spent_seconds), 0) AS session_seconds
+        FROM reading_sessions
+        WHERE user_id = $1 
+          AND start_time >= $2 
+          AND start_time <= $3 + interval '1 day'
+          AND end_time IS NOT NULL
+        GROUP BY DATE(start_time)
+      )
+      SELECT 
+        dr.date,
+        COALESCE(ds.snapshot_events, 0) AS snapshot_events,
+        COALESCE(ds.novels_touched, 0) AS novels_touched,
+        COALESCE(sess.sessions, 0) AS sessions,
+        COALESCE(sess.session_seconds, 0) AS session_seconds
+      FROM date_range dr
+      LEFT JOIN daily_snapshots ds ON dr.date = ds.date
+      LEFT JOIN daily_sessions sess ON dr.date = sess.date
+      ORDER BY dr.date ASC
+    `, [req.user.id, fromDate.toISOString().split('T')[0], toDate.toISOString().split('T')[0]]);
+
+    res.json(result.rows);
+  } catch (error) {
+    handleDbError(res, error, 'Get daily statistics');
+  }
 });
 
-/* ----------------------- Launch ------------------------- */
-initDatabase()
-    .then(() => {
-        app.listen(PORT, '0.0.0.0', () => {
-            console.log(`ReadSync API server running on port ${PORT}`);
-            console.log(`Dashboard: http://localhost:${PORT}`);
-        });
-    })
-    .catch((error) => {
-        console.error('Failed to initialize database:', error);
-        process.exit(1);
+app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+  const { novelId } = req.params;
+
+  try {
+    const client = await pool.connect();
+    try {
+      const [novelInfo, progressStats, sessionStats, bookmarkStats] = await Promise.all([
+        client.query(`
+          SELECT n.title, n.author, n.genre, m.status, m.favorite, m.rating,
+                 m.started_at, m.completed_at
+          FROM novels n
+          LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
+          WHERE n.id = $2
+        `, [req.user.id, novelId]),
+        
+        client.query(`
+          SELECT 
+            COUNT(*) AS total_snapshots,
+            MIN(created_at) AS first_read,
+            MAX(created_at) AS last_read,
+            MAX(percent) AS max_progress,
+            COUNT(DISTINCT device_id) AS devices_used
+          FROM progress_snapshots
+          WHERE user_id = $1 AND novel_id = $2
+        `, [req.user.id, novelId]),
+        
+        client.query(`
+          SELECT 
+            COUNT(*) AS total_sessions,
+            COALESCE(SUM(time_spent_seconds), 0) AS total_time_seconds,
+            ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
+          FROM reading_sessions
+          WHERE user_id = $1 AND novel_id = $2 AND end_time IS NOT NULL
+        `, [req.user.id, novelId]),
+        
+        client.query(`
+          SELECT COUNT(*) AS total_bookmarks
+          FROM bookmarks
+          WHERE user_id = $1 AND novel_id = $2
+        `, [req.user.id, novelId])
+      ]);
+
+      if (novelInfo.rows.length === 0) {
+        return res.status(404).json({ error: 'Novel not found' });
+      }
+
+      res.json({
+        novel: novelInfo.rows[0],
+        progress: progressStats.rows[0],
+        sessions: sessionStats.rows[0],
+        bookmarks: { total: Number(bookmarkStats.rows[0].total_bookmarks) }
+      });
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    handleDbError(res, error, 'Get novel statistics');
+  }
+});
+
+/* ---------------------- Debug Routes ---------------------- */
+app.get('/api/v1/debug/last', validateApiKey, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT p.*, d.device_label, n.title
+      FROM progress_snapshots p
+      JOIN devices d ON d.id = p.device_id
+      JOIN novels n ON n.id = p.novel_id
+      WHERE p.user_id = $1
+      ORDER BY p.created_at DESC
+      LIMIT 1
+    `, [req.user.id]);
+
+    res.json({ 
+      last_snapshot: result.rows[0] || null,
+      timestamp: new Date().toISOString()
     });
+  } catch (error) {
+    handleDbError(res, error, 'Get last progress');
+  }
+});
+
+/* ---------------------- Static File Serving ---------------------- */
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// 404 handler for API routes
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ 
+    error: 'API endpoint not found',
+    path: req.path,
+    method: req.method
+  });
+});
+
+/* ---------------------- Server Startup ---------------------- */
+async function startServer() {
+  try {
+    await initDatabase();
+    
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 ReadSync API server running on port ${PORT}`);
+      console.log(`📊 Dashboard: http://localhost:${PORT}`);
+      console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+      console.log(`📚 API docs: http://localhost:${PORT}/api/v1/`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+      console.log('SIGTERM received, shutting down gracefully...');
+      server.close(() => {
+        pool.end().then(() => {
+          console.log('Database pool closed');
+          process.exit(0);
+        });
+      });
+    });
+
+    process.on('SIGINT', () => {
+      console.log('SIGINT received, shutting down gracefully...');
+      server.close(() => {
+        pool.end().then(() => {
+          console.log('Database pool closed');
+          process.exit(0);
+        });
+      });
+    });
+
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
