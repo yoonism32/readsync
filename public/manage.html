@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ReadSync — Manage</title>
 
-    <!-- Favicons -->
+    <!-- Favicons / PWA -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
     <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
@@ -15,14 +15,12 @@
     <meta name="theme-color" content="#667eea" />
 
     <style>
-        /* Reset */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
 
-        /* Page */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -52,7 +50,6 @@
             opacity: .9;
         }
 
-        /* Auth bar */
         .auth {
             margin: 14px auto 18px;
             max-width: 680px;
@@ -71,15 +68,14 @@
             outline: none;
         }
 
-        /* Buttons */
         .btn {
             padding: 9px 12px;
             border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
             border: 1px solid rgba(255, 255, 255, .35);
             background: rgba(255, 255, 255, .95);
             color: #111827;
-            font-weight: 600;
-            cursor: pointer;
         }
 
         .btn-primary {
@@ -94,7 +90,6 @@
             color: #991b1b;
         }
 
-        /* Panel */
         .panel {
             background: rgba(255, 255, 255, .96);
             border-radius: 16px;
@@ -123,12 +118,9 @@
             border-radius: 10px;
             border: 1px solid #e2e8f0;
             background: #fff;
-            color: #111827;
-            outline: none;
             min-width: 160px;
         }
 
-        /* Grid */
         .novels-grid {
             display: grid;
             gap: 14px;
@@ -198,7 +190,6 @@
             align-items: center;
         }
 
-        /* Alerts */
         .error {
             display: none;
             background: #7f1d1d;
@@ -231,7 +222,6 @@
             <p>Change status or remove novels (API key required)</p>
         </div>
 
-        <!-- Inline login -->
         <div class="auth">
             <input id="apiKey" type="password" placeholder="Enter your API key…" />
             <button class="btn btn-primary" id="connectBtn">Connect</button>
@@ -265,17 +255,11 @@
 
     <script>
         const API_BASE = '/api/v1';
+        const $ = id => document.getElementById(id);
 
-        /* ---------- Small helpers ---------- */
-        const $ = (id) => document.getElementById(id);
-
-        function getKey() {
-            return localStorage.getItem('readsync_api_key') || '';
-        }
-
-        function setKey(k) {
-            localStorage.setItem('readsync_api_key', k);
-        }
+        // ----- auth helpers
+        const getKey = () => localStorage.getItem('readsync_api_key') || '';
+        const setKey = k => localStorage.setItem('readsync_api_key', k);
 
         function showError(msg) {
             const el = $('error');
@@ -284,6 +268,7 @@
             setTimeout(() => { el.style.display = 'none'; }, 3000);
         }
 
+        // generic fetch with key + cache-bust
         async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
             const key = getKey();
             if (!key) throw new Error('API key required');
@@ -293,14 +278,12 @@
             for (const [k, v] of Object.entries(qs)) {
                 if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
             }
-
             const res = await fetch(url.toString(), {
                 method,
                 headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
                 cache: 'no-store',
                 body: body ? JSON.stringify(body) : null
             });
-
             if (!res.ok) {
                 let detail = '';
                 try { const j = await res.json(); detail = j.error || j.detail || JSON.stringify(j); } catch { }
@@ -311,23 +294,22 @@
 
         function fmtAgo(ts) {
             if (!ts) return '';
-            const d = new Date(ts);
-            const diff = (Date.now() - d.getTime()) / 1000; // seconds
-            if (diff < 60) return 'just now';
-            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-            if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+            const d = new Date(ts); const s = (Date.now() - d.getTime()) / 1000;
+            if (s < 60) return 'just now';
+            if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+            if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+            if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
             return d.toLocaleString();
         }
 
-        /* ---------- Auth flow ---------- */
+        // ----- auth flow
         async function connect() {
             const key = ($('apiKey').value || '').trim();
-            if (!key) { showError('Please enter your API key.'); return; }
+            if (!key) return showError('Please enter your API key.');
             try {
-                const whoRes = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
-                if (!whoRes.ok) throw new Error('Invalid key');
-                const who = await whoRes.json();
+                const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
+                if (!ok.ok) throw new Error('Invalid key');
+                const who = await ok.json();
                 setKey(key);
                 $('who').textContent = `Signed in as: ${who.display_name || who.id}`;
                 $('panel').style.display = 'block';
@@ -337,18 +319,18 @@
             }
         }
 
-        /* ---------- Rendering ---------- */
-        function render(novels) {
+        // ----- render
+        function render(list) {
             const grid = $('list');
             grid.innerHTML = '';
 
-            if (!novels.length) {
+            if (!list.length) {
                 $('empty').style.display = 'block';
                 return;
             }
             $('empty').style.display = 'none';
 
-            for (const n of novels) {
+            for (const n of list) {
                 const status = (n.status || 'reading').toLowerCase();
                 const latest = n.latest_global;
 
@@ -372,26 +354,12 @@
           </div>
 
           <div class="row">
-            <select id="sel-${CSS.escape(n.novel_id)}">
-              ${['reading', 'on-hold', 'completed', 'dropped', 'removed'].map(s =>
-                    `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
-            </select>
-
             <button class="btn btn-primary"
-              onclick="saveStatus('${encodeURIComponent(n.novel_id)}')">
-              Save
-            </button>
-
+              onclick="changeStatus('${encodeURIComponent(n.novel_id)}','${status}')">Change Status</button>
             <button class="btn btn-danger"
-              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', false)">
-              Soft Remove
-            </button>
-
+              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', false)">Soft Remove</button>
             <button class="btn btn-danger"
-              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', true)">
-              HARD Delete
-            </button>
-
+              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', true)">HARD Delete</button>
             ${n.primary_url ? `<a class="btn" href="${n.primary_url}" target="_blank" rel="noreferrer">Open</a>` : ''}
           </div>
         `;
@@ -399,15 +367,21 @@
             }
         }
 
-        /* ---------- Actions ---------- */
-        async function saveStatus(encodedNovelId) {
+        // ----- actions (prompt style, like your original)
+        async function changeStatus(encodedNovelId, current) {
+            const novelId = decodeURIComponent(encodedNovelId);
+            const next = prompt(
+                `Set status for ${novelId}\nreading | completed | on-hold | dropped | removed`,
+                current || 'reading'
+            );
+            if (!next) return;
+            const valid = new Set(['reading', 'completed', 'on-hold', 'dropped', 'removed']);
+            if (!valid.has(next)) return showError('Invalid status');
+
             try {
-                const novelId = decodeURIComponent(encodedNovelId);
-                const select = document.querySelector(`#sel-${CSS.escape(novelId)}`);
-                const status = select.value;
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    body: { status }
+                    body: { status: next }
                 });
                 await reload(false);
             } catch (e) {
@@ -434,13 +408,13 @@
             }
         }
 
-        /* ---------- Loader ---------- */
+        // ----- data load
         async function reload(showSpinner = true) {
             $('loading').style.display = showSpinner ? 'block' : 'none';
             try {
                 const status = $('statusFilter').value;
                 const data = await getJSON(`${API_BASE}/novels`, { qs: { status } });
-                // The API returns { novels: [...] }
+                // API returns { novels: [...], pagination: {...} }
                 const novels = Array.isArray(data) ? data : (data.novels || []);
                 const q = ($('q').value || '').toLowerCase();
                 const filtered = novels.filter(n => (n.title || '').toLowerCase().includes(q));
@@ -452,18 +426,15 @@
             }
         }
 
-        /* ---------- Wire up ---------- */
+        // ----- wire up
         $('connectBtn').addEventListener('click', connect);
         $('refreshBtn').addEventListener('click', () => reload(false));
         $('statusFilter').addEventListener('change', () => reload(false));
         $('q').addEventListener('input', () => reload(false));
 
-        // Auto-connect if a key is already saved
+        // auto-connect if key saved
         const saved = getKey();
-        if (saved) {
-            $('apiKey').value = saved;
-            connect();
-        }
+        if (saved) { $('apiKey').value = saved; connect(); }
     </script>
 </body>
 
