@@ -443,31 +443,30 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
 
             // 🔹 Upsert novel with latest chapter info
             await client.query(`
-                INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
-                VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
-                ON CONFLICT (id) DO UPDATE SET
-                    title = EXCLUDED.title,
-                    primary_url = EXCLUDED.primary_url,
-                    latest_chapter_num = CASE 
-                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
-                        THEN EXCLUDED.latest_chapter_num 
-                        ELSE novels.latest_chapter_num 
-                    END,
-                    latest_chapter_title = CASE 
-                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
-                        THEN EXCLUDED.latest_chapter_title 
-                        ELSE novels.latest_chapter_title 
-                    END,
-                    chapters_updated_at = CASE 
-                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
-                        THEN CURRENT_TIMESTAMP 
-                        ELSE novels.chapters_updated_at 
-                    END
-            `, [novel_id, novel_title, novel_url, latestChapterNum, latestChapterTitle]);
-
+        INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
+        VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
+        ON CONFLICT (id) DO UPDATE SET
+            title = EXCLUDED.title,
+            primary_url = EXCLUDED.primary_url,
+            latest_chapter_num = CASE 
+                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                THEN EXCLUDED.latest_chapter_num::integer 
+                ELSE novels.latest_chapter_num 
+            END,
+            latest_chapter_title = CASE 
+                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                THEN EXCLUDED.latest_chapter_title 
+                ELSE novels.latest_chapter_title 
+            END,
+            chapters_updated_at = CASE 
+                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                THEN CURRENT_TIMESTAMP 
+                ELSE novels.chapters_updated_at 
+            END
+        `, [novel_id, novel_title, novel_url, latestChapterNum, latestChapterTitle]);
             // Ensure user novel metadata exists
             await client.query(`
         INSERT INTO user_novel_meta (user_id, novel_id, started_at)
