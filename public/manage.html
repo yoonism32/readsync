@@ -367,7 +367,7 @@
             }
         }
 
-        // ----- actions (prompt style, like your original)
+        // ----- actions on novels
         async function changeStatus(encodedNovelId, current) {
             const novelId = decodeURIComponent(encodedNovelId);
             const next = prompt(
@@ -381,7 +381,7 @@
             try {
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    body: { status: next }
+                    body: { status: next, user_key: getKey() }  // Make sure user_key is in the body
                 });
                 await reload(false);
             } catch (e) {
@@ -408,7 +408,7 @@
             }
         }
 
-        // ----- data load
+        // ----- data load  
         async function reload(showSpinner = true) {
             $('loading').style.display = showSpinner ? 'block' : 'none';
             try {
