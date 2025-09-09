@@ -2,9 +2,10 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ReadSync Dashboard</title>
+
     <style>
         * {
             margin: 0;
@@ -25,132 +26,230 @@
             padding: 20px;
         }
 
+        /* ---------- Header ---------- */
+
         .header {
             text-align: center;
-            margin-bottom: 40px;
+            margin-bottom: 24px;
             color: white;
         }
 
         .header h1 {
-            font-size: 2.5rem;
-            font-weight: 300;
-            margin-bottom: 8px;
+            font-size: 2.4rem;
+            font-weight: 700;
+            margin-bottom: 6px;
         }
 
         .header p {
             opacity: 0.9;
-            font-size: 1.1rem;
+            font-size: 1.05rem;
         }
+
+        .authbar {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            color: #eef2ff;
+            flex-wrap: wrap;
+        }
+
+        .whoami {
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        /* ---------- Controls ---------- */
+
+        .controls {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin: 0 auto 18px;
+            max-width: 980px;
+            justify-content: center;
+        }
+
+        .controls input[type="search"],
+        .controls select {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.9);
+            color: #111827;
+            outline: none;
+            min-width: 180px;
+        }
+
+        /* ---------- Stats ---------- */
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
             gap: 20px;
-            margin-bottom: 40px;
+            margin-bottom: 24px;
         }
 
         .stat-card {
             background: rgba(255, 255, 255, 0.95);
-            padding: 24px;
+            padding: 20px;
             border-radius: 12px;
             text-align: center;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
             backdrop-filter: blur(10px);
         }
 
         .stat-card h3 {
-            font-size: 2rem;
-            font-weight: 600;
+            font-size: 1.9rem;
+            font-weight: 700;
             color: #667eea;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .stat-card p {
-            color: #666;
+            color: #555;
             font-weight: 500;
+        }
+
+        /* ---------- Layout ---------- */
+
+        .layout {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        @media (min-width: 980px) {
+            .layout {
+                grid-template-columns: 1fr 320px;
+            }
+        }
+
+        /* ---------- Cards ---------- */
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+            backdrop-filter: blur(8px);
+        }
+
+        .panel h2 {
+            font-size: 1.1rem;
+            color: #111827;
+            margin-bottom: 10px;
         }
 
         .novels-grid {
             display: grid;
-            gap: 24px;
+            gap: 18px;
         }
 
         .novel-card {
-            background: rgba(255, 255, 255, 0.95);
+            background: rgba(255, 255, 255, 0.96);
             border-radius: 16px;
-            padding: 24px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            backdrop-filter: blur(10px);
+            padding: 18px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
         .novel-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+            transform: translateY(-3px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.16);
         }
 
         .novel-header {
             display: flex;
+            gap: 10px;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .novel-title {
-            font-size: 1.4rem;
-            font-weight: 600;
-            color: #333;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #0f172a;
             line-height: 1.3;
         }
 
+        .novel-title a {
+            text-decoration: none;
+            color: inherit;
+        }
+
         .novel-id {
-            font-size: 0.9rem;
-            color: #888;
-            background: #f0f0f0;
+            font-size: 0.85rem;
+            color: #64748b;
+            background: #f1f5f9;
             padding: 4px 8px;
-            border-radius: 4px;
-            font-family: 'Monaco', 'Courier New', monospace;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        }
+
+        .status-pill {
+            background: #111827;
+            color: #fff;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.75rem;
+            margin-left: 8px;
+        }
+
+        .status-pill.reading {
+            background: #0ea5e9;
+        }
+
+        .status-pill.completed {
+            background: #10b981;
+        }
+
+        .status-pill.on-hold {
+            background: #f59e0b;
+        }
+
+        .status-pill.dropped {
+            background: #ef4444;
         }
 
         .global-progress {
             background: linear-gradient(90deg, #10b981, #059669);
             color: white;
-            padding: 16px;
+            padding: 14px;
             border-radius: 12px;
-            margin-bottom: 16px;
+            margin-bottom: 12px;
         }
 
         .progress-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 6px;
         }
 
         .chapter-info {
-            font-size: 1.2rem;
-            font-weight: 600;
+            font-size: 1.05rem;
+            font-weight: 700;
         }
 
         .percent-info {
-            font-size: 1.1rem;
-            opacity: 0.9;
+            font-size: 1rem;
+            opacity: 0.95;
+            font-weight: 600;
         }
 
         .device-info {
             font-size: 0.9rem;
-            opacity: 0.8;
-        }
-
-        .devices-section {
-            margin-bottom: 16px;
+            opacity: 0.95;
         }
 
         .devices-header {
-            font-size: 1rem;
+            font-size: 0.95rem;
             font-weight: 600;
-            color: #555;
-            margin-bottom: 12px;
+            color: #334155;
+            margin-bottom: 10px;
             display: flex;
             align-items: center;
             gap: 8px;
@@ -158,15 +257,15 @@
 
         .devices-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 10px;
         }
 
         .device-card {
             background: #f8fafc;
             border: 1px solid #e2e8f0;
-            padding: 16px;
-            border-radius: 8px;
+            padding: 12px;
+            border-radius: 10px;
             position: relative;
         }
 
@@ -182,22 +281,18 @@
         }
 
         .device-name {
-            font-weight: 600;
-            margin-bottom: 4px;
+            font-weight: 700;
+            margin-bottom: 3px;
         }
 
         .device-progress {
             font-size: 0.9rem;
-            opacity: 0.8;
-        }
-
-        .device-card.leader .device-progress {
             opacity: 0.9;
         }
 
         .device-timestamp {
             font-size: 0.8rem;
-            opacity: 0.7;
+            opacity: 0.8;
             margin-top: 4px;
         }
 
@@ -219,47 +314,49 @@
 
         .actions {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             flex-wrap: wrap;
+            margin-top: 8px;
         }
 
         .btn {
-            padding: 10px 16px;
-            border: none;
-            border-radius: 8px;
-            font-weight: 500;
+            padding: 9px 12px;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            font-size: 0.9rem;
+            font-size: 0.92rem;
+            background: #f8fafc;
+            color: #1f2937;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
         }
 
         .btn-primary {
             background: linear-gradient(135deg, #667eea, #764ba2);
+            border-color: #818cf8;
             color: white;
         }
 
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        .btn-danger {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #991b1b;
         }
 
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #475569;
-            border: 1px solid #e2e8f0;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
+        /* ---------- Loading / Empty / Error ---------- */
 
         .loading {
             text-align: center;
-            padding: 60px 20px;
+            padding: 50px 20px;
             color: white;
         }
 
@@ -270,7 +367,7 @@
             border-top: 4px solid white;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 18px;
         }
 
         @keyframes spin {
@@ -290,20 +387,32 @@
         }
 
         .empty-state h2 {
-            font-size: 1.5rem;
+            font-size: 1.4rem;
             margin-bottom: 8px;
-            opacity: 0.9;
+            opacity: 0.95;
         }
 
         .empty-state p {
-            opacity: 0.7;
+            opacity: 0.85;
         }
+
+        .error {
+            background: #7f1d1d;
+            border: 1px solid #fecaca;
+            color: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 16px;
+            display: none;
+        }
+
+        /* ---------- Floating Refresh ---------- */
 
         .refresh-btn {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.95);
             border: none;
             border-radius: 50%;
             width: 56px;
@@ -312,14 +421,16 @@
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-            transition: all 0.2s ease;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         .refresh-btn:hover {
-            background: white;
-            transform: scale(1.1);
+            transform: scale(1.07);
+            background: #ffffff;
         }
+
+        /* ---------- Responsive tweaks ---------- */
 
         @media (max-width: 768px) {
             .container {
@@ -335,10 +446,6 @@
                 gap: 8px;
             }
 
-            .actions {
-                flex-direction: column;
-            }
-
             .devices-grid {
                 grid-template-columns: 1fr;
             }
@@ -351,20 +458,54 @@
         <div class="header">
             <h1>📚 ReadSync</h1>
             <p>Cross-device reading progress dashboard</p>
+
+            <div class="authbar">
+                <span id="whoami" class="whoami">Not signed in</span>
+                <button class="btn" onclick="setApiKey()">Set API key</button>
+                <button class="btn" onclick="logout()">Logout</button>
+            </div>
+        </div>
+
+        <div id="error" class="error"></div>
+
+        <div class="controls">
+            <select id="statusFilter">
+                <option value="">All statuses</option>
+                <option value="reading">Reading</option>
+                <option value="on-hold">On-hold</option>
+                <option value="completed">Completed</option>
+                <option value="dropped">Dropped</option>
+            </select>
+
+            <input id="q" type="search" placeholder="Filter by title…" />
+
+            <button class="btn" onclick="reloadAll()">Refresh ↻</button>
         </div>
 
         <div id="stats" class="stats-grid" style="display: none;">
             <div class="stat-card">
-                <h3 id="total-novels">0</h3>
-                <p>Active Novels</p>
+                <h3 id="stat-total-novels">0</h3>
+                <p>Total Novels</p>
             </div>
             <div class="stat-card">
-                <h3 id="total-devices">0</h3>
-                <p>Devices</p>
+                <h3 id="stat-reading">0</h3>
+                <p>Reading</p>
             </div>
             <div class="stat-card">
-                <h3 id="sync-conflicts">0</h3>
-                <p>Sync Conflicts</p>
+                <h3 id="stat-completed">0</h3>
+                <p>Completed</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-avg">0%</h3>
+                <p>Avg Progress</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-sessions">0</h3>
+                <p>Sessions</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="stat-bookmarks">0</h3>
+                <p>Bookmarks</p>
             </div>
         </div>
 
@@ -375,15 +516,25 @@
 
         <div id="empty" class="empty-state" style="display: none;">
             <h2>No novels found</h2>
-            <p>Start reading with the NovelBin userscript to see your progress here!</p>
+            <p>Start reading on a device with the userscript and they’ll appear here.</p>
         </div>
 
-        <div id="novels-container" class="novels-grid" style="display: none;">
-            <!-- Novels will be populated here -->
+        <div class="layout" style="display: none;" id="layout">
+            <section class="panel">
+                <h2>Novels</h2>
+                <div id="novels-container" class="novels-grid"></div>
+            </section>
+
+            <aside class="panel">
+                <h2>Devices</h2>
+                <div id="devices-panel">
+                    <div style="color:#64748b">Loading devices…</div>
+                </div>
+            </aside>
         </div>
     </div>
 
-    <button class="refresh-btn" onclick="loadDashboard()" title="Refresh">
+    <button class="refresh-btn" onclick="reloadAll()" title="Refresh">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
@@ -392,228 +543,348 @@
     </button>
 
     <script>
-        const API_KEY = 'demo-api-key-12345'; // In production, this would be user-specific
         const API_BASE = '/api/v1';
 
-        async function loadDashboard() {
+        /* ------------------ Auth (API key) ------------------ */
+
+        function getApiKey() {
+            return localStorage.getItem('readsync_api_key') || '';
+        }
+
+        async function setApiKey() {
+            const existing = getApiKey() || 'demo-api-key-12345';
+            const key = prompt('Enter your ReadSync API key:', existing);
+            if (!key) return;
+
             try {
-                const response = await fetch(`${API_BASE}/novels?user_key=${API_KEY}`);
-                const novels = await response.json();
+                const who = await getJSON(`${API_BASE}/auth/whoami`);
+                // if it returned, the stored key was ok, but we want to verify the new one:
+            } catch (_) { /* ignore */ }
 
-                document.getElementById('loading').style.display = 'none';
-
-                if (novels.length === 0) {
-                    document.getElementById('empty').style.display = 'block';
-                    return;
-                }
-
-                updateStats(novels);
-                renderNovels(novels);
-
-                document.getElementById('stats').style.display = 'grid';
-                document.getElementById('novels-container').style.display = 'grid';
-
-            } catch (error) {
-                console.error('Failed to load dashboard:', error);
-                document.getElementById('loading').innerHTML = '<h2>Failed to load data</h2><p>Please check the API server is running</p>';
+            // verify new key explicitly
+            try {
+                const res = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
+                if (!res.ok) throw new Error('Invalid key');
+                localStorage.setItem('readsync_api_key', key);
+                await reloadAll();
+            } catch (e) {
+                showError('That API key did not work.');
             }
         }
 
-        function updateStats(novels) {
-            const totalNovels = novels.length;
-            const allDevices = new Set();
-            let conflicts = 0;
-
-            novels.forEach(novel => {
-                Object.keys(novel.latest_per_device).forEach(deviceId => {
-                    allDevices.add(deviceId);
-                });
-
-                // Count conflicts (more than one device with different progress)
-                const deviceStates = Object.values(novel.latest_per_device);
-                if (deviceStates.length > 1) {
-                    const chapters = [...new Set(deviceStates.map(d => d.chapter_num))];
-                    if (chapters.length > 1) conflicts++;
-                }
-            });
-
-            document.getElementById('total-novels').textContent = totalNovels;
-            document.getElementById('total-devices').textContent = allDevices.size;
-            document.getElementById('sync-conflicts').textContent = conflicts;
+        function logout() {
+            localStorage.removeItem('readsync_api_key');
+            location.reload();
         }
 
-        function renderNovels(novels) {
-            const container = document.getElementById('novels-container');
-            container.innerHTML = '';
+        /* ------------------ Fetch helper ------------------ */
 
-            novels.forEach(novel => {
-                const novelCard = createNovelCard(novel);
-                container.appendChild(novelCard);
+        async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
+            const key = getApiKey();
+            if (!key) throw new Error('NO_KEY');
+
+            const url = new URL(path, location.origin);
+            url.searchParams.set('user_key', key);
+            url.searchParams.set('_t', Date.now().toString());
+            for (const [k, v] of Object.entries(qs)) {
+                if (v !== undefined && v !== null && v !== '')
+                    url.searchParams.set(k, v);
+            }
+
+            const res = await fetch(url.toString(), {
+                method,
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+                cache: 'no-store',
+                body: body ? JSON.stringify(body) : null
             });
+
+            if (!res.ok) {
+                let detail = '';
+                try {
+                    const j = await res.json();
+                    detail = j.error || j.detail || JSON.stringify(j);
+                } catch (_) { }
+                throw new Error(`${res.status} ${res.statusText}${detail ? ' – ' + detail : ''}`);
+            }
+            return res.json();
         }
 
-        function createNovelCard(novel) {
-            const card = document.createElement('div');
-            card.className = 'novel-card';
+        /* ------------------ UI helpers ------------------ */
 
-            const global = novel.latest_global;
-            const devices = novel.latest_per_device;
-            const deviceEntries = Object.entries(devices);
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.style.display = 'block';
+            el.textContent = msg;
+        }
 
-            // Determine leader and conflicts
-            const leaderDeviceId = global?.device_id;
+        function clearError() {
+            const el = document.getElementById('error');
+            el.style.display = 'none';
+            el.textContent = '';
+        }
 
-            card.innerHTML = `
-                <div class="novel-header">
-                    <h2 class="novel-title">${novel.title}</h2>
-                    <span class="novel-id">${novel.novel_id}</span>
-                </div>
+        function setLoading(on) {
+            document.getElementById('loading').style.display = on ? 'block' : 'none';
+            document.getElementById('layout').style.display = on ? 'none' : 'grid';
+        }
 
-                ${global ? `
-                <div class="global-progress">
-                    <div class="progress-header">
-                        <div class="chapter-info">Chapter ${global.chapter_num}</div>
-                        <div class="percent-info">${global.percent.toFixed(1)}%</div>
-                    </div>
-                    <div class="device-info">
-                        📱 ${global.device_label} • ${formatTimestamp(global.ts)}
-                    </div>
-                </div>
-                ` : ''}
+        /* ------------------ Renderers ------------------ */
 
-                <div class="devices-section">
-                    <div class="devices-header">
-                        <span>📱 Devices (${deviceEntries.length})</span>
-                    </div>
-                    <div class="devices-grid">
-                        ${deviceEntries.map(([deviceId, device]) => {
-                const isLeader = deviceId === leaderDeviceId;
-                const isBehind = global && (device.chapter_num < global.chapter_num ||
-                    (device.chapter_num === global.chapter_num && device.percent < global.percent - 5));
+        function renderStats(s) {
+            document.getElementById('stat-total-novels').textContent = s.total_novels ?? 0;
+            document.getElementById('stat-reading').textContent = s.reading_novels ?? 0;
+            document.getElementById('stat-completed').textContent = s.completed_novels ?? 0;
+            document.getElementById('stat-avg').textContent = `${(s.avg_progress ?? 0).toFixed(1)}%`;
+            document.getElementById('stat-sessions').textContent = s.sessions_count ?? 0;
+            document.getElementById('stat-bookmarks').textContent = s.total_bookmarks ?? 0;
+            document.getElementById('stats').style.display = 'grid';
+        }
 
+        function deviceEmoji(t) {
+            return t === 'mobile' ? '📱' : t === 'tablet' ? '📟' : '🖥️';
+        }
+
+        function renderDevices(devs) {
+            const el = document.getElementById('devices-panel');
+            if (!devs.length) {
+                el.innerHTML = '<div style="color:#64748b">No devices yet.</div>';
+                return;
+            }
+            el.innerHTML = devs.map(d => {
+                const last = new Date((d.last_seen || '').replace(' ', 'T') + 'Z');
                 return `
+                    <div class="stat" style="display:flex; justify-content:space-between; margin:6px 0;">
+                        <span>${deviceEmoji(d.device_type || 'desktop')} ${d.device_label}</span>
+                        <span style="color:#64748b">${isNaN(last) ? '' : last.toLocaleString()}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderNovels(list) {
+            const grid = document.getElementById('novels-container');
+            const q = (document.getElementById('q').value || '').toLowerCase();
+            const filtered = list.filter(n => (n.title || '').toLowerCase().includes(q));
+
+            grid.innerHTML = '';
+
+            if (!filtered.length) {
+                document.getElementById('empty').style.display = 'block';
+                return;
+            }
+            document.getElementById('empty').style.display = 'none';
+
+            for (const n of filtered) {
+                const card = document.createElement('div');
+                card.className = 'novel-card';
+
+                const status = (n.status || 'reading').toLowerCase();
+                const latest = n.latest_global;
+                const progressText = latest
+                    ? `${latest.chapter_token || 'chapter'} ${latest.chapter_num} • ${Number(latest.percent).toFixed(1)}%`
+                    : '—';
+
+                card.innerHTML = `
+                    <div class="novel-header">
+                        <div class="novel-title">
+                            <a href="${n.primary_url || '#'}" target="_blank" rel="noreferrer">${n.title}</a>
+                            <span class="status-pill ${status}">${status.toUpperCase()}</span>
+                        </div>
+                        <span class="novel-id">${n.novel_id}</span>
+                    </div>
+
+                    ${latest ? `
+                    <div class="global-progress">
+                        <div class="progress-header">
+                            <div class="chapter-info">${latest.chapter_token || 'Chapter'} ${latest.chapter_num}</div>
+                            <div class="percent-info">${Number(latest.percent).toFixed(1)}%</div>
+                        </div>
+                        <div class="device-info">
+                            📱 ${latest.device_label} • ${formatAgo(latest.ts)}
+                        </div>
+                    </div>` : ''}
+
+                    <div class="devices-header">📱 Devices (${Object.keys(n.latest_per_device || {}).length})</div>
+                    <div class="devices-grid">
+                        ${Object.entries(n.latest_per_device || {}).map(([id, d]) => {
+                    const isLeader = latest && id === latest.device_id;
+                    const isBehind = latest && (
+                        (d.chapter_num < latest.chapter_num) ||
+                        (d.chapter_num === latest.chapter_num && d.percent < (latest.percent - 5))
+                    );
+                    return `
                                 <div class="device-card ${isLeader ? 'leader' : isBehind ? 'behind' : ''}">
                                     ${isLeader ? '<div class="leader-badge">👑</div>' : ''}
-                                    <div class="device-name">${device.device_label}</div>
-                                    <div class="device-progress">
-                                        Ch. ${device.chapter_num} • ${device.percent.toFixed(1)}%
-                                    </div>
-                                    <div class="device-timestamp">${formatTimestamp(device.ts)}</div>
+                                    <div class="device-name">${d.device_label}</div>
+                                    <div class="device-progress">Ch. ${d.chapter_num} • ${Number(d.percent).toFixed(1)}%</div>
+                                    <div class="device-timestamp">${formatAgo(d.ts)}</div>
                                 </div>
                             `;
-            }).join('')}
+                }).join('')}
                     </div>
-                </div>
 
-                <div class="actions">
-                    ${global ? `
-                        <a href="${global.url}#nbp=${global.percent.toFixed(1)}" 
-                           class="btn btn-primary" target="_blank">
-                            📖 Resume Reading
-                        </a>
-                        <button class="btn btn-secondary" onclick="copyResumeLink('${global.url}', ${global.percent})">
-                            📋 Copy Link
-                        </button>
-                    ` : ''}
-                    <a href="${novel.primary_url}" class="btn btn-secondary" target="_blank">
-                        🔗 Open Novel
-                    </a>
-                </div>
-            `;
+                    <div class="actions">
+                        ${latest ? `
+                            <a class="btn btn-primary" href="${latest.url}#nbp=${Number(latest.percent).toFixed(1)}" target="_blank">📖 Resume</a>
+                            <button class="btn" onclick="copyResumeLink('${latest.url}', ${Number(latest.percent)})">📋 Copy Link</button>
+                        ` : ''}
+                        <button class="btn" onclick="promptStatus('${n.novel_id}', '${status}')">📝 Change Status</button>
+                        <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}')">🗑 Remove</button>
+                        <a class="btn" href="${n.primary_url}" target="_blank">🔗 Open</a>
+                    </div>
+                `;
 
-            return card;
+                grid.appendChild(card);
+            }
         }
 
-        function formatTimestamp(ts) {
-            const date = new Date(ts);
-            const now = new Date();
-            const diffMs = now - date;
-            const diffMins = Math.floor(diffMs / 60000);
-            const diffHours = Math.floor(diffMs / 3600000);
-            const diffDays = Math.floor(diffMs / 86400000);
+        /* ------------------ Actions ------------------ */
 
-            if (diffMins < 1) return 'Just now';
-            if (diffMins < 60) return `${diffMins}m ago`;
-            if (diffHours < 24) return `${diffHours}h ago`;
-            if (diffDays < 7) return `${diffDays}d ago`;
-            return date.toLocaleDateString();
+        async function promptStatus(novelId, current) {
+            const next = prompt(`Set status for ${novelId}\nreading | completed | on-hold | dropped`, current || 'reading');
+            if (!next) return;
+            const valid = new Set(['reading', 'completed', 'on-hold', 'dropped']);
+            if (!valid.has(next)) {
+                showError('Invalid status value.');
+                return;
+            }
+            try {
+                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
+                    method: 'PUT',
+                    body: { user_key: getApiKey(), status: next }
+                });
+                await reloadAll(false);
+            } catch (e) {
+                showError('Failed to set status: ' + e.message);
+            }
+        }
+
+        async function removeNovel(novelId) {
+            const hard = confirm('Delete reading history & bookmarks too?\nOK = HARD delete, Cancel = soft remove');
+            const sure = confirm(`Really ${hard ? 'HARD delete' : 'remove'} ${novelId}?`);
+            if (!sure) return;
+
+            try {
+                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}`, {
+                    method: 'DELETE',
+                    body: { user_key: getApiKey(), hard }
+                });
+                await reloadAll(false);
+            } catch (e) {
+                showError('Failed to remove: ' + e.message);
+            }
         }
 
         async function copyResumeLink(url, percent) {
-            const cleanUrl = url.replace(/#.*$/, '');
-            const resumeUrl = `${cleanUrl}#nbp=${percent.toFixed(1)}`;
+            const clean = (url || '').replace(/#.*$/, '');
+            const resume = `${clean}#nbp=${Number(percent).toFixed(1)}`;
+            try {
+                await navigator.clipboard.writeText(resume);
+                notify('Copied resume link');
+            } catch (_) {
+                const t = document.createElement('textarea');
+                t.value = resume;
+                document.body.appendChild(t);
+                t.select();
+                document.execCommand('copy');
+                document.body.removeChild(t);
+                notify('Copied resume link');
+            }
+        }
+
+        /* ------------------ Helpers ------------------ */
+
+        function notify(message) {
+            const el = document.createElement('div');
+            el.textContent = message;
+            el.style.cssText = `
+                position: fixed;
+                bottom: 96px;
+                right: 24px;
+                background: rgba(16, 185, 129, 0.97);
+                color: white;
+                padding: 10px 14px;
+                border-radius: 10px;
+                font-weight: 600;
+                z-index: 10000;
+                box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            `;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 1800);
+        }
+
+        function formatAgo(ts) {
+            const d = new Date(ts);
+            if (isNaN(d)) return '';
+            const diff = Date.now() - d.getTime();
+            const m = Math.floor(diff / 60000);
+            const h = Math.floor(diff / 3600000);
+            const day = Math.floor(diff / 86400000);
+
+            if (m < 1) return 'just now';
+            if (m < 60) return `${m}m ago`;
+            if (h < 24) return `${h}h ago`;
+            if (day < 7) return `${day}d ago`;
+            return d.toLocaleDateString();
+        }
+
+        /* ------------------ Load sequence ------------------ */
+
+        async function reloadAll(showSpinner = true) {
+            clearError();
+
+            if (!getApiKey()) {
+                await setApiKey();
+                if (!getApiKey()) return;
+            }
+
+            if (showSpinner) {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('empty').style.display = 'none';
+                document.getElementById('layout').style.display = 'none';
+            }
 
             try {
-                await navigator.clipboard.writeText(resumeUrl);
-                showNotification(`Copied resume link (${percent.toFixed(1)}%)`);
-            } catch (error) {
-                // Fallback for older browsers
-                const textarea = document.createElement('textarea');
-                textarea.value = resumeUrl;
-                document.body.appendChild(textarea);
-                textarea.select();
-                document.execCommand('copy');
-                document.body.removeChild(textarea);
-                showNotification(`Copied resume link (${percent.toFixed(1)}%)`);
+                // whoami
+                const who = await getJSON(`${API_BASE}/auth/whoami`);
+                document.getElementById('whoami').textContent = `Signed in as: ${who.display_name || who.id}`;
+
+                // parallel loads
+                const [stats, devices, novels] = await Promise.all([
+                    getJSON(`${API_BASE}/stats/summary`),
+                    getJSON(`${API_BASE}/devices`),
+                    getJSON(`${API_BASE}/novels`, { qs: { status: document.getElementById('statusFilter').value } })
+                ]);
+
+                renderStats(stats);
+                renderDevices(devices);
+                renderNovels(novels);
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('layout').style.display = 'grid';
+
+                if (!novels.length) {
+                    document.getElementById('empty').style.display = 'block';
+                } else {
+                    document.getElementById('empty').style.display = 'none';
+                }
+            } catch (e) {
+                document.getElementById('loading').style.display = 'none';
+                showError(e.message === 'NO_KEY'
+                    ? 'No API key set. Click “Set API key”.'
+                    : 'Load failed: ' + e.message);
             }
         }
 
-        function showNotification(message) {
-            const notification = document.createElement('div');
-            notification.textContent = message;
-            notification.style.cssText = `
-                position: fixed;
-                bottom: 100px;
-                right: 24px;
-                background: rgba(16, 185, 129, 0.95);
-                color: white;
-                padding: 12px 16px;
-                border-radius: 8px;
-                font-weight: 500;
-                z-index: 10000;
-                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-                animation: slideIn 0.3s ease;
-            `;
+        // Filters
+        document.getElementById('statusFilter').addEventListener('change', () => reloadAll(false));
+        document.getElementById('q').addEventListener('input', () => reloadAll(false));
 
-            document.body.appendChild(notification);
-            setTimeout(() => {
-                notification.style.animation = 'slideOut 0.3s ease forwards';
-                setTimeout(() => notification.remove(), 300);
-            }, 2000);
-        }
+        // Auto-refresh every 30s
+        setInterval(() => reloadAll(false), 30000);
 
-        // Add animation styles
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideIn {
-                from {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-                to {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-            }
-
-            @keyframes slideOut {
-                from {
-                    transform: translateX(0);
-                    opacity: 1;
-                }
-                to {
-                    transform: translateX(100%);
-                    opacity: 0;
-                }
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Auto-refresh every 30 seconds
-        setInterval(loadDashboard, 30000);
-
-        // Load dashboard on page load
-        document.addEventListener('DOMContentLoaded', loadDashboard);
+        // Initial load
+        document.addEventListener('DOMContentLoaded', reloadAll);
     </script>
 </body>
 
