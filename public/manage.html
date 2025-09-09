@@ -8,25 +8,21 @@
 
     <!-- Favicons -->
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
-    <link rel="icon" href="/favicon.ico" sizes="any"><!-- .ico for legacy -->
+    <link rel="icon" href="/favicon.ico" sizes="any">
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-
-    <!-- Optional PWA icons (Android) -->
-    <link rel="icon" type="image/png" sizes="192x192" href="/android-chrome-192x192.png">
-    <link rel="icon" type="image/png" sizes="512x512" href="/android-chrome-512x512.png">
-
-    <!-- Manifest + color for mobile UI bars -->
     <link rel="manifest" href="/site.webmanifest">
-    <meta name="theme-color" content="#667eea">
+    <meta name="theme-color" content="#667eea" />
 
     <style>
+        /* Reset */
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
         }
 
+        /* Page */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -56,6 +52,7 @@
             opacity: .9;
         }
 
+        /* Auth bar */
         .auth {
             margin: 14px auto 18px;
             max-width: 680px;
@@ -74,6 +71,7 @@
             outline: none;
         }
 
+        /* Buttons */
         .btn {
             padding: 9px 12px;
             border-radius: 10px;
@@ -84,18 +82,19 @@
             cursor: pointer;
         }
 
-        .btn-danger {
-            background: #fee2e2;
-            border-color: #fecaca;
-            color: #991b1b;
-        }
-
         .btn-primary {
             background: #667eea;
             border-color: #818cf8;
             color: #fff;
         }
 
+        .btn-danger {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+
+        /* Panel */
         .panel {
             background: rgba(255, 255, 255, .96);
             border-radius: 16px;
@@ -129,6 +128,7 @@
             min-width: 160px;
         }
 
+        /* Grid */
         .novels-grid {
             display: grid;
             gap: 14px;
@@ -152,7 +152,7 @@
         }
 
         .novel-id {
-            font-size: 0.85rem;
+            font-size: .85rem;
             color: #64748b;
             background: #f1f5f9;
             padding: 4px 8px;
@@ -186,13 +186,19 @@
             background: #ef4444;
         }
 
+        .status-pill.removed {
+            background: #6b7280;
+        }
+
         .row {
             display: flex;
             gap: 8px;
             flex-wrap: wrap;
             margin-top: 8px;
+            align-items: center;
         }
 
+        /* Alerts */
         .error {
             display: none;
             background: #7f1d1d;
@@ -228,7 +234,7 @@
         <!-- Inline login -->
         <div class="auth">
             <input id="apiKey" type="password" placeholder="Enter your API key…" />
-            <button class="btn btn-primary" onclick="connect()">Connect</button>
+            <button class="btn btn-primary" id="connectBtn">Connect</button>
             <a class="btn" href="/">← Dashboard</a>
         </div>
 
@@ -245,9 +251,10 @@
                     <option value="on-hold">On-hold</option>
                     <option value="completed">Completed</option>
                     <option value="dropped">Dropped</option>
+                    <option value="removed">Removed</option>
                 </select>
                 <input id="q" type="search" placeholder="Filter by title…" />
-                <button class="btn" onclick="reload(false)">Refresh ↻</button>
+                <button class="btn" id="refreshBtn">Refresh ↻</button>
             </div>
 
             <div id="loading" class="loading" style="display:none;">Loading…</div>
@@ -259,51 +266,41 @@
     <script>
         const API_BASE = '/api/v1';
 
-        // load saved key if present
-        const saved = localStorage.getItem('readsync_api_key') || '';
-        if (saved) document.getElementById('apiKey').value = saved;
-
-        async function connect() {
-            const key = (document.getElementById('apiKey').value || '').trim();
-            if (!key) return showError('Please enter your API key.');
-            try {
-                const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
-                if (!ok.ok) throw new Error('Invalid key');
-                const who = await ok.json();
-                localStorage.setItem('readsync_api_key', key);
-                document.getElementById('who').textContent = `Signed in as: ${who.display_name || who.id}`;
-                document.getElementById('panel').style.display = 'block';
-                reload(true);
-            } catch (e) {
-                showError('Login failed: ' + e.message);
-            }
-        }
+        /* ---------- Small helpers ---------- */
+        const $ = (id) => document.getElementById(id);
 
         function getKey() {
             return localStorage.getItem('readsync_api_key') || '';
         }
 
+        function setKey(k) {
+            localStorage.setItem('readsync_api_key', k);
+        }
+
         function showError(msg) {
-            const el = document.getElementById('error');
-            el.style.display = 'block';
+            const el = $('error');
             el.textContent = msg;
+            el.style.display = 'block';
             setTimeout(() => { el.style.display = 'none'; }, 3000);
         }
 
         async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
             const key = getKey();
+            if (!key) throw new Error('API key required');
             const url = new URL(path, location.origin);
             url.searchParams.set('user_key', key);
             url.searchParams.set('_t', Date.now().toString());
             for (const [k, v] of Object.entries(qs)) {
                 if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
             }
+
             const res = await fetch(url.toString(), {
                 method,
                 headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
                 cache: 'no-store',
                 body: body ? JSON.stringify(body) : null
             });
+
             if (!res.ok) {
                 let detail = '';
                 try { const j = await res.json(); detail = j.error || j.detail || JSON.stringify(j); } catch { }
@@ -312,16 +309,46 @@
             return res.json();
         }
 
-        function render(list) {
-            const grid = document.getElementById('list');
+        function fmtAgo(ts) {
+            if (!ts) return '';
+            const d = new Date(ts);
+            const diff = (Date.now() - d.getTime()) / 1000; // seconds
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+            if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+            return d.toLocaleString();
+        }
+
+        /* ---------- Auth flow ---------- */
+        async function connect() {
+            const key = ($('apiKey').value || '').trim();
+            if (!key) { showError('Please enter your API key.'); return; }
+            try {
+                const whoRes = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
+                if (!whoRes.ok) throw new Error('Invalid key');
+                const who = await whoRes.json();
+                setKey(key);
+                $('who').textContent = `Signed in as: ${who.display_name || who.id}`;
+                $('panel').style.display = 'block';
+                reload(true);
+            } catch (e) {
+                showError('Login failed: ' + e.message);
+            }
+        }
+
+        /* ---------- Rendering ---------- */
+        function render(novels) {
+            const grid = $('list');
             grid.innerHTML = '';
-            if (!list.length) {
-                document.getElementById('empty').style.display = 'block';
+
+            if (!novels.length) {
+                $('empty').style.display = 'block';
                 return;
             }
-            document.getElementById('empty').style.display = 'none';
+            $('empty').style.display = 'none';
 
-            for (const n of list) {
+            for (const n of novels) {
                 const status = (n.status || 'reading').toLowerCase();
                 const latest = n.latest_global;
 
@@ -340,14 +367,31 @@
             ${latest ? `
               Last: <strong>${latest.chapter_token || 'Chapter'} ${Number(latest.chapter_num) || 0}</strong>
               • ${Number(latest.percent || 0).toFixed(1)}%
-              • ${latest.device_label || ''} • ${new Date(latest.ts).toLocaleString()}
+              • ${latest.device_label || ''} • ${fmtAgo(latest.ts)}
             ` : 'No recent progress'}
           </div>
 
           <div class="row">
-            <button class="btn btn-primary" onclick="changeStatus('${n.novel_id}', '${status}')">Change Status</button>
-            <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', false)">Soft Remove</button>
-            <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', true)">HARD Delete</button>
+            <select id="sel-${CSS.escape(n.novel_id)}">
+              ${['reading', 'on-hold', 'completed', 'dropped', 'removed'].map(s =>
+                    `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
+            </select>
+
+            <button class="btn btn-primary"
+              onclick="saveStatus('${encodeURIComponent(n.novel_id)}')">
+              Save
+            </button>
+
+            <button class="btn btn-danger"
+              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', false)">
+              Soft Remove
+            </button>
+
+            <button class="btn btn-danger"
+              onclick="removeNovel('${encodeURIComponent(n.novel_id)}', true)">
+              HARD Delete
+            </button>
+
             ${n.primary_url ? `<a class="btn" href="${n.primary_url}" target="_blank" rel="noreferrer">Open</a>` : ''}
           </div>
         `;
@@ -355,21 +399,24 @@
             }
         }
 
-        async function changeStatus(novelId, current) {
-            const next = prompt(`Set status for ${novelId}\nreading | completed | on-hold | dropped`, current || 'reading');
-            if (!next) return;
-            const valid = new Set(['reading', 'completed', 'on-hold', 'dropped']);
-            if (!valid.has(next)) return showError('Invalid status');
+        /* ---------- Actions ---------- */
+        async function saveStatus(encodedNovelId) {
             try {
+                const novelId = decodeURIComponent(encodedNovelId);
+                const select = document.querySelector(`#sel-${CSS.escape(novelId)}`);
+                const status = select.value;
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    body: { user_key: getKey(), status: next }
+                    body: { status }
                 });
                 await reload(false);
-            } catch (e) { showError('Failed to set status: ' + e.message); }
+            } catch (e) {
+                showError('Failed to set status: ' + e.message);
+            }
         }
 
-        async function removeNovel(novelId, hard) {
+        async function removeNovel(encodedNovelId, hard) {
+            const novelId = decodeURIComponent(encodedNovelId);
             const msg = hard
                 ? 'This permanently deletes snapshots & bookmarks for this novel.\nType DELETE to confirm.'
                 : 'This hides the novel (status=removed) but keeps history.\nType REMOVE to confirm.';
@@ -379,32 +426,44 @@
             try {
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}`, {
                     method: 'DELETE',
-                    body: { user_key: getKey(), hard: !!hard }
+                    body: { hard: !!hard }
                 });
                 await reload(false);
-            } catch (e) { showError('Failed to remove: ' + e.message); }
+            } catch (e) {
+                showError('Failed to remove: ' + e.message);
+            }
         }
 
+        /* ---------- Loader ---------- */
         async function reload(showSpinner = true) {
-            document.getElementById('loading').style.display = showSpinner ? 'block' : 'none';
+            $('loading').style.display = showSpinner ? 'block' : 'none';
             try {
-                const status = document.getElementById('statusFilter').value;
-                const novels = await getJSON(`${API_BASE}/novels`, { qs: { status } });
-                const q = (document.getElementById('q').value || '').toLowerCase();
+                const status = $('statusFilter').value;
+                const data = await getJSON(`${API_BASE}/novels`, { qs: { status } });
+                // The API returns { novels: [...] }
+                const novels = Array.isArray(data) ? data : (data.novels || []);
+                const q = ($('q').value || '').toLowerCase();
                 const filtered = novels.filter(n => (n.title || '').toLowerCase().includes(q));
                 render(filtered);
             } catch (e) {
                 showError('Load failed: ' + e.message);
             } finally {
-                document.getElementById('loading').style.display = 'none';
+                $('loading').style.display = 'none';
             }
         }
 
-        document.getElementById('statusFilter').addEventListener('change', () => reload(false));
-        document.getElementById('q').addEventListener('input', () => reload(false));
+        /* ---------- Wire up ---------- */
+        $('connectBtn').addEventListener('click', connect);
+        $('refreshBtn').addEventListener('click', () => reload(false));
+        $('statusFilter').addEventListener('change', () => reload(false));
+        $('q').addEventListener('input', () => reload(false));
 
-        // Auto-connect if key is saved
-        if (saved) connect();
+        // Auto-connect if a key is already saved
+        const saved = getKey();
+        if (saved) {
+            $('apiKey').value = saved;
+            connect();
+        }
     </script>
 </body>
 
