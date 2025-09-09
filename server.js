@@ -1276,45 +1276,62 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
                 bookmarkCount,
                 deviceCount
             ] = await Promise.all([
-                client.query(`
+                client.query(
+                    `
           SELECT COUNT(DISTINCT novel_id) AS total
-          FROM progress_snapshots WHERE user_id = $1
-        `, [req.user.id]),
+          FROM progress_snapshots
+          WHERE user_id = $1
+          `,
+                    [req.user.id]
+                ),
 
-                client.query(`
+                client.query(
+                    `
           SELECT status, COUNT(*) AS count
-          FROM user_novel_meta 
+          FROM user_novel_meta
           WHERE user_id = $1 AND status <> 'removed'
           GROUP BY status
-        `, [req.user.id]),
+          `,
+                    [req.user.id]
+                ),
 
-                client.query(`
+                // Cast to numeric for 2-arg ROUND
+                client.query(
+                    `
           WITH latest AS (
             SELECT DISTINCT ON (novel_id) novel_id, percent
             FROM progress_snapshots
             WHERE user_id = $1
             ORDER BY novel_id, created_at DESC
           )
-          SELECT ROUND(AVG(percent), 2) AS avg_progress
+          SELECT COALESCE(ROUND(AVG(percent)::numeric, 2), 0)::float AS avg_progress
           FROM latest
-        `, [req.user.id]),
+          `,
+                    [req.user.id]
+                ),
 
-                client.query(`
-          SELECT 
+                // Cast to numeric for 2-arg ROUND on avg seconds
+                client.query(
+                    `
+          SELECT
             COUNT(*) AS total_sessions,
             COALESCE(SUM(time_spent_seconds), 0) AS total_seconds,
-            ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
-          FROM reading_sessions 
+            COALESCE(ROUND(AVG(time_spent_seconds)::numeric, 0), 0)::int AS avg_session_seconds
+          FROM reading_sessions
           WHERE user_id = $1 AND end_time IS NOT NULL
-        `, [req.user.id]),
+          `,
+                    [req.user.id]
+                ),
 
-                client.query(`
-          SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1
-        `, [req.user.id]),
+                client.query(
+                    `SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`,
+                    [req.user.id]
+                ),
 
-                client.query(`
-          SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE
-        `, [req.user.id])
+                client.query(
+                    `SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`,
+                    [req.user.id]
+                )
             ]);
 
             const statusMap = {};
@@ -1346,6 +1363,7 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
         handleDbError(res, error, 'Get statistics summary');
     }
 });
+
 
 app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
     const { from, to, days = 30 } = req.query;

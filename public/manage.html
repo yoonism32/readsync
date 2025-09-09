@@ -4,7 +4,8 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ReadSync — Dashboard</title>
+    <title>ReadSync — Manage</title>
+
     <style>
         * {
             box-sizing: border-box;
@@ -28,8 +29,8 @@
         /* Header */
 
         .header {
-            text-align: center;
             color: #fff;
+            text-align: center;
             margin-bottom: 18px;
         }
 
@@ -64,6 +65,18 @@
             cursor: pointer;
         }
 
+        .btn-danger {
+            background: #fee2e2;
+            border-color: #fecaca;
+            color: #991b1b;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            border-color: #818cf8;
+            color: #fff;
+        }
+
         /* Controls */
 
         .controls {
@@ -86,49 +99,7 @@
             min-width: 180px;
         }
 
-        /* Stats */
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-            gap: 18px;
-            margin-bottom: 22px;
-        }
-
-        .stat-card {
-            background: rgba(255, 255, 255, .95);
-            padding: 18px;
-            border-radius: 12px;
-            text-align: center;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, .12);
-            backdrop-filter: blur(8px);
-        }
-
-        .stat-card h3 {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #667eea;
-            margin-bottom: 6px;
-        }
-
-        .stat-card p {
-            color: #475569;
-            font-weight: 600;
-        }
-
-        /* Layout */
-
-        .layout {
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 18px;
-        }
-
-        @media (min-width: 980px) {
-            .layout {
-                grid-template-columns: 1fr 320px;
-            }
-        }
+        /* Layout / Panels */
 
         .panel {
             background: rgba(255, 255, 255, .96);
@@ -146,7 +117,7 @@
 
         .novels-grid {
             display: grid;
-            gap: 16px;
+            gap: 14px;
         }
 
         .novel-card {
@@ -167,11 +138,11 @@
             gap: 12px;
             justify-content: space-between;
             align-items: flex-start;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
         }
 
         .novel-title {
-            font-size: 1.2rem;
+            font-size: 1.15rem;
             font-weight: 800;
             color: #0f172a;
         }
@@ -216,42 +187,15 @@
             background: #ef4444;
         }
 
-        .global-progress {
-            background: linear-gradient(90deg, #10b981, #059669);
-            color: white;
-            padding: 14px;
-            border-radius: 12px;
-            margin-bottom: 12px;
-        }
-
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
-
-        .devices-header {
-            font-weight: 700;
-            color: #334155;
-            margin-bottom: 8px;
-        }
-
-        .devices-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-            gap: 10px;
-        }
-
-        .device-card {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            padding: 10px;
-            border-radius: 10px;
-        }
-
         .muted {
             color: #64748b;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 10px;
         }
 
         .error {
@@ -303,13 +247,14 @@
     <div class="container">
 
         <div class="header">
-            <h1>📚 ReadSync</h1>
-            <p>Cross-device reading progress dashboard (view-only)</p>
+            <h1>🛠️ ReadSync — Manage</h1>
+            <p>Change status or remove novels (requires API key)</p>
 
             <div class="authbar">
                 <span id="whoami" class="muted">Not signed in</span>
                 <button class="btn" onclick="setApiKey()">Set API key</button>
                 <button class="btn" onclick="logout()">Logout</button>
+                <a class="btn" href="/">← Back to Dashboard</a>
             </div>
         </div>
 
@@ -325,60 +270,23 @@
             </select>
 
             <input id="q" type="search" placeholder="Filter by title…" />
-            <button class="btn" onclick="reloadAll()">Refresh ↻</button>
-            <a class="btn" href="/manage.html">Open Manage (remove / status)</a>
-        </div>
-
-        <div id="stats" class="stats-grid" style="display: none;">
-            <div class="stat-card">
-                <h3 id="stat-total">0</h3>
-                <p>Total Novels</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="stat-reading">0</h3>
-                <p>Reading</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="stat-completed">0</h3>
-                <p>Completed</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="stat-avg">0%</h3>
-                <p>Avg Progress</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="stat-sessions">0</h3>
-                <p>Sessions</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="stat-bookmarks">0</h3>
-                <p>Bookmarks</p>
-            </div>
+            <button class="btn" onclick="reload()">Refresh ↻</button>
         </div>
 
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            <div>Loading your reading progress…</div>
+            <div>Loading your novels…</div>
         </div>
 
         <div id="empty" class="empty">
-            <h3>No novels yet</h3>
+            <h3>No novels found</h3>
             <p>Start reading on a device with the userscript and they’ll show up here.</p>
         </div>
 
-        <div id="layout" class="layout" style="display: none;">
-            <section class="panel">
-                <h2>Novels</h2>
-                <div id="novels" class="novels-grid"></div>
-            </section>
-
-            <aside class="panel">
-                <h2>Devices</h2>
-                <div id="devices">
-                    <div class="muted">Loading…</div>
-                </div>
-            </aside>
-        </div>
+        <section class="panel" id="panel" style="display:none;">
+            <h2>Manage Novels</h2>
+            <div id="list" class="novels-grid"></div>
+        </section>
     </div>
 
     <script>
@@ -397,7 +305,7 @@
                 const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(k)}&_t=${Date.now()}`, { cache: 'no-store' });
                 if (!ok.ok) throw new Error();
                 localStorage.setItem('readsync_api_key', k);
-                reloadAll();
+                reload();
             } catch {
                 showError('That API key did not work.');
             }
@@ -408,7 +316,7 @@
             location.reload();
         }
 
-        /* ---------- Fetch helper (cache-busting) ---------- */
+        /* ---------- Fetch helper ---------- */
 
         async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
             const key = getApiKey();
@@ -447,77 +355,25 @@
             el.textContent = '';
         }
 
-        function setLoading(on) {
-            document.getElementById('loading').style.display = on ? 'block' : 'none';
-            document.getElementById('layout').style.display = on ? 'none' : 'grid';
-        }
+        /* ---------- Render ---------- */
 
-        function formatAgo(ts) {
-            const d = new Date(ts);
-            if (isNaN(d)) return '';
-            const diff = Date.now() - d.getTime();
-            const m = Math.floor(diff / 60000);
-            const h = Math.floor(diff / 3600000);
-            const day = Math.floor(diff / 86400000);
-
-            if (m < 1) return 'just now';
-            if (m < 60) return `${m}m ago`;
-            if (h < 24) return `${h}h ago`;
-            if (day < 7) return `${day}d ago`;
-            return d.toLocaleDateString();
-        }
-
-        /* ---------- Renderers (view-only) ---------- */
-
-        function renderStats(s) {
-            const show = (id, v) => document.getElementById(id).textContent = v;
-            show('stat-total', s.total_novels ?? 0);
-            show('stat-reading', s.reading_novels ?? 0);
-            show('stat-completed', s.completed_novels ?? 0);
-            show('stat-avg', `${(s.avg_progress ?? 0).toFixed(1)}%`);
-            show('stat-sessions', s.sessions_count ?? 0);
-            show('stat-bookmarks', s.total_bookmarks ?? 0);
-            document.getElementById('stats').style.display = 'grid';
-        }
-
-        function renderDevices(list) {
-            const el = document.getElementById('devices');
-            if (!list.length) {
-                el.innerHTML = '<div class="muted">No devices yet.</div>';
-                return;
-            }
-            el.innerHTML = list.map(d => {
-                const last = new Date((d.last_seen || '').replace(' ', 'T') + 'Z');
-                const typeEmoji = d.device_type === 'mobile' ? '📱' : d.device_type === 'tablet' ? '📟' : '🖥️';
-                return `
-          <div style="display:flex; justify-content:space-between; margin:6px 0;">
-            <span>${typeEmoji} ${d.device_label}</span>
-            <span class="muted">${isNaN(last) ? '' : last.toLocaleString()}</span>
-          </div>
-        `;
-            }).join('');
-        }
-
-        function renderNovels(novels) {
-            const q = (document.getElementById('q').value || '').toLowerCase();
-            const f = (document.getElementById('statusFilter').value || '').toLowerCase();
-            const list = novels.filter(n =>
-                (!f || (n.status || 'reading').toLowerCase() === f) &&
-                (n.title || '').toLowerCase().includes(q)
-            );
-
-            const grid = document.getElementById('novels');
+        function render(list) {
+            const grid = document.getElementById('list');
             grid.innerHTML = '';
 
             if (!list.length) {
                 document.getElementById('empty').style.display = 'block';
+                document.getElementById('panel').style.display = 'none';
                 return;
             }
+
             document.getElementById('empty').style.display = 'none';
+            document.getElementById('panel').style.display = 'block';
 
             for (const n of list) {
                 const status = (n.status || 'reading').toLowerCase();
                 const latest = n.latest_global;
+
                 const card = document.createElement('div');
                 card.className = 'novel-card';
                 card.innerHTML = `
@@ -530,33 +386,64 @@
           </div>
 
           ${latest ? `
-            <div class="global-progress">
-              <div class="progress-header">
-                <div><strong>${latest.chapter_token || 'Chapter'} ${latest.chapter_num}</strong></div>
-                <div><strong>${Number(latest.percent).toFixed(1)}%</strong></div>
-              </div>
-              <div class="muted">📱 ${latest.device_label} • ${formatAgo(latest.ts)}</div>
+            <div class="muted">
+              Last: <strong>${latest.chapter_token || 'Chapter'} ${latest.chapter_num}</strong>
+              • ${Number(latest.percent).toFixed(1)}%
+              • ${latest.device_label} • ${new Date(latest.ts).toLocaleString()}
             </div>
-          ` : ''}
+          ` : '<div class="muted">No recent progress</div>'}
 
-          <div class="devices-header">Devices (${Object.keys(n.latest_per_device || {}).length})</div>
-          <div class="devices-grid">
-            ${Object.values(n.latest_per_device || {}).map(d => `
-              <div class="device-card">
-                <div><strong>${d.device_label}</strong></div>
-                <div class="muted">Ch. ${d.chapter_num} • ${Number(d.percent).toFixed(1)}%</div>
-                <div class="muted">${formatAgo(d.ts)}</div>
-              </div>
-            `).join('')}
+          <div class="row">
+            <button class="btn btn-primary" onclick="changeStatus('${n.novel_id}', '${status}')">Change Status</button>
+            <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', false)">Soft Remove</button>
+            <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', true)">HARD Delete</button>
+            ${latest ? `<a class="btn" href="${latest.url}" target="_blank">Open</a>` : ''}
           </div>
         `;
                 grid.appendChild(card);
             }
         }
 
-        /* ---------- Loader ---------- */
+        /* ---------- Actions ---------- */
 
-        async function reloadAll(showSpinner = true) {
+        async function changeStatus(novelId, current) {
+            const next = prompt(`Set status for ${novelId}\nreading | completed | on-hold | dropped`, current || 'reading');
+            if (!next) return;
+            const valid = new Set(['reading', 'completed', 'on-hold', 'dropped']);
+            if (!valid.has(next)) { showError('Invalid status'); return; }
+            try {
+                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
+                    method: 'PUT',
+                    body: { user_key: getApiKey(), status: next }
+                });
+                await reload(false);
+            } catch (e) {
+                showError('Failed to set status: ' + e.message);
+            }
+        }
+
+        async function removeNovel(novelId, hard) {
+            const msg = hard
+                ? 'This will permanently delete snapshots & bookmarks for this novel. Type DELETE to confirm.'
+                : 'This will hide the novel (status=removed) but keep your history. Type REMOVE to confirm.';
+            const expect = hard ? 'DELETE' : 'REMOVE';
+            const answer = prompt(msg, '');
+            if (answer !== expect) return;
+
+            try {
+                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}`, {
+                    method: 'DELETE',
+                    body: { user_key: getApiKey(), hard: !!hard }
+                });
+                await reload(false);
+            } catch (e) {
+                showError('Failed to remove: ' + e.message);
+            }
+        }
+
+        /* ---------- Load ---------- */
+
+        async function reload(showSpinner = true) {
             clearError();
 
             if (!getApiKey()) {
@@ -566,41 +453,35 @@
 
             if (showSpinner) {
                 document.getElementById('loading').style.display = 'block';
-                document.getElementById('layout').style.display = 'none';
                 document.getElementById('empty').style.display = 'none';
+                document.getElementById('panel').style.display = 'none';
             }
 
             try {
                 const who = await getJSON(`${API_BASE}/auth/whoami`);
                 document.getElementById('whoami').textContent = `Signed in as: ${who.display_name || who.id}`;
-            } catch { /* ignore whoami error visually */ }
+            } catch { /* ignore */ }
 
-            // Fetch novels & devices even if stats fail
-            let stats = null, devices = [], novels = [];
-            try { stats = await getJSON(`${API_BASE}/stats/summary`); } catch (e) { /* leave stats null */ }
-            try { devices = await getJSON(`${API_BASE}/devices`); } catch (e) { showError('Devices failed: ' + e.message); }
             try {
-                novels = await getJSON(`${API_BASE}/novels`, { qs: { status: document.getElementById('statusFilter').value } });
+                const status = document.getElementById('statusFilter').value;
+                const novels = await getJSON(`${API_BASE}/novels`, { qs: { status } });
+
+                // local filter
+                const q = (document.getElementById('q').value || '').toLowerCase();
+                const filtered = novels.filter(n => (n.title || '').toLowerCase().includes(q));
+
+                render(filtered);
             } catch (e) {
-                showError('Novels failed: ' + e.message);
+                showError('Load failed: ' + e.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
             }
-
-            if (stats) renderStats(stats);
-            renderDevices(devices);
-            renderNovels(novels);
-
-            document.getElementById('loading').style.display = 'none';
-            document.getElementById('layout').style.display = 'grid';
-            document.getElementById('empty').style.display = novels.length ? 'none' : 'block';
         }
 
-        // filters + initial load
-        document.getElementById('statusFilter').addEventListener('change', () => reloadAll(false));
-        document.getElementById('q').addEventListener('input', () => reloadAll(false));
-        document.addEventListener('DOMContentLoaded', reloadAll);
+        document.getElementById('statusFilter').addEventListener('change', () => reload(false));
+        document.getElementById('q').addEventListener('input', () => reload(false));
 
-        // Optional periodic refresh
-        setInterval(() => reloadAll(false), 30000);
+        document.addEventListener('DOMContentLoaded', reload);
     </script>
 </body>
 
