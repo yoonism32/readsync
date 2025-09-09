@@ -60,6 +60,8 @@ pool.on('connect', () => console.log('New PostgreSQL connection established'));
 /* ---------------------- Error Handling Utilities ---------------------- */
 const handleDbError = (res, error, operation) => {
     console.error(`${operation} error:`, error);
+
+    // Common PostgreSQL error codes
     switch (error.code) {
         case '23503': return res.status(400).json({ error: 'Referenced record not found' });
         case '23505': return res.status(409).json({ error: 'Duplicate entry' });
@@ -94,11 +96,13 @@ const validateApiKey = async (req, res, next) => {
     if (!user_key) {
         return res.status(401).json({ error: 'API key required' });
     }
+
     try {
         const result = await pool.query('SELECT id, display_name FROM users WHERE api_key = $1', [user_key]);
         if (result.rows.length === 0) {
             return res.status(401).json({ error: 'Invalid API key' });
         }
+
         req.user = result.rows[0];
         next();
     } catch (error) {
@@ -130,7 +134,7 @@ async function initDatabase() {
         // Enable UUID extension
         await client.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
 
-        // Users
+        // Users table
         await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -140,7 +144,7 @@ async function initDatabase() {
       )
     `);
 
-        // Devices
+        // Devices table - ensure active column is included
         await client.query(`
       CREATE TABLE IF NOT EXISTS devices (
         id TEXT PRIMARY KEY,
@@ -154,11 +158,8 @@ async function initDatabase() {
         FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
       )
     `);
-        // Ensure legacy DBs have newer columns
-        await client.query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_type TEXT DEFAULT 'unknown'`);
-        await client.query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
 
-        // Novels
+        // Novels catalog
         await client.query(`
       CREATE TABLE IF NOT EXISTS novels (
         id TEXT PRIMARY KEY,
@@ -171,7 +172,14 @@ async function initDatabase() {
       )
     `);
 
-        // Progress snapshots
+        // 🔹 Add latest chapter columns
+        await client.query(`
+          ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_num INTEGER;
+          ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_title TEXT;
+          ALTER TABLE novels ADD COLUMN IF NOT EXISTS chapters_updated_at TIMESTAMP;
+        `);
+
+        // Progress snapshots (time-series data)
         await client.query(`
       CREATE TABLE IF NOT EXISTS progress_snapshots (
         id BIGSERIAL PRIMARY KEY,
@@ -247,8 +255,9 @@ async function initDatabase() {
       )
     `);
 
-        // Indexes
+        // Now create indexes AFTER all tables exist with their columns
         console.log('Creating performance indexes...');
+
         const indexes = [
             'CREATE INDEX IF NOT EXISTS idx_progress_user_novel ON progress_snapshots (user_id, novel_id, created_at DESC)',
             'CREATE INDEX IF NOT EXISTS idx_progress_device ON progress_snapshots (device_id, novel_id, created_at DESC)',
@@ -259,16 +268,18 @@ async function initDatabase() {
             'CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices (user_id, active, last_seen DESC)',
             'CREATE INDEX IF NOT EXISTS idx_user_novel_meta_status ON user_novel_meta (user_id, status, updated_at DESC)',
         ];
+
         for (const indexQuery of indexes) {
             try {
                 await client.query(indexQuery);
                 console.log(`✓ Index created: ${indexQuery.match(/idx_\w+/)[0]}`);
             } catch (indexError) {
                 console.log(`⚠ Index might already exist or had issue: ${indexQuery.match(/idx_\w+/)[0]}`, indexError.message);
+                // Continue with other indexes even if one fails
             }
         }
 
-        // Demo user
+        // Insert demo user
         await client.query(`
       INSERT INTO users (id, display_name, api_key)
       VALUES ('demo-user', 'Demo User', 'demo-api-key-12345')
@@ -305,7 +316,7 @@ function parseChapterFromUrl(url) {
 }
 
 async function getLatestStates(client, userId, novelId) {
-    // Global latest across devices
+    // Get global latest state across all devices
     const globalResult = await client.query(`
     SELECT p.*, d.device_label, d.last_seen AS device_last_seen
     FROM progress_snapshots p
@@ -315,7 +326,7 @@ async function getLatestStates(client, userId, novelId) {
     LIMIT 1
   `, [userId, novelId]);
 
-    // Latest per device
+    // Get latest state per device
     const deviceResult = await client.query(`
     SELECT DISTINCT ON (p.device_id) p.*, d.device_label
     FROM progress_snapshots p
@@ -331,7 +342,7 @@ async function getLatestStates(client, userId, novelId) {
         device_id: globalResult.rows[0].device_id,
         device_label: globalResult.rows[0].device_label,
         url: globalResult.rows[0].url,
-        ts: globalResult.rows[0].created_at,
+        ts: globalResult.rows[0].created_at,          // <-- key used by dashboard.html
     } : null;
 
     const latest_per_device = {};
@@ -342,7 +353,7 @@ async function getLatestStates(client, userId, novelId) {
             percent: parseFloat(row.percent),
             device_label: row.device_label,
             url: row.url,
-            ts: row.created_at,
+            ts: row.created_at,                        // <-- key used by dashboard.html
         };
     });
 
@@ -410,6 +421,8 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
     }
 
     const percentValue = Math.max(0, Math.min(100, Number(percent)));
+    const latestChapterNum = req.body.latest_chapter_num != null ? Number(req.body.latest_chapter_num) : null;
+    const latestChapterTitle = req.body.latest_chapter_title || null;
 
     try {
         const result = await withTransaction(async (client) => {
@@ -428,14 +441,32 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
           active = TRUE
       `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
-            // Upsert novel
+            // 🔹 Upsert novel with latest chapter info
             await client.query(`
-        INSERT INTO novels (id, title, primary_url)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (id) DO UPDATE SET
-          title = EXCLUDED.title,
-          primary_url = EXCLUDED.primary_url
-      `, [novel_id, novel_title, novel_url]);
+                INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
+                VALUES ($1, $2, $3, $4, $5, CASE WHEN $4 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
+                ON CONFLICT (id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    primary_url = EXCLUDED.primary_url,
+                    latest_chapter_num = CASE 
+                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                        THEN EXCLUDED.latest_chapter_num 
+                        ELSE novels.latest_chapter_num 
+                    END,
+                    latest_chapter_title = CASE 
+                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                        THEN EXCLUDED.latest_chapter_title 
+                        ELSE novels.latest_chapter_title 
+                    END,
+                    chapters_updated_at = CASE 
+                        WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
+                        AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                        THEN CURRENT_TIMESTAMP 
+                        ELSE novels.chapters_updated_at 
+                    END
+            `, [novel_id, novel_title, novel_url, latestChapterNum, latestChapterTitle]);
 
             // Ensure user novel metadata exists
             await client.query(`
@@ -444,7 +475,7 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
         ON CONFLICT (user_id, novel_id) DO NOTHING
       `, [user_id, novel_id]);
 
-            // Max-progress policy
+            // Check if we should update (max-progress policy)
             const lastProgress = await client.query(`
         SELECT percent, chapter_num, created_at
         FROM progress_snapshots
@@ -456,12 +487,15 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
             let shouldUpdate = true;
             if (lastProgress.rows.length > 0) {
                 const prev = lastProgress.rows[0];
+                // Don't update if going backwards in same chapter
                 if (prev.chapter_num === chapterInfo.num && percentValue <= parseFloat(prev.percent)) {
                     shouldUpdate = false;
                 }
+                // Don't update if going to earlier chapter
                 if (chapterInfo.num < prev.chapter_num) {
                     shouldUpdate = false;
                 }
+                // Ignore noise at chapter start if previously made progress
                 if (percentValue <= 1 && parseFloat(prev.percent) > 10 && prev.chapter_num === chapterInfo.num) {
                     shouldUpdate = false;
                 }
@@ -492,9 +526,11 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
 
 app.get('/api/v1/progress', validateApiKey, async (req, res) => {
     const { novel_id } = req.query;
+
     if (!novel_id) {
         return res.status(400).json({ error: 'novel_id parameter required' });
     }
+
     try {
         const client = await pool.connect();
         try {
@@ -510,6 +546,7 @@ app.get('/api/v1/progress', validateApiKey, async (req, res) => {
 
 app.get('/api/v1/compare', validateApiKey, async (req, res) => {
     const { novel_id, device_id } = req.query;
+
     if (!novel_id || !device_id) {
         return res.status(400).json({ error: 'novel_id and device_id parameters required' });
     }
@@ -536,6 +573,7 @@ app.get('/api/v1/compare', validateApiKey, async (req, res) => {
             if (chapterDiff > 0) shouldPrompt = true;
             else if (chapterDiff === 0 && percentDiff >= 5.0) shouldPrompt = true;
 
+            // Don't prompt if this device is the most advanced
             if (globalState.device_id === device_id) shouldPrompt = false;
 
             res.json({
@@ -578,32 +616,35 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
             const whereClause = whereConditions.length ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
             const novelsResult = await client.query(`
-        WITH latest AS (
-          SELECT DISTINCT ON (novel_id) novel_id, created_at
-          FROM progress_snapshots
-          WHERE user_id = $1
-          ORDER BY novel_id, created_at DESC
-        )
-        SELECT
-          n.id,
-          n.title,
-          n.primary_url,
-          n.author,
-          n.genre,
-          l.created_at AS last_activity,
-          COALESCE(m.status, 'reading') AS status,
-          COALESCE(m.favorite, FALSE) AS favorite,
-          COALESCE(m.rating, 0) AS rating,
-          m.notes,
-          m.started_at,
-          m.completed_at
-        FROM novels n
-        JOIN latest l ON n.id = l.novel_id
-        LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
-        ${whereClause}
-        ORDER BY l.created_at DESC
-        LIMIT $${++paramIndex} OFFSET $${++paramIndex}
-      `, [...params, limit, offset]);
+                WITH latest AS (
+                    SELECT DISTINCT ON (novel_id) novel_id, created_at
+                    FROM progress_snapshots
+                    WHERE user_id = $1
+                    ORDER BY novel_id, created_at DESC
+                )
+                SELECT
+                    n.id,
+                    n.title,
+                    n.primary_url,
+                    n.author,
+                    n.genre,
+                    n.latest_chapter_num,
+                    n.latest_chapter_title,
+                    n.chapters_updated_at,
+                    l.created_at AS last_activity,
+                    COALESCE(m.status, 'reading') AS status,
+                    COALESCE(m.favorite, FALSE) AS favorite,
+                    COALESCE(m.rating, 0) AS rating,
+                    m.notes,
+                    m.started_at,
+                    m.completed_at
+                FROM novels n
+                JOIN latest l ON n.id = l.novel_id
+                LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
+                ${whereClause}
+                ORDER BY l.created_at DESC
+                LIMIT $${++paramIndex} OFFSET $${++paramIndex}
+            `, [...params, limit, offset]);
 
             const results = [];
             for (const novel of novelsResult.rows) {
@@ -614,6 +655,9 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
                     primary_url: novel.primary_url,
                     author: novel.author,
                     genre: novel.genre,
+                    latest_chapter_num: novel.latest_chapter_num,
+                    latest_chapter_title: novel.latest_chapter_title,
+                    chapters_updated_at: novel.chapters_updated_at,
                     status: novel.status,
                     favorite: novel.favorite,
                     rating: novel.rating,
@@ -626,7 +670,7 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
                 });
             }
 
-            // return a plain array for the public dashboard
+            // Return plain array for dashboard consumption
             res.json(results);
         } finally {
             client.release();
@@ -636,37 +680,70 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
     }
 });
 
+// 🔁 Replaced/updated status endpoint
 app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
     const { status } = req.body;
+
     const allowedStatuses = ['reading', 'completed', 'on-hold', 'dropped', 'removed'];
-    if (!allowedStatuses.includes(status)) {
+    if (!status || !allowedStatuses.includes(status)) {
         return res.status(400).json({ error: 'Invalid status', allowed: allowedStatuses });
     }
 
     try {
-        await withTransaction(async (client) => {
-            await client.query(`
-        INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at, completed_at)
-        VALUES ($1, $2, $3, CURRENT_TIMESTAMP, ${status === 'completed' ? 'CURRENT_TIMESTAMP' : 'NULL'})
-        ON CONFLICT (user_id, novel_id) DO UPDATE SET
-          status = EXCLUDED.status,
-          updated_at = CURRENT_TIMESTAMP,
-          completed_at = CASE WHEN EXCLUDED.status = 'completed' THEN CURRENT_TIMESTAMP ELSE user_novel_meta.completed_at END
-      `, [req.user.id, novelId, status]);
+        const result = await withTransaction(async (client) => {
+            // Update the status
+            const updateResult = await client.query(`
+                INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at, completed_at)
+                VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)
+                ON CONFLICT (user_id, novel_id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    updated_at = CURRENT_TIMESTAMP,
+                    completed_at = CASE 
+                        WHEN EXCLUDED.status = 'completed' THEN COALESCE(user_novel_meta.completed_at, CURRENT_TIMESTAMP)
+                        WHEN EXCLUDED.status != 'completed' THEN NULL
+                        ELSE user_novel_meta.completed_at 
+                    END
+                RETURNING *
+            `, [req.user.id, novelId, status, status === 'completed' ? 'CURRENT_TIMESTAMP' : null]);
 
+            // If marking as completed, create a 100% progress snapshot
             if (status === 'completed') {
-                await client.query(`
-          INSERT INTO progress_snapshots (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
-          SELECT $1, 'system', $2, 'chapter',
-                 COALESCE(MAX(chapter_num), 1), 100,
-                 COALESCE(MAX(url), ''), 0
-          FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2
-        `, [req.user.id, novelId]);
+                // Get the latest progress to determine chapter info
+                const latestProgress = await client.query(`
+                    SELECT chapter_num, chapter_token, url, novel_id
+                    FROM progress_snapshots
+                    WHERE user_id = $1 AND novel_id = $2
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                `, [req.user.id, novelId]);
+
+                if (latestProgress.rows.length > 0) {
+                    const latest = latestProgress.rows[0];
+                    await client.query(`
+                        INSERT INTO progress_snapshots (
+                            user_id, device_id, novel_id, chapter_token, 
+                            chapter_num, percent, url, seconds_on_page
+                        )
+                        VALUES ($1, 'system', $2, $3, $4, 100, $5, 0)
+                    `, [
+                        req.user.id,
+                        latest.novel_id,
+                        latest.chapter_token,
+                        latest.chapter_num,
+                        latest.url
+                    ]);
+                }
             }
+
+            return updateResult.rows[0];
         });
 
-        res.json({ success: true, status });
+        res.json({
+            success: true,
+            status: result.status,
+            updated_at: result.updated_at
+        });
     } catch (error) {
         handleDbError(res, error, 'Update novel status');
     }
@@ -679,11 +756,13 @@ app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (re
     try {
         await withTransaction(async (client) => {
             if (hard) {
+                // Hard delete: remove all associated data
                 await client.query('DELETE FROM bookmarks WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
                 await client.query('DELETE FROM reading_sessions WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
                 await client.query('DELETE FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
                 await client.query('DELETE FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2', [req.user.id, novelId]);
             } else {
+                // Soft delete: mark as removed
                 await client.query(`
           INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at)
           VALUES ($1, $2, 'removed', CURRENT_TIMESTAMP)
@@ -694,7 +773,11 @@ app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (re
             }
         });
 
-        res.json({ success: true, removed: true, hard_delete: hard });
+        res.json({
+            success: true,
+            removed: true,
+            hard_delete: hard
+        });
     } catch (error) {
         handleDbError(res, error, 'Delete novel');
     }
@@ -703,6 +786,7 @@ app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (re
 /* ---------------------- Additional Novel Endpoints ---------------------- */
 app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
+
     try {
         await pool.query(`
       INSERT INTO user_novel_meta (user_id, novel_id, favorite, updated_at)
@@ -711,6 +795,7 @@ app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, as
         favorite = TRUE,
         updated_at = CURRENT_TIMESTAMP
     `, [req.user.id, novelId]);
+
         res.json({ success: true, favorited: true });
     } catch (error) {
         handleDbError(res, error, 'Favorite novel');
@@ -719,12 +804,14 @@ app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, as
 
 app.delete('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
+
     try {
         await pool.query(`
       UPDATE user_novel_meta 
       SET favorite = FALSE, updated_at = CURRENT_TIMESTAMP
       WHERE user_id = $1 AND novel_id = $2
     `, [req.user.id, novelId]);
+
         res.json({ success: true, favorited: false });
     } catch (error) {
         handleDbError(res, error, 'Unfavorite novel');
@@ -733,6 +820,7 @@ app.delete('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, 
 
 app.get('/api/v1/novels/completed', validateApiKey, validatePagination, async (req, res) => {
     const { limit, offset } = req.pagination;
+
     try {
         const result = await pool.query(`
       SELECT n.id, n.title, n.primary_url, n.author, n.genre,
@@ -743,7 +831,11 @@ app.get('/api/v1/novels/completed', validateApiKey, validatePagination, async (r
       ORDER BY m.completed_at DESC
       LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
-        res.json({ novels: result.rows, pagination: { limit, offset, total: result.rows.length } });
+
+        res.json({
+            novels: result.rows,
+            pagination: { limit, offset, total: result.rows.length }
+        });
     } catch (error) {
         handleDbError(res, error, 'Get completed novels');
     }
@@ -751,6 +843,7 @@ app.get('/api/v1/novels/completed', validateApiKey, validatePagination, async (r
 
 app.get('/api/v1/novels/favorites', validateApiKey, validatePagination, async (req, res) => {
     const { limit, offset } = req.pagination;
+
     try {
         const result = await pool.query(`
       SELECT n.id, n.title, n.primary_url, n.author, n.genre,
@@ -761,7 +854,11 @@ app.get('/api/v1/novels/favorites', validateApiKey, validatePagination, async (r
       ORDER BY m.updated_at DESC
       LIMIT $2 OFFSET $3
     `, [req.user.id, limit, offset]);
-        res.json({ novels: result.rows, pagination: { limit, offset, total: result.rows.length } });
+
+        res.json({
+            novels: result.rows,
+            pagination: { limit, offset, total: result.rows.length }
+        });
     } catch (error) {
         handleDbError(res, error, 'Get favorite novels');
     }
@@ -770,6 +867,7 @@ app.get('/api/v1/novels/favorites', validateApiKey, validatePagination, async (r
 app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
     const { notes } = req.body;
+
     try {
         await pool.query(`
       INSERT INTO user_novel_meta (user_id, novel_id, notes, updated_at)
@@ -778,6 +876,7 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
         notes = EXCLUDED.notes,
         updated_at = CURRENT_TIMESTAMP
     `, [req.user.id, novelId, notes || null]);
+
         res.json({ success: true });
     } catch (error) {
         handleDbError(res, error, 'Update novel notes');
@@ -787,6 +886,7 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
 /* ---------------------- Bookmarks API ---------------------- */
 app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
+
     try {
         const result = await pool.query(`
       SELECT id, chapter_url, percent, bookmark_type, title, note, created_at
@@ -794,6 +894,7 @@ app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (re
       WHERE user_id = $1 AND novel_id = $2
       ORDER BY created_at DESC
     `, [req.user.id, novelId]);
+
         res.json(result.rows);
     } catch (error) {
         handleDbError(res, error, 'Get novel bookmarks');
@@ -823,7 +924,11 @@ app.get('/api/v1/bookmarks', validateApiKey, validatePagination, async (req, res
         params.push(limit, offset);
 
         const result = await pool.query(query, params);
-        res.json({ bookmarks: result.rows, pagination: { limit, offset, total: result.rows.length } });
+
+        res.json({
+            bookmarks: result.rows,
+            pagination: { limit, offset, total: result.rows.length }
+        });
     } catch (error) {
         handleDbError(res, error, 'Get bookmarks');
     }
@@ -833,22 +938,31 @@ app.post('/api/v1/bookmarks', validateApiKey, async (req, res) => {
     const { novel_id, chapter_url, percent, bookmark_type = 'position', title, note } = req.body;
 
     if (!novel_id || !chapter_url || percent == null) {
-        return res.status(400).json({ error: 'Missing required fields: novel_id, chapter_url, percent' });
+        return res.status(400).json({
+            error: 'Missing required fields: novel_id, chapter_url, percent'
+        });
     }
+
     const validTypes = ['position', 'highlight', 'note', 'favorite'];
     if (!validTypes.includes(bookmark_type)) {
-        return res.status(400).json({ error: 'Invalid bookmark_type', allowed: validTypes });
+        return res.status(400).json({
+            error: 'Invalid bookmark_type',
+            allowed: validTypes
+        });
     }
+
     const percentValue = Math.max(0, Math.min(100, Number(percent)));
 
     try {
         const result = await withTransaction(async (client) => {
+            // Ensure novel exists
             await client.query(`
         INSERT INTO novels (id, title, primary_url)
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO NOTHING
       `, [novel_id, extractNovelTitle(chapter_url), chapter_url]);
 
+            // Create bookmark
             const insertResult = await client.query(`
         INSERT INTO bookmarks (user_id, novel_id, chapter_url, percent, bookmark_type, title, note)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -858,7 +972,11 @@ app.post('/api/v1/bookmarks', validateApiKey, async (req, res) => {
             return insertResult.rows[0];
         });
 
-        res.status(201).json({ success: true, id: result.id, created_at: result.created_at });
+        res.status(201).json({
+            success: true,
+            id: result.id,
+            created_at: result.created_at
+        });
     } catch (error) {
         if (error.code === '23505') {
             return res.status(409).json({ error: 'Bookmark already exists at this position' });
@@ -873,7 +991,10 @@ app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
 
     const validTypes = ['position', 'highlight', 'note', 'favorite'];
     if (bookmark_type && !validTypes.includes(bookmark_type)) {
-        return res.status(400).json({ error: 'Invalid bookmark_type', allowed: validTypes });
+        return res.status(400).json({
+            error: 'Invalid bookmark_type',
+            allowed: validTypes
+        });
     }
 
     try {
@@ -923,15 +1044,18 @@ app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
 
 app.delete('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
     const { bookmarkId } = req.params;
+
     try {
         const result = await pool.query(`
       DELETE FROM bookmarks 
       WHERE user_id = $1 AND id = $2
       RETURNING id
     `, [req.user.id, Number(bookmarkId)]);
+
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Bookmark not found' });
         }
+
         res.json({ success: true });
     } catch (error) {
         handleDbError(res, error, 'Delete bookmark');
@@ -966,8 +1090,13 @@ app.get('/api/v1/sessions', validateApiKey, validatePagination, async (req, res)
         query += ` ORDER BY s.start_time DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
         params.push(limit, offset);
 
+
         const result = await pool.query(query, params);
-        res.json({ sessions: result.rows, pagination: { limit, offset, total: result.rows.length } });
+
+        res.json({
+            sessions: result.rows,
+            pagination: { limit, offset, total: result.rows.length }
+        });
     } catch (error) {
         handleDbError(res, error, 'Get reading sessions');
     }
@@ -975,6 +1104,7 @@ app.get('/api/v1/sessions', validateApiKey, validatePagination, async (req, res)
 
 app.get('/api/v1/sessions/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
+
     try {
         const result = await pool.query(`
       SELECT s.id, s.device_id, d.device_label, s.session_type,
@@ -984,6 +1114,7 @@ app.get('/api/v1/sessions/:novelId', validateApiKey, validateNovelId, async (req
       WHERE s.user_id = $1 AND s.novel_id = $2
       ORDER BY s.start_time DESC
     `, [req.user.id, novelId]);
+
         res.json(result.rows);
     } catch (error) {
         handleDbError(res, error, 'Get novel sessions');
@@ -1002,6 +1133,7 @@ app.get('/api/v1/sessions/active', validateApiKey, async (req, res) => {
       WHERE s.user_id = $1 AND s.end_time IS NULL
       ORDER BY s.start_time DESC
     `, [req.user.id]);
+
         res.json(result.rows);
     } catch (error) {
         handleDbError(res, error, 'Get active sessions');
@@ -1012,11 +1144,17 @@ app.post('/api/v1/sessions', validateApiKey, async (req, res) => {
     const { novel_id, device_id, session_type = 'manual', start_time, start_percent } = req.body;
 
     if (!novel_id || !device_id) {
-        return res.status(400).json({ error: 'Missing required fields: novel_id, device_id' });
+        return res.status(400).json({
+            error: 'Missing required fields: novel_id, device_id'
+        });
     }
+
     const validTypes = ['auto', 'manual', 'imported'];
     if (!validTypes.includes(session_type)) {
-        return res.status(400).json({ error: 'Invalid session_type', allowed: validTypes });
+        return res.status(400).json({
+            error: 'Invalid session_type',
+            allowed: validTypes
+        });
     }
 
     try {
@@ -1032,7 +1170,12 @@ app.post('/api/v1/sessions', validateApiKey, async (req, res) => {
             start_time || null,
             start_percent != null ? Number(start_percent) : null
         ]);
-        res.status(201).json({ success: true, id: result.rows[0].id, start_time: result.rows[0].start_time });
+
+        res.status(201).json({
+            success: true,
+            id: result.rows[0].id,
+            start_time: result.rows[0].start_time
+        });
     } catch (error) {
         handleDbError(res, error, 'Start reading session');
     }
@@ -1054,9 +1197,9 @@ app.put('/api/v1/sessions/:sessionId/end', validateApiKey, async (req, res) => {
 
         const startTime = new Date(sessionResult.rows[0].start_time);
         const endTime = end_time ? new Date(end_time) : new Date();
-        const calculatedDuration = time_spent_seconds != null
-            ? Number(time_spent_seconds)
-            : Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
+        const calculatedDuration = time_spent_seconds != null ?
+            Number(time_spent_seconds) :
+            Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
 
         await pool.query(`
       UPDATE reading_sessions
@@ -1072,7 +1215,10 @@ app.put('/api/v1/sessions/:sessionId/end', validateApiKey, async (req, res) => {
             req.user.id
         ]);
 
-        res.json({ success: true, duration_seconds: calculatedDuration });
+        res.json({
+            success: true,
+            duration_seconds: calculatedDuration
+        });
     } catch (error) {
         handleDbError(res, error, 'End reading session');
     }
@@ -1081,6 +1227,7 @@ app.put('/api/v1/sessions/:sessionId/end', validateApiKey, async (req, res) => {
 /* ---------------------- Device Management ---------------------- */
 app.get('/api/v1/devices', validateApiKey, async (req, res) => {
     const { include_inactive } = req.query;
+
     try {
         const result = await pool.query(`
       SELECT id, device_label, device_type, last_seen, active,
@@ -1090,6 +1237,7 @@ app.get('/api/v1/devices', validateApiKey, async (req, res) => {
       WHERE user_id = $1 ${include_inactive === 'true' ? '' : 'AND active = TRUE'}
       ORDER BY last_seen DESC
     `, [req.user.id]);
+
         res.json(result.rows);
     } catch (error) {
         handleDbError(res, error, 'Get devices');
@@ -1140,6 +1288,7 @@ app.put('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
 
 app.delete('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
     const { deviceId } = req.params;
+
     try {
         const result = await pool.query(`
       UPDATE devices 
@@ -1147,9 +1296,11 @@ app.delete('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
       WHERE user_id = $1 AND id = $2
       RETURNING id
     `, [req.user.id, deviceId]);
+
         if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Device not found' });
         }
+
         res.json({ success: true, deactivated: true });
     } catch (error) {
         handleDbError(res, error, 'Deactivate device');
@@ -1169,18 +1320,28 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
                 bookmarkCount,
                 deviceCount
             ] = await Promise.all([
-                client.query(`
+                client.query(
+                    `
           SELECT COUNT(DISTINCT novel_id) AS total
           FROM progress_snapshots
           WHERE user_id = $1
-        `, [req.user.id]),
-                client.query(`
+          `,
+                    [req.user.id]
+                ),
+
+                client.query(
+                    `
           SELECT status, COUNT(*) AS count
-          FROM user_novel_meta 
+          FROM user_novel_meta
           WHERE user_id = $1 AND status <> 'removed'
           GROUP BY status
-        `, [req.user.id]),
-                client.query(`
+          `,
+                    [req.user.id]
+                ),
+
+                // Cast to numeric for 2-arg ROUND
+                client.query(
+                    `
           WITH latest AS (
             SELECT DISTINCT ON (novel_id) novel_id, percent
             FROM progress_snapshots
@@ -1189,21 +1350,38 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
           )
           SELECT COALESCE(ROUND(AVG(percent)::numeric, 2), 0)::float AS avg_progress
           FROM latest
-        `, [req.user.id]),
-                client.query(`
-          SELECT 
+          `,
+                    [req.user.id]
+                ),
+
+                // Cast to numeric for 2-arg ROUND on avg seconds
+                client.query(
+                    `
+          SELECT
             COUNT(*) AS total_sessions,
             COALESCE(SUM(time_spent_seconds), 0) AS total_seconds,
             COALESCE(ROUND(AVG(time_spent_seconds)::numeric, 0), 0)::int AS avg_session_seconds
-          FROM reading_sessions 
+          FROM reading_sessions
           WHERE user_id = $1 AND end_time IS NOT NULL
-        `, [req.user.id]),
-                client.query(`SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`, [req.user.id]),
-                client.query(`SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`, [req.user.id])
+          `,
+                    [req.user.id]
+                ),
+
+                client.query(
+                    `SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`,
+                    [req.user.id]
+                ),
+
+                client.query(
+                    `SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`,
+                    [req.user.id]
+                )
             ]);
 
             const statusMap = {};
-            statusCounts.rows.forEach(row => { statusMap[row.status] = Number(row.count); });
+            statusCounts.rows.forEach(row => {
+                statusMap[row.status] = Number(row.count);
+            });
 
             res.json({
                 total_novels: Number(totalNovels.rows[0]?.total || 0),
@@ -1230,8 +1408,10 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
     }
 });
 
+
 app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
     const { from, to, days = 30 } = req.query;
+
     const fromDate = from ? new Date(from) : new Date(Date.now() - (Number(days) * 24 * 60 * 60 * 1000));
     const toDate = to ? new Date(to) : new Date();
 
@@ -1274,6 +1454,7 @@ app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
       LEFT JOIN daily_sessions sess ON dr.date = sess.date
       ORDER BY dr.date ASC
     `, [req.user.id, fromDate.toISOString().split('T')[0], toDate.toISOString().split('T')[0]]);
+
         res.json(result.rows);
     } catch (error) {
         handleDbError(res, error, 'Get daily statistics');
@@ -1282,6 +1463,7 @@ app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
 
 app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
+
     try {
         const client = await pool.connect();
         try {
@@ -1293,6 +1475,7 @@ app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async 
           LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
           WHERE n.id = $2
         `, [req.user.id, novelId]),
+
                 client.query(`
           SELECT 
             COUNT(*) AS total_snapshots,
@@ -1303,14 +1486,16 @@ app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async 
           FROM progress_snapshots
           WHERE user_id = $1 AND novel_id = $2
         `, [req.user.id, novelId]),
+
                 client.query(`
           SELECT 
             COUNT(*) AS total_sessions,
             COALESCE(SUM(time_spent_seconds), 0) AS total_time_seconds,
-            COALESCE(ROUND(AVG(time_spent_seconds)::numeric, 0), 0)::int AS avg_session_seconds
+            ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
           FROM reading_sessions
           WHERE user_id = $1 AND novel_id = $2 AND end_time IS NOT NULL
         `, [req.user.id, novelId]),
+
                 client.query(`
           SELECT COUNT(*) AS total_bookmarks
           FROM bookmarks
