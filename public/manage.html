@@ -5,7 +5,6 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>ReadSync — Manage</title>
-
     <style>
         * {
             box-sizing: border-box;
@@ -21,23 +20,20 @@
         }
 
         .container {
-            max-width: 1200px;
+            max-width: 1100px;
             margin: 0 auto;
             padding: 20px;
         }
 
-        /* Header */
-
         .header {
             color: #fff;
             text-align: center;
-            margin-bottom: 18px;
+            margin-bottom: 16px;
         }
 
         .header h1 {
-            font-size: 2.2rem;
+            font-size: 2.1rem;
             font-weight: 800;
-            letter-spacing: .2px;
             margin-bottom: 6px;
         }
 
@@ -45,14 +41,22 @@
             opacity: .9;
         }
 
-        .authbar {
-            margin-top: 10px;
-            display: flex;
+        .auth {
+            margin: 14px auto 18px;
+            max-width: 680px;
+            display: grid;
+            grid-template-columns: 1fr auto auto;
             gap: 10px;
-            justify-content: center;
             align-items: center;
-            color: #eef2ff;
-            flex-wrap: wrap;
+        }
+
+        .auth input {
+            padding: 10px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, .35);
+            background: rgba(255, 255, 255, .95);
+            color: #111827;
+            outline: none;
         }
 
         .btn {
@@ -77,30 +81,6 @@
             color: #fff;
         }
 
-        /* Controls */
-
-        .controls {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-            justify-content: center;
-            margin: 14px auto 20px;
-            max-width: 980px;
-        }
-
-        .controls input[type="search"],
-        .controls select {
-            padding: 10px 12px;
-            border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, .35);
-            background: rgba(255, 255, 255, .9);
-            color: #111827;
-            outline: none;
-            min-width: 180px;
-        }
-
-        /* Layout / Panels */
-
         .panel {
             background: rgba(255, 255, 255, .96);
             border-radius: 16px;
@@ -110,9 +90,28 @@
         }
 
         .panel h2 {
-            font-size: 1.1rem;
+            font-size: 1.05rem;
             margin-bottom: 10px;
             color: #0f172a;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 8px 0 14px;
+            align-items: center;
+        }
+
+        .controls select,
+        .controls input[type="search"] {
+            padding: 9px 12px;
+            border-radius: 10px;
+            border: 1px solid #e2e8f0;
+            background: #fff;
+            color: #111827;
+            outline: none;
+            min-width: 160px;
         }
 
         .novels-grid {
@@ -121,39 +120,24 @@
         }
 
         .novel-card {
-            background: #ffffff;
+            background: #fff;
             border-radius: 14px;
             padding: 16px;
             box-shadow: 0 8px 24px rgba(0, 0, 0, .10);
-            transition: transform .2s ease, box-shadow .2s ease;
-        }
-
-        .novel-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 16px 40px rgba(0, 0, 0, .14);
         }
 
         .novel-header {
             display: flex;
-            gap: 12px;
             justify-content: space-between;
-            align-items: flex-start;
             margin-bottom: 8px;
         }
 
         .novel-title {
-            font-size: 1.15rem;
             font-weight: 800;
-            color: #0f172a;
-        }
-
-        .novel-title a {
-            color: inherit;
-            text-decoration: none;
         }
 
         .novel-id {
-            font-size: .85rem;
+            font-size: 0.85rem;
             color: #64748b;
             background: #f1f5f9;
             padding: 4px 8px;
@@ -187,15 +171,11 @@
             background: #ef4444;
         }
 
-        .muted {
-            color: #64748b;
-        }
-
         .row {
             display: flex;
-            gap: 10px;
+            gap: 8px;
             flex-wrap: wrap;
-            margin-top: 10px;
+            margin-top: 8px;
         }
 
         .error {
@@ -210,34 +190,14 @@
 
         .loading {
             text-align: center;
-            padding: 48px 12px;
             color: #fff;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, .3);
-            border-top: 4px solid #fff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 14px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
+            padding: 40px 10px;
         }
 
         .empty {
             text-align: center;
             color: #fff;
-            padding: 40px 10px;
+            padding: 36px 10px;
             display: none;
         }
     </style>
@@ -245,46 +205,38 @@
 
 <body>
     <div class="container">
-
         <div class="header">
             <h1>🛠️ ReadSync — Manage</h1>
-            <p>Change status or remove novels (requires API key)</p>
-
-            <div class="authbar">
-                <span id="whoami" class="muted">Not signed in</span>
-                <button class="btn" onclick="setApiKey()">Set API key</button>
-                <button class="btn" onclick="logout()">Logout</button>
-                <a class="btn" href="/">← Back to Dashboard</a>
-            </div>
+            <p>Change status or remove novels (API key required)</p>
         </div>
 
+        <!-- Inline login -->
+        <div class="auth">
+            <input id="apiKey" type="password" placeholder="Enter your API key…" />
+            <button class="btn btn-primary" onclick="connect()">Connect</button>
+            <a class="btn" href="/">← Dashboard</a>
+        </div>
+
+        <div id="who" style="text-align:center; color:#eef2ff; margin-bottom:8px;"></div>
         <div id="error" class="error"></div>
-
-        <div class="controls">
-            <select id="statusFilter">
-                <option value="">All statuses</option>
-                <option value="reading">Reading</option>
-                <option value="on-hold">On-hold</option>
-                <option value="completed">Completed</option>
-                <option value="dropped">Dropped</option>
-            </select>
-
-            <input id="q" type="search" placeholder="Filter by title…" />
-            <button class="btn" onclick="reload()">Refresh ↻</button>
-        </div>
-
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <div>Loading your novels…</div>
-        </div>
-
-        <div id="empty" class="empty">
-            <h3>No novels found</h3>
-            <p>Start reading on a device with the userscript and they’ll show up here.</p>
-        </div>
 
         <section class="panel" id="panel" style="display:none;">
             <h2>Manage Novels</h2>
+
+            <div class="controls">
+                <select id="statusFilter">
+                    <option value="">All statuses</option>
+                    <option value="reading">Reading</option>
+                    <option value="on-hold">On-hold</option>
+                    <option value="completed">Completed</option>
+                    <option value="dropped">Dropped</option>
+                </select>
+                <input id="q" type="search" placeholder="Filter by title…" />
+                <button class="btn" onclick="reload(false)">Refresh ↻</button>
+            </div>
+
+            <div id="loading" class="loading" style="display:none;">Loading…</div>
+            <div id="empty" class="empty">No novels found.</div>
             <div id="list" class="novels-grid"></div>
         </section>
     </div>
@@ -292,35 +244,39 @@
     <script>
         const API_BASE = '/api/v1';
 
-        /* ---------- Auth ---------- */
+        // load saved key if present
+        const saved = localStorage.getItem('readsync_api_key') || '';
+        if (saved) document.getElementById('apiKey').value = saved;
 
-        function getApiKey() {
-            return localStorage.getItem('readsync_api_key') || '';
-        }
-
-        async function setApiKey() {
-            const k = prompt('Enter your ReadSync API key:', getApiKey() || 'demo-api-key-12345');
-            if (!k) return;
+        async function connect() {
+            const key = (document.getElementById('apiKey').value || '').trim();
+            if (!key) return showError('Please enter your API key.');
             try {
-                const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(k)}&_t=${Date.now()}`, { cache: 'no-store' });
-                if (!ok.ok) throw new Error();
-                localStorage.setItem('readsync_api_key', k);
-                reload();
-            } catch {
-                showError('That API key did not work.');
+                const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
+                if (!ok.ok) throw new Error('Invalid key');
+                const who = await ok.json();
+                localStorage.setItem('readsync_api_key', key);
+                document.getElementById('who').textContent = `Signed in as: ${who.display_name || who.id}`;
+                document.getElementById('panel').style.display = 'block';
+                reload(true);
+            } catch (e) {
+                showError('Login failed: ' + e.message);
             }
         }
 
-        function logout() {
-            localStorage.removeItem('readsync_api_key');
-            location.reload();
+        function getKey() {
+            return localStorage.getItem('readsync_api_key') || '';
         }
 
-        /* ---------- Fetch helper ---------- */
+        function showError(msg) {
+            const el = document.getElementById('error');
+            el.style.display = 'block';
+            el.textContent = msg;
+            setTimeout(() => { el.style.display = 'none'; }, 3000);
+        }
 
         async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
-            const key = getApiKey();
-            if (!key) throw new Error('NO_KEY');
+            const key = getKey();
             const url = new URL(path, location.origin);
             url.searchParams.set('user_key', key);
             url.searchParams.set('_t', Date.now().toString());
@@ -329,7 +285,7 @@
             }
             const res = await fetch(url.toString(), {
                 method,
-                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
                 cache: 'no-store',
                 body: body ? JSON.stringify(body) : null
             });
@@ -341,34 +297,14 @@
             return res.json();
         }
 
-        /* ---------- UI helpers ---------- */
-
-        function showError(msg) {
-            const el = document.getElementById('error');
-            el.style.display = 'block';
-            el.textContent = msg;
-        }
-
-        function clearError() {
-            const el = document.getElementById('error');
-            el.style.display = 'none';
-            el.textContent = '';
-        }
-
-        /* ---------- Render ---------- */
-
         function render(list) {
             const grid = document.getElementById('list');
             grid.innerHTML = '';
-
             if (!list.length) {
                 document.getElementById('empty').style.display = 'block';
-                document.getElementById('panel').style.display = 'none';
                 return;
             }
-
             document.getElementById('empty').style.display = 'none';
-            document.getElementById('panel').style.display = 'block';
 
             for (const n of list) {
                 const status = (n.status || 'reading').toLowerCase();
@@ -379,97 +315,68 @@
                 card.innerHTML = `
           <div class="novel-header">
             <div class="novel-title">
-              <a href="${n.primary_url || '#'}" target="_blank" rel="noreferrer">${n.title}</a>
+              ${n.title || n.novel_id}
               <span class="status-pill ${status}">${status.toUpperCase()}</span>
             </div>
             <span class="novel-id">${n.novel_id}</span>
           </div>
 
-          ${latest ? `
-            <div class="muted">
-              Last: <strong>${latest.chapter_token || 'Chapter'} ${latest.chapter_num}</strong>
-              • ${Number(latest.percent).toFixed(1)}%
-              • ${latest.device_label} • ${new Date(latest.ts).toLocaleString()}
-            </div>
-          ` : '<div class="muted">No recent progress</div>'}
+          <div style="color:#64748b;">
+            ${latest ? `
+              Last: <strong>${latest.chapter_token || 'Chapter'} ${Number(latest.chapter_num) || 0}</strong>
+              • ${Number(latest.percent || 0).toFixed(1)}%
+              • ${latest.device_label || ''} • ${new Date(latest.ts).toLocaleString()}
+            ` : 'No recent progress'}
+          </div>
 
           <div class="row">
             <button class="btn btn-primary" onclick="changeStatus('${n.novel_id}', '${status}')">Change Status</button>
             <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', false)">Soft Remove</button>
             <button class="btn btn-danger" onclick="removeNovel('${n.novel_id}', true)">HARD Delete</button>
-            ${latest ? `<a class="btn" href="${latest.url}" target="_blank">Open</a>` : ''}
+            ${n.primary_url ? `<a class="btn" href="${n.primary_url}" target="_blank" rel="noreferrer">Open</a>` : ''}
           </div>
         `;
                 grid.appendChild(card);
             }
         }
 
-        /* ---------- Actions ---------- */
-
         async function changeStatus(novelId, current) {
             const next = prompt(`Set status for ${novelId}\nreading | completed | on-hold | dropped`, current || 'reading');
             if (!next) return;
             const valid = new Set(['reading', 'completed', 'on-hold', 'dropped']);
-            if (!valid.has(next)) { showError('Invalid status'); return; }
+            if (!valid.has(next)) return showError('Invalid status');
             try {
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    body: { user_key: getApiKey(), status: next }
+                    body: { user_key: getKey(), status: next }
                 });
                 await reload(false);
-            } catch (e) {
-                showError('Failed to set status: ' + e.message);
-            }
+            } catch (e) { showError('Failed to set status: ' + e.message); }
         }
 
         async function removeNovel(novelId, hard) {
             const msg = hard
-                ? 'This will permanently delete snapshots & bookmarks for this novel. Type DELETE to confirm.'
-                : 'This will hide the novel (status=removed) but keep your history. Type REMOVE to confirm.';
+                ? 'This permanently deletes snapshots & bookmarks for this novel.\nType DELETE to confirm.'
+                : 'This hides the novel (status=removed) but keeps history.\nType REMOVE to confirm.';
             const expect = hard ? 'DELETE' : 'REMOVE';
             const answer = prompt(msg, '');
             if (answer !== expect) return;
-
             try {
                 await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}`, {
                     method: 'DELETE',
-                    body: { user_key: getApiKey(), hard: !!hard }
+                    body: { user_key: getKey(), hard: !!hard }
                 });
                 await reload(false);
-            } catch (e) {
-                showError('Failed to remove: ' + e.message);
-            }
+            } catch (e) { showError('Failed to remove: ' + e.message); }
         }
 
-        /* ---------- Load ---------- */
-
         async function reload(showSpinner = true) {
-            clearError();
-
-            if (!getApiKey()) {
-                await setApiKey();
-                if (!getApiKey()) return;
-            }
-
-            if (showSpinner) {
-                document.getElementById('loading').style.display = 'block';
-                document.getElementById('empty').style.display = 'none';
-                document.getElementById('panel').style.display = 'none';
-            }
-
-            try {
-                const who = await getJSON(`${API_BASE}/auth/whoami`);
-                document.getElementById('whoami').textContent = `Signed in as: ${who.display_name || who.id}`;
-            } catch { /* ignore */ }
-
+            document.getElementById('loading').style.display = showSpinner ? 'block' : 'none';
             try {
                 const status = document.getElementById('statusFilter').value;
                 const novels = await getJSON(`${API_BASE}/novels`, { qs: { status } });
-
-                // local filter
                 const q = (document.getElementById('q').value || '').toLowerCase();
                 const filtered = novels.filter(n => (n.title || '').toLowerCase().includes(q));
-
                 render(filtered);
             } catch (e) {
                 showError('Load failed: ' + e.message);
@@ -481,7 +388,8 @@
         document.getElementById('statusFilter').addEventListener('change', () => reload(false));
         document.getElementById('q').addEventListener('input', () => reload(false));
 
-        document.addEventListener('DOMContentLoaded', reload);
+        // Auto-connect if key is saved
+        if (saved) connect();
     </script>
 </body>
 
