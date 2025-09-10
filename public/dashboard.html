@@ -55,6 +55,33 @@
         .header p {
             opacity: 0.9;
             font-size: 1.1rem;
+            margin-bottom: 16px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .header-btn {
+            background: rgba(255, 255, 255, 0.9);
+            color: #667eea;
+            padding: 10px 20px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-btn:hover {
+            background: #fff;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
         .stats-grid {
@@ -358,6 +385,11 @@
             .devices-grid {
                 grid-template-columns: 1fr;
             }
+
+            .header-actions {
+                flex-direction: column;
+                align-items: center;
+            }
         }
     </style>
 </head>
@@ -367,6 +399,10 @@
         <div class="header">
             <h1>📚 ReadSync</h1>
             <p>Cross-device reading progress dashboard</p>
+            <div class="header-actions">
+                <a href="/novels" class="header-btn">📖 Browse All Novels</a>
+                <a href="/manage" class="header-btn">🛠️ Manage</a>
+            </div>
         </div>
 
         <div id="stats" class="stats-grid" style="display: none;">
@@ -521,6 +557,7 @@
                class="btn btn-primary" target="_blank" rel="noreferrer">📖 Resume Reading</a>
             <button class="btn btn-secondary" onclick="copyResumeLink('${(global.url || '').replace(/'/g, "\\'")}', ${Number(global.percent || 0)})">📋 Copy Link</button>
           ` : ''}
+          <a href="/novels/${encodeURIComponent(novel.novel_id)}" class="btn btn-secondary">📊 Novel Details</a>
           <a href="${novel.primary_url || '#'}" class="btn btn-secondary" target="_blank" rel="noreferrer">🔗 Open Novel</a>
         </div>
       `;
@@ -573,7 +610,7 @@
             setTimeout(() => el.remove(), 1800);
         }
 
-        // Auto-refresh every 30s, but don’t flicker the loading spinner
+        // Auto-refresh every 30s, but don't flicker the loading spinner
         let firstLoad = true;
         async function safeLoad() {
             if (firstLoad) {

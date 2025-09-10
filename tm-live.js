@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.7.1
-// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC
+// @version      4.8
+// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + latest chapter extraction
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*
@@ -91,18 +91,131 @@
     let compareInterval = null;
     let syncBanner = null;
 
-    /* ========= Device ID Generation ========= */
+    /* ========= Latest Chapter Extraction ========= */
+    function extractLatestChapterInfo() {
+        try {
+            // Look for the specific NovelBin structure: div.l-chapter
+            const latestChapterElement = document.querySelector('.l-chapter');
+            if (latestChapterElement) {
+                const chapterLink = latestChapterElement.querySelector('.chapter-title');
+                if (chapterLink) {
+                    const linkText = chapterLink.textContent.trim();
+                    const match = linkText.match(/Chapter\s+(\d+)\s*:\s*(.+)/i);
+                    if (match) {
+                        log('Found latest chapter via .l-chapter', { num: match[1], title: match[2] });
+                        return {
+                            latestChapterNum: parseInt(match[1], 10),
+                            latestChapterTitle: match[2].trim()
+                        };
+                    }
+                }
+            }
+
+            // Fallback: check all chapter links on the page
+            const allChapterLinks = document.querySelectorAll('a[href*="chapter-"]');
+            let maxChapter = 0;
+            let maxChapterTitle = null;
+
+            allChapterLinks.forEach(link => {
+                const hrefMatch = link.href.match(/chapter-(\d+)/i);
+                if (hrefMatch) {
+                    const num = parseInt(hrefMatch[1], 10);
+                    if (num > maxChapter) {
+                        maxChapter = num;
+                        // Try to extract title from link text
+                        const textMatch = link.textContent.match(/Chapter\s+\d+\s*:\s*(.+)/i);
+                        maxChapterTitle = textMatch ? textMatch[1].trim() : null;
+                    }
+                }
+            });
+
+            if (maxChapter > 0) {
+                log('Found latest chapter via fallback', { num: maxChapter, title: maxChapterTitle });
+                return {
+                    latestChapterNum: maxChapter,
+                    latestChapterTitle: maxChapterTitle
+                };
+            }
+
+            log('No latest chapter info found');
+            return { latestChapterNum: null, latestChapterTitle: null };
+        } catch (error) {
+            log('Error extracting latest chapter info:', error);
+            return { latestChapterNum: null, latestChapterTitle: null };
+        }
+    }
+
+    /* ========= Stable Device ID Generation ========= */
+    function generateStableFingerprint() {
+        // Create a more stable fingerprint based on browser characteristics
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        ctx.textBaseline = 'top';
+        ctx.font = '14px Arial';
+        ctx.fillText('Device fingerprint', 2, 2);
+        const canvasFingerprint = canvas.toDataURL().slice(-50);
+
+        const fingerprint = [
+            navigator.userAgent,
+            navigator.language,
+            screen.width + 'x' + screen.height,
+            screen.colorDepth,
+            new Date().getTimezoneOffset(),
+            !!window.sessionStorage,
+            !!window.localStorage,
+            !!window.indexedDB,
+            typeof (Worker),
+            navigator.platform,
+            navigator.cookieEnabled,
+            canvasFingerprint
+        ].join('|');
+
+        // Create a simple hash
+        let hash = 0;
+        for (let i = 0; i < fingerprint.length; i++) {
+            const char = fingerprint.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32-bit integer
+        }
+
+        return Math.abs(hash).toString(36).substring(0, 6);
+    }
+
     function generateDeviceId() {
         let deviceId = localStorage.getItem('readsync_device_id');
+
         if (!deviceId) {
+            // Try to get a stable fingerprint first
+            const fingerprint = generateStableFingerprint();
             const browserInfo = navigator.userAgent.includes('Chrome') ? 'chrome' :
                 navigator.userAgent.includes('Firefox') ? 'firefox' :
                     navigator.userAgent.includes('Safari') ? 'safari' : 'browser';
-            const randomId = Math.random().toString(36).substr(2, 6);
-            deviceId = `${browserInfo}-${randomId}`;
+
+            // Combine browser + stable fingerprint
+            deviceId = `${browserInfo}-${fingerprint}`;
+
+            // Check if this ID already exists for this browser type
+            const existingDevices = JSON.parse(localStorage.getItem('readsync_known_devices') || '[]');
+            const conflictingDevice = existingDevices.find(d => d.id === deviceId);
+
+            if (conflictingDevice) {
+                // Add a small random suffix to avoid collision
+                const randomSuffix = Math.random().toString(36).substr(2, 2);
+                deviceId = `${deviceId}-${randomSuffix}`;
+            }
+
             localStorage.setItem('readsync_device_id', deviceId);
-            log('Generated new device id', deviceId);
+
+            // Store this device info
+            const deviceInfo = { id: deviceId, created: Date.now(), userAgent: navigator.userAgent };
+            existingDevices.push(deviceInfo);
+            localStorage.setItem('readsync_known_devices', JSON.stringify(existingDevices.slice(-5))); // Keep last 5
+
+            log('Generated new stable device id', { deviceId, fingerprint, browserInfo });
+        } else {
+            log('Using existing device id', deviceId);
         }
+
         return deviceId;
     }
 
@@ -121,13 +234,18 @@
         log('parseChapter result (syncProgress)', chapterInfo);
         if (!chapterInfo) return;
 
+        // Extract latest chapter info
+        const latestChapterInfo = extractLatestChapterInfo();
+
         const payload = {
             user_key: READSYNC_API_KEY,
             device_id: READSYNC_DEVICE_ID,
             device_label: READSYNC_DEVICE_LABEL,
             novel_url: normalizeUrl(location.href),   // ✅ normalized here
             percent: percent,
-            seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000)
+            seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000),
+            latest_chapter_num: latestChapterInfo.latestChapterNum,
+            latest_chapter_title: latestChapterInfo.latestChapterTitle
         };
 
         try {
@@ -518,18 +636,19 @@
       <div style="position:fixed;top:10%;left:10%;background:#333;color:#fff;padding:20px;border-radius:8px;z-index:10000;max-width:480px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial">
         <h2 style="margin:0 0 8px;font-size:18px">📚 ReadSync + Keyboard Shortcuts</h2>
         <ul style="line-height:1.7;margin:0;padding-left:18px">
-          <li><b>A</b> / <b>←</b> – Previous Chapter</li>
-          <li><b>D</b> / <b>→</b> – Next Chapter</li>
-          <li><b>W</b> – Scroll Up</li>
-          <li><b>S</b> – Scroll Down</li>
-          <li><b>Shift+S</b> – Toggle Auto-Scroll</li>
-          <li><b>Shift+H</b> – Show/Hide Help</li>
-          <li><b>Ctrl+Shift+X</b> – Copy resume link</li>
+          <li><b>A</b> / <b>←</b> — Previous Chapter</li>
+          <li><b>D</b> / <b>→</b> — Next Chapter</li>
+          <li><b>W</b> — Scroll Up</li>
+          <li><b>S</b> — Scroll Down</li>
+          <li><b>Shift+S</b> — Toggle Auto-Scroll</li>
+          <li><b>Shift+H</b> — Show/Hide Help</li>
+          <li><b>Ctrl+Shift+X</b> — Copy resume link</li>
         </ul>
         <div style="margin-top:16px;padding-top:12px;border-top:1px solid #555">
           <h3 style="margin:0 0 8px;font-size:14px;color:#10b981">🔄 ReadSync Features</h3>
           <ul style="line-height:1.6;margin:0;padding-left:18px;font-size:13px;opacity:0.9">
             <li>📱 Cross-device progress sync</li>
+            <li>🆔 Stable device IDs (${READSYNC_DEVICE_ID})</li>
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
             <li>📊 Dashboard at <a href="https://readsync-n7zp.onrender.com/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
@@ -652,13 +771,16 @@
         try {
             const chapterInfo = parseChapter(location.pathname);
             if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
+            const latestChapterInfo = extractLatestChapterInfo();
             const payload = {
                 user_key: READSYNC_API_KEY,
                 device_id: READSYNC_DEVICE_ID,
                 device_label: READSYNC_DEVICE_LABEL,
                 novel_url: normalizeUrl(location.href),   // ✅ normalized here too
                 percent: percent,
-                seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000)
+                seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000),
+                latest_chapter_num: latestChapterInfo.latestChapterNum,
+                latest_chapter_title: latestChapterInfo.latestChapterTitle
             };
             const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
             if (navigator.sendBeacon) {

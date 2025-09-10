@@ -1,0 +1,441 @@
+// novels.html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Novels - ReadSync</title>
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="theme-color" content="#667eea">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .breadcrumb {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 12px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .breadcrumb a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .breadcrumb a:hover {
+            text-decoration: underline;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.9);
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .controls input,
+        .controls select {
+            padding: 8px 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            background: white;
+            min-width: 150px;
+        }
+
+        .novels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .novel-card {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            transition: all 0.2s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+
+        .novel-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .novel-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1a202c;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+
+        .novel-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .meta-item {
+            font-size: 0.85rem;
+            color: #64748b;
+            background: #f8fafc;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+
+        .status-pill {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: white;
+        }
+
+        .status-pill.reading {
+            background: #0ea5e9;
+        }
+
+        .status-pill.completed {
+            background: #10b981;
+        }
+
+        .status-pill.on-hold {
+            background: #f59e0b;
+        }
+
+        .status-pill.dropped {
+            background: #ef4444;
+        }
+
+        .status-pill.removed {
+            background: #6b7280;
+        }
+
+        .novel-stats {
+            font-size: 0.9rem;
+            color: #64748b;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .favorite-indicator {
+            color: #f59e0b;
+            font-size: 1.1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: white;
+        }
+
+        .empty-state h2 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            opacity: 0.9;
+        }
+
+        .empty-state p {
+            opacity: 0.7;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .novels-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .controls input,
+            .controls select {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 My Novels</h1>
+            <p>Browse your reading collection</p>
+        </div>
+
+        <div class="breadcrumb">
+            <a href="/">Dashboard</a>
+            <span>›</span>
+            <span>Novels</span>
+        </div>
+
+        <div class="controls">
+            <input type="search" id="searchInput" placeholder="Search novels..." />
+            <select id="statusFilter">
+                <option value="">All Statuses</option>
+                <option value="reading">Reading</option>
+                <option value="completed">Completed</option>
+                <option value="on-hold">On-Hold</option>
+                <option value="dropped">Dropped</option>
+            </select>
+            <select id="sortBy">
+                <option value="recent">Recently Active</option>
+                <option value="title">Title A-Z</option>
+                <option value="started">Date Started</option>
+            </select>
+            <label style="display: flex; align-items: center; gap: 4px;">
+                <input type="checkbox" id="favoritesOnly" />
+                Favorites Only
+            </label>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="loading-spinner"></div>
+            <h2>Loading your novels...</h2>
+        </div>
+
+        <div id="empty" class="empty-state" style="display: none;">
+            <h2>No novels found</h2>
+            <p>Start reading with the NovelBin userscript to see your collection here!</p>
+        </div>
+
+        <div id="novels-container" class="novels-grid" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
+        const API_BASE = '/api/v1';
+
+        let allNovels = [];
+        let filteredNovels = [];
+
+        async function loadNovels() {
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('novels-container').style.display = 'none';
+                document.getElementById('empty').style.display = 'none';
+
+                const res = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(API_KEY)}&_t=${Date.now()}`);
+                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+                allNovels = await res.json();
+                applyFilters();
+
+                document.getElementById('loading').style.display = 'none';
+
+            } catch (err) {
+                console.error('Failed to load novels:', err);
+                document.getElementById('loading').innerHTML =
+                    '<h2>Failed to load novels</h2><p>Please check the API server is running</p>';
+            }
+        }
+
+        function applyFilters() {
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            const favoritesOnly = document.getElementById('favoritesOnly').checked;
+            const sortBy = document.getElementById('sortBy').value;
+
+            filteredNovels = allNovels.filter(novel => {
+                // Search filter
+                if (search && !novel.title.toLowerCase().includes(search)) {
+                    return false;
+                }
+
+                // Status filter
+                if (statusFilter && novel.status !== statusFilter) {
+                    return false;
+                }
+
+                // Favorites filter
+                if (favoritesOnly && !novel.favorite) {
+                    return false;
+                }
+
+                // Hide removed novels
+                if (novel.status === 'removed') {
+                    return false;
+                }
+
+                return true;
+            });
+
+            // Sort novels
+            filteredNovels.sort((a, b) => {
+                switch (sortBy) {
+                    case 'title':
+                        return a.title.localeCompare(b.title);
+                    case 'started':
+                        return new Date(b.started_at || 0) - new Date(a.started_at || 0);
+                    case 'recent':
+                    default:
+                        return new Date(b.last_activity || 0) - new Date(a.last_activity || 0);
+                }
+            });
+
+            renderNovels();
+        }
+
+        function renderNovels() {
+            const container = document.getElementById('novels-container');
+
+            if (filteredNovels.length === 0) {
+                document.getElementById('empty').style.display = 'block';
+                document.getElementById('novels-container').style.display = 'none';
+                return;
+            }
+
+            document.getElementById('empty').style.display = 'none';
+            document.getElementById('novels-container').style.display = 'grid';
+
+            container.innerHTML = filteredNovels.map(novel => createNovelCard(novel)).join('');
+        }
+
+        function createNovelCard(novel) {
+            const status = novel.status || 'reading';
+
+            return `
+                <a href="/novels/${encodeURIComponent(novel.novel_id)}" class="novel-card">
+                    <div class="novel-title">${novel.title || novel.novel_id}</div>
+                    
+                    <div class="novel-meta">
+                        <span class="status-pill ${status}">${status.charAt(0).toUpperCase() + status.slice(1)}</span>
+                        ${novel.author ? `<span class="meta-item">📖 ${novel.author}</span>` : ''}
+                        ${novel.genre ? `<span class="meta-item">🏷️ ${novel.genre}</span>` : ''}
+                        ${novel.favorite ? `<span class="favorite-indicator">⭐</span>` : ''}
+                    </div>
+
+                    <div class="novel-stats">
+                        <span>${formatDate(novel.started_at || novel.last_activity)}</span>
+                        ${novel.latest_chapter_num ? `<span>Ch. ${novel.latest_chapter_num}</span>` : ''}
+                    </div>
+                </a>
+            `;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Unknown';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffDays = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+            if (diffDays < 365) return `${Math.floor(diffDays / 30)} months ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Event listeners
+        document.getElementById('searchInput').addEventListener('input', applyFilters);
+        document.getElementById('statusFilter').addEventListener('change', applyFilters);
+        document.getElementById('sortBy').addEventListener('change', applyFilters);
+        document.getElementById('favoritesOnly').addEventListener('change', applyFilters);
+
+        // Load on page load
+        loadNovels();
+    </script>
+</body>
+
+</html>

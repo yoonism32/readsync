@@ -287,7 +287,7 @@
             if (!res.ok) {
                 let detail = '';
                 try { const j = await res.json(); detail = j.error || j.detail || JSON.stringify(j); } catch { }
-                throw new Error(`${res.status} ${res.statusText}${detail ? ' – ' + detail : ''}`);
+                throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
             }
             return res.json();
         }
@@ -367,7 +367,7 @@
             }
         }
 
-        // ----- actions on novels
+        // ----- FIXED actions on novels
         async function changeStatus(encodedNovelId, current) {
             const novelId = decodeURIComponent(encodedNovelId);
             const next = prompt(
@@ -379,10 +379,19 @@
             if (!valid.has(next)) return showError('Invalid status');
 
             try {
-                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, {
+                // Use standard fetch with user_key in URL for consistency
+                const key = getKey();
+                const response = await fetch(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, {
                     method: 'PUT',
-                    body: { status: next, user_key: getKey() }  // Make sure user_key is in the body
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: next })
                 });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || `${response.status} ${response.statusText}`);
+                }
+
                 await reload(false);
             } catch (e) {
                 showError('Failed to set status: ' + e.message);

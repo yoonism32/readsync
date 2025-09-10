@@ -426,7 +426,7 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
 
     try {
         const result = await withTransaction(async (client) => {
-            // Upsert device with type detection
+            // Upsert device with type detection - FIXED to prevent duplicates
             const deviceType = /iPad|iPhone|iPod/.test(req.get('User-Agent')) ? 'mobile' :
                 /Android/.test(req.get('User-Agent')) ? 'mobile' : 'desktop';
 
@@ -679,7 +679,7 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
     }
 });
 
-// 🔁 Replaced/updated status endpoint
+// 🔴 FIXED status endpoint
 app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
     const { status } = req.body;
@@ -691,20 +691,30 @@ app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async
 
     try {
         const result = await withTransaction(async (client) => {
+            // First ensure the novel exists in user_novel_meta
+            await client.query(`
+                INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at)
+                VALUES ($1, $2, 'reading', CURRENT_TIMESTAMP)
+                ON CONFLICT (user_id, novel_id) DO NOTHING
+            `, [req.user.id, novelId]);
+
             // Update the status
             const updateResult = await client.query(`
-                INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at, completed_at)
-                VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)
-                ON CONFLICT (user_id, novel_id) DO UPDATE SET
-                    status = EXCLUDED.status,
+                UPDATE user_novel_meta SET
+                    status = $3,
                     updated_at = CURRENT_TIMESTAMP,
                     completed_at = CASE 
-                        WHEN EXCLUDED.status = 'completed' THEN COALESCE(user_novel_meta.completed_at, CURRENT_TIMESTAMP)
-                        WHEN EXCLUDED.status != 'completed' THEN NULL
-                        ELSE user_novel_meta.completed_at 
+                        WHEN $3 = 'completed' THEN COALESCE(completed_at, CURRENT_TIMESTAMP)
+                        WHEN $3 != 'completed' THEN NULL
+                        ELSE completed_at 
                     END
+                WHERE user_id = $1 AND novel_id = $2
                 RETURNING *
-            `, [req.user.id, novelId, status, status === 'completed' ? 'CURRENT_TIMESTAMP' : null]);
+            `, [req.user.id, novelId, status]);
+
+            if (updateResult.rows.length === 0) {
+                throw new Error('Novel not found for user');
+            }
 
             // If marking as completed, create a 100% progress snapshot
             if (status === 'completed') {
@@ -1547,6 +1557,21 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
+// Serve manage page
+app.get('/manage', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'manage.html'));
+});
+
+// Serve novels listing page
+app.get('/novels', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'novels.html'));
+});
+
+// Serve individual novel detail page
+app.get('/novels/:novelId', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'novel.html'));
+});
+
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
     res.status(404).json({
@@ -1564,7 +1589,9 @@ async function startServer() {
         const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 ReadSync API server running on port ${PORT}`);
             console.log(`📊 Dashboard: http://localhost:${PORT}`);
-            console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+            console.log(`📚 Novels: http://localhost:${PORT}/novels`);
+            console.log(`🛠️ Manage: http://localhost:${PORT}/manage`);
+            console.log(`🩺 Health check: http://localhost:${PORT}/health`);
             console.log(`📚 API docs: http://localhost:${PORT}/api/v1/`);
         });
 
