@@ -414,10 +414,22 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
     const user_id = req.user.id;
     const novel_id = normalizeNovelId(novel_url);
     const novel_title = extractNovelTitle(novel_url);
-    const chapterInfo = parseChapterFromUrl(novel_url);
+
+    // 🔹 FIXED: Use current_chapter_num from userscript if available, fallback to URL parsing
+    const chapterInfo = req.body.current_chapter_num ?
+        { token: 'chapter', num: req.body.current_chapter_num } :
+        parseChapterFromUrl(novel_url);
+
+    // Log chapter detection for debugging
+    console.log('📊 Chapter detection:', {
+        current_chapter_num: req.body.current_chapter_num,
+        current_chapter_source: req.body.current_chapter_source,
+        url_parsed: parseChapterFromUrl(novel_url),
+        final_chapter: chapterInfo?.num
+    });
 
     if (!novel_id || !chapterInfo) {
-        return res.status(400).json({ error: 'Invalid novel URL format' });
+        return res.status(400).json({ error: 'Invalid novel URL format or missing chapter info' });
     }
 
     const percentValue = Math.max(0, Math.min(100, Number(percent)));

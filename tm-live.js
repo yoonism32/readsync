@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.8
-// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + latest chapter extraction
+// @version      4.9.7
+// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*
@@ -31,7 +31,7 @@
     const RESTORE_LIMIT = 90;       // restore if <90%, clear if ≥90
     const BANNER_SHOW_MAX_PCT = 10; // show restore banner only if current scroll ≤ 10%
     const IGNORE_LOW_PCT = 1;       // ignore saving tiny noise at very top
-    const QUIET_SYNC = true;        // silent on succesful syncs; still shows errors
+    const QUIET_SYNC = true;        // silent on successful syncs; still shows errors
 
     // ReadSync Settings
     // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
@@ -91,7 +91,7 @@
     let compareInterval = null;
     let syncBanner = null;
 
-    /* ========= Latest Chapter Extraction ========= */
+    /* ========= Enhanced Latest Chapter Extraction ========= */
     function extractLatestChapterInfo() {
         try {
             // Look for the specific NovelBin structure: div.l-chapter
@@ -129,10 +129,59 @@
                 }
             });
 
-            if (maxChapter > 0) {
-                log('Found latest chapter via fallback', { num: maxChapter, title: maxChapterTitle });
+            // 🌍 ENHANCED: If local detection seems limited, fetch from main page
+            if (maxChapter > 0 && maxChapter < 500) {
+                log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
+
+                // Get novel main page URL (remove chapter part)
+                const novelMainUrl = location.href.replace(/\/c*chapter-\d+.*$/, '');
+
+                // Try async fetch (won't block current execution)
+                fetch(novelMainUrl)
+                    .then(response => response.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const mainPageDoc = parser.parseFromString(html, 'text/html');
+
+                        // Scan chapter links on main page (same logic that worked)
+                        const mainPageLinks = mainPageDoc.querySelectorAll('a[href*="chapter-"]');
+                        let mainPageMax = maxChapter;
+
+                        mainPageLinks.forEach(link => {
+                            const match = link.href.match(/chapter-(\d+)/i);
+                            if (match) {
+                                const num = parseInt(match[1], 10);
+                                if (num > mainPageMax) {
+                                    mainPageMax = num;
+                                }
+                            }
+                        });
+
+                        if (mainPageMax > maxChapter) {
+                            log('🎯 Found real chapter count from main page!', {
+                                was: maxChapter,
+                                now: mainPageMax,
+                                improvement: mainPageMax - maxChapter
+                            });
+
+                            // Update for next sync (this is async so won't affect current return)
+                            window.realChapterCount = mainPageMax;
+                        }
+                    })
+                    .catch(err => log('Main page fetch failed (non-critical)', err));
+            }
+
+            // Use enhanced count if available, otherwise fallback
+            const finalChapterCount = window.realChapterCount || maxChapter;
+
+            if (finalChapterCount > 0) {
+                log('Found latest chapter info', {
+                    num: finalChapterCount,
+                    title: maxChapterTitle,
+                    source: window.realChapterCount ? 'main-page-fetch' : 'local-detection'
+                });
                 return {
-                    latestChapterNum: maxChapter,
+                    latestChapterNum: finalChapterCount,
                     latestChapterTitle: maxChapterTitle
                 };
             }
@@ -143,6 +192,121 @@
             log('Error extracting latest chapter info:', error);
             return { latestChapterNum: null, latestChapterTitle: null };
         }
+    }
+
+    /* ========= ROBUST CURRENT CHAPTER DETECTION (Content-First) ========= */
+    function getCurrentChapterFromContent() {
+        try {
+            // Strategy 1: Page title (most reliable based on your test)
+            const title = document.title;
+            const titleMatch = title.match(/Chapter\s+(\d+)/i);
+            if (titleMatch) {
+                const chapterNum = parseInt(titleMatch[1], 10);
+                log('✅ Found current chapter from title', { title, chapterNum });
+                return {
+                    num: chapterNum,
+                    token: 'chapter',
+                    title: title,
+                    source: 'title'
+                };
+            }
+
+            // Strategy 2: Chapter-related elements (your test showed [class*="title"] works)
+            const chapterSelectors = [
+                '[class*="title"]',
+                '.chapter-title',
+                '.title',
+                '.chapter-header',
+                '.chapter-name',
+                '[class*="chapter"]'
+            ];
+
+            for (const selector of chapterSelectors) {
+                const elements = document.querySelectorAll(selector);
+                for (const element of elements) {
+                    const text = element.textContent.trim();
+                    if (text.length > 5 && text.length < 200) { // Skip empty or huge text blocks
+                        const match = text.match(/Chapter\s+(\d+)/i);
+                        if (match) {
+                            const chapterNum = parseInt(match[1], 10);
+                            log('✅ Found current chapter from content', { selector, text, chapterNum });
+                            return {
+                                num: chapterNum,
+                                token: 'chapter',
+                                title: text,
+                                source: 'content'
+                            };
+                        }
+                    }
+                }
+            }
+
+            // Strategy 3: H1 headers
+            const h1Elements = document.querySelectorAll('h1');
+            for (const h1 of h1Elements) {
+                const text = h1.textContent.trim();
+                const match = text.match(/Chapter\s+(\d+)/i);
+                if (match) {
+                    const chapterNum = parseInt(match[1], 10);
+                    log('✅ Found current chapter from H1', { text, chapterNum });
+                    return {
+                        num: chapterNum,
+                        token: 'chapter',
+                        title: text,
+                        source: 'h1'
+                    };
+                }
+            }
+
+            // Strategy 4: Breadcrumbs (your test showed this works too)
+            const breadcrumbs = document.querySelectorAll('.breadcrumb, [class*="breadcrumb"], .navigation, .nav');
+            for (const crumb of breadcrumbs) {
+                const text = crumb.textContent.trim();
+                const match = text.match(/Chapter\s+(\d+)/i);
+                if (match) {
+                    const chapterNum = parseInt(match[1], 10);
+                    log('✅ Found current chapter from breadcrumb', { text, chapterNum });
+                    return {
+                        num: chapterNum,
+                        token: 'chapter',
+                        title: text,
+                        source: 'breadcrumb'
+                    };
+                }
+            }
+
+            log('❌ No current chapter found in content');
+            return null;
+        } catch (error) {
+            log('Error extracting current chapter from content:', error);
+            return null;
+        }
+    }
+
+    // Enhanced parseChapter that prioritizes content over URL
+    function parseChapterEnhanced(pathname) {
+        // First try to get chapter from page content
+        const contentChapter = getCurrentChapterFromContent();
+        if (contentChapter) {
+            log('🎯 Using chapter from content:', contentChapter);
+            return contentChapter;
+        }
+
+        // Fallback to original URL parsing (but this is often wrong!)
+        log('⚠️ Falling back to URL parsing for chapter detection');
+        const m = pathname.match(/\/b\/[^/]+\/((c*)chapter)-(\d+)(?:-\3)?(?:-[^/]*)?\/?$/i);
+        if (!m) {
+            log('❌ parseChapter no match', { pathname });
+            return null;
+        }
+
+        const res = {
+            token: m[1],
+            num: parseInt(m[3], 10),
+            source: 'url'
+        };
+        log('🔗 Using chapter from URL (may be wrong):', res);
+        return res;
     }
 
     /* ========= Stable Device ID Generation ========= */
@@ -230,22 +394,34 @@
     /* ========= ReadSync API Functions ========= */
     async function syncProgress(percent) {
         log('syncProgress invoked', { percent });
-        const chapterInfo = parseChapter(location.pathname);
-        log('parseChapter result (syncProgress)', chapterInfo);
+        const chapterInfo = parseChapterEnhanced(location.pathname);
+        log('parseChapterEnhanced result (syncProgress)', chapterInfo);
         if (!chapterInfo) return;
 
         // Extract latest chapter info
         const latestChapterInfo = extractLatestChapterInfo();
 
+        // Show improvement if enhanced detection worked
+        if (window.realChapterCount && latestChapterInfo.latestChapterNum === window.realChapterCount) {
+            updateBadgeStatus('📈 Enhanced Count', false);
+        }
+
+        // Show content-based detection success
+        if (chapterInfo.source === 'title' || chapterInfo.source === 'content') {
+            updateBadgeStatus('🎯 Smart Detection', false);
+        }
+
         const payload = {
             user_key: READSYNC_API_KEY,
             device_id: READSYNC_DEVICE_ID,
             device_label: READSYNC_DEVICE_LABEL,
-            novel_url: normalizeUrl(location.href),   // ✅ normalized here
+            novel_url: normalizeUrl(location.href),
             percent: percent,
             seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000),
             latest_chapter_num: latestChapterInfo.latestChapterNum,
-            latest_chapter_title: latestChapterInfo.latestChapterTitle
+            latest_chapter_title: latestChapterInfo.latestChapterTitle,
+            current_chapter_num: chapterInfo.num,
+            current_chapter_source: chapterInfo.source
         };
 
         try {
@@ -604,26 +780,33 @@
         }
     }
 
-    /* ========= Navigation ========= */
+    /* ========= Enhanced Navigation ========= */
     function navigate(direction) {
         let link = document.querySelector(direction === 'next'
             ? 'a[rel="next"],link[rel="next"]'
             : 'a[rel="prev"],link[rel="prev"]');
+
         if (!link) {
             const rx = direction === 'next' ? /(next|›|»)/i : /(prev|previous|‹|«)/i;
             link = [...document.querySelectorAll('a,button')].find(el => rx.test((el.textContent || '').trim()));
         }
+
         if (!link) {
-            const info = parseChapter(location.pathname);
+            const info = parseChapterEnhanced(location.pathname);
             if (info) {
                 let n = info.num + (direction === 'next' ? 1 : -1);
                 if (n >= 1) {
                     const newPath = buildChapterPath(location.pathname, info.token, n);
+                    log(`🧭 Navigating ${direction} from chapter ${info.num} to ${n}`, {
+                        source: info.source,
+                        newPath
+                    });
                     location.href = newPath;
                     return;
                 }
             }
         }
+
         if (link && link.href) location.href = link.href;
         else notify('No further chapters available.');
     }
@@ -633,7 +816,7 @@
     function createHelp() {
         overlay = document.createElement('div');
         overlay.innerHTML = `
-      <div style="position:fixed;top:10%;left:10%;background:#333;color:#fff;padding:20px;border-radius:8px;z-index:10000;max-width:480px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial">
+      <div style="position:fixed;top:10%;left:10%;background:#333;color:#fff;padding:20px;border-radius:8px;z-index:10000;max-width:520px;box-shadow:0 8px 24px rgba(0,0,0,.35);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial">
         <h2 style="margin:0 0 8px;font-size:18px">📚 ReadSync + Keyboard Shortcuts</h2>
         <ul style="line-height:1.7;margin:0;padding-left:18px">
           <li><b>A</b> / <b>←</b> — Previous Chapter</li>
@@ -651,6 +834,7 @@
             <li>🆔 Stable device IDs (${READSYNC_DEVICE_ID})</li>
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
+            <li>🎯 Smart chapter detection (content-based)</li>
             <li>📊 Dashboard at <a href="https://readsync-n7zp.onrender.com/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
           </ul>
         </div>
@@ -731,7 +915,7 @@
         log('discoverable button injected');
     }
 
-    /* ========= Boot ========= */
+    /* ========= Application initialization and platform detection ========= */
     function boot() {
         log('boot()');
         injectBadge();
@@ -769,18 +953,20 @@
     // iOS-friendly final save
     function sendFinal(percent) {
         try {
-            const chapterInfo = parseChapter(location.pathname);
+            const chapterInfo = parseChapterEnhanced(location.pathname);
             if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
             const latestChapterInfo = extractLatestChapterInfo();
             const payload = {
                 user_key: READSYNC_API_KEY,
                 device_id: READSYNC_DEVICE_ID,
                 device_label: READSYNC_DEVICE_LABEL,
-                novel_url: normalizeUrl(location.href),   // ✅ normalized here too
+                novel_url: normalizeUrl(location.href),
                 percent: percent,
                 seconds_on_page: Math.floor((Date.now() - pageLoadTime) / 1000),
                 latest_chapter_num: latestChapterInfo.latestChapterNum,
-                latest_chapter_title: latestChapterInfo.latestChapterTitle
+                latest_chapter_title: latestChapterInfo.latestChapterTitle,
+                current_chapter_num: chapterInfo.num,
+                current_chapter_source: chapterInfo.source
             };
             const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
             if (navigator.sendBeacon) {
