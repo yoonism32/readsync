@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.9.7
-// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION
+// @version      4.9.8
+// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*
@@ -11,6 +11,14 @@
 // @match        https://www.novelbin.net/b/*/*chapter-*
 // @match        https://novelbin.org/b/*/*chapter-*
 // @match        https://www.novelbin.org/b/*/*chapter-*
+// @match        https://novelbin.com/b/*/*chapter*
+// @match        https://www.novelbin.com/b/*/*chapter*
+// @match        https://novelbin.me/b/*/*chapter*
+// @match        https://www.novelbin.me/b/*/*chapter*
+// @match        https://novelbin.net/b/*/*chapter*
+// @match        https://www.novelbin.net/b/*/*chapter*
+// @match        https://novelbin.org/b/*/*chapter*
+// @match        https://www.novelbin.org/b/*/*chapter*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
@@ -77,10 +85,12 @@
 
     /* ========= Normalization helpers ========= */
     function normalizePath(path) {
-        return path.replace(/\/c+chapter-/, '/chapter-');
+        // Handle both /chapter-343 and /chapter343 formats
+        return path.replace(/\/c+chapter-?/, '/chapter-');
     }
     function normalizeUrl(href) {
-        return href.replace(/#.*$/, '').replace(/\/c+chapter-/, '/chapter-');
+        // Handle both formats in URLs
+        return href.replace(/#.*$/, '').replace(/\/c+chapter-?/, '/chapter-');
     }
 
     const normalizedPath = normalizePath(location.pathname);
@@ -112,12 +122,13 @@
             }
 
             // Fallback: check all chapter links on the page
-            const allChapterLinks = document.querySelectorAll('a[href*="chapter-"]');
+            const allChapterLinks = document.querySelectorAll('a[href*="chapter"]');
             let maxChapter = 0;
             let maxChapterTitle = null;
 
             allChapterLinks.forEach(link => {
-                const hrefMatch = link.href.match(/chapter-(\d+)/i);
+                // Handle both chapter-343 and chapter343 formats
+                const hrefMatch = link.href.match(/chapter-?(\d+)/i);
                 if (hrefMatch) {
                     const num = parseInt(hrefMatch[1], 10);
                     if (num > maxChapter) {
@@ -134,7 +145,7 @@
                 log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
 
                 // Get novel main page URL (remove chapter part)
-                const novelMainUrl = location.href.replace(/\/c*chapter-\d+.*$/, '');
+                const novelMainUrl = location.href.replace(/\/c*chapter-?\d+.*$/, '');
 
                 // Try async fetch (won't block current execution)
                 fetch(novelMainUrl)
@@ -144,11 +155,11 @@
                         const mainPageDoc = parser.parseFromString(html, 'text/html');
 
                         // Scan chapter links on main page (same logic that worked)
-                        const mainPageLinks = mainPageDoc.querySelectorAll('a[href*="chapter-"]');
+                        const mainPageLinks = mainPageDoc.querySelectorAll('a[href*="chapter"]');
                         let mainPageMax = maxChapter;
 
                         mainPageLinks.forEach(link => {
-                            const match = link.href.match(/chapter-(\d+)/i);
+                            const match = link.href.match(/chapter-?(\d+)/i);
                             if (match) {
                                 const num = parseInt(match[1], 10);
                                 if (num > mainPageMax) {
@@ -294,7 +305,7 @@
 
         // Fallback to original URL parsing (but this is often wrong!)
         log('⚠️ Falling back to URL parsing for chapter detection');
-        const m = pathname.match(/\/b\/[^/]+\/((c*)chapter)-(\d+)(?:-\3)?(?:-[^/]*)?\/?$/i);
+        const m = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
         if (!m) {
             log('❌ parseChapter no match', { pathname });
             return null;
@@ -544,7 +555,7 @@
             const targetUrl = globalState.url;
             const targetPercent = globalState.percent;
 
-            if (targetUrl.includes(`chapter-${globalState.chapter_num}`)) {
+            if (targetUrl.includes(`chapter${globalState.chapter_num}`) || targetUrl.includes(`chapter-${globalState.chapter_num}`)) {
                 const h = Math.max(1, page.scrollHeight - page.clientHeight);
                 page.scrollTop = (targetPercent / 100) * h;
                 notify(`Jumped to ${targetPercent.toFixed(1)}%`);
@@ -670,9 +681,10 @@
     }
 
     // Parse current chapter token (any number of "c"s before "chapter"), number
+    // FIXED: Now handles both /chapter-343 and /chapter344 formats
     function parseChapter(pathname) {
         const m = pathname.match(
-            /\/b\/[^/]+\/((c*)chapter)-(\d+)(?:-\3)?(?:-[^/]*)?\/?$/i
+            /\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i
         );
         if (!m) { log('parseChapter no match', { pathname }); return null; }
         const res = { token: m[1], num: parseInt(m[3], 10) };
@@ -681,9 +693,14 @@
 
     // Build next/prev path preserving token and slug
     function buildChapterPath(pathname, token, newNum) {
-        return pathname.replace(/(\/b\/[^/]+\/)(c?chapter)-\d+(?:-\d+)?/i, (_, p1) => {
-            return `${p1}${token}-${newNum}`;
-        });
+        // Try to preserve the original format (with or without hyphen after chapter)
+        const hasHyphen = pathname.match(/chapter-\d+/i);
+        const separator = hasHyphen ? '-' : '';
+
+        return pathname.replace(
+            /(\/b\/[^/]+\/)(c*chapter)-?\d+(?:-[^/]*)?/i,
+            (_, p1, chapToken) => `${p1}${chapToken}${separator}${newNum}`
+        );
     }
 
     /* ========= Restore banner ========= */
@@ -782,33 +799,45 @@
 
     /* ========= Enhanced Navigation ========= */
     function navigate(direction) {
-        let link = document.querySelector(direction === 'next'
-            ? 'a[rel="next"],link[rel="next"]'
-            : 'a[rel="prev"],link[rel="prev"]');
+        // Stage 1: Prefer NovelBin's built-in navigation IDs
+        let link = document.querySelector(direction === 'next' ? '#next_chap' : '#prev_chap');
 
+        // Stage 2: Fallback to rel="next"/"prev"
         if (!link) {
-            const rx = direction === 'next' ? /(next|›|»)/i : /(prev|previous|‹|«)/i;
-            link = [...document.querySelectorAll('a,button')].find(el => rx.test((el.textContent || '').trim()));
+            link = document.querySelector(direction === 'next'
+                ? 'a[rel="next"],link[rel="next"]'
+                : 'a[rel="prev"],link[rel="prev"]');
         }
 
+        // Stage 3: Fallback to textual buttons (Next / Prev)
+        if (!link) {
+            const rx = direction === 'next' ? /(next|›|»)/i : /(prev|previous|‹|«)/i;
+            link = [...document.querySelectorAll('a,button')].find(el =>
+                rx.test((el.textContent || '').trim())
+            );
+        }
+
+        // Stage 4: If still nothing, build numeric URL
         if (!link) {
             const info = parseChapterEnhanced(location.pathname);
             if (info) {
-                let n = info.num + (direction === 'next' ? 1 : -1);
+                const n = info.num + (direction === 'next' ? 1 : -1);
                 if (n >= 1) {
                     const newPath = buildChapterPath(location.pathname, info.token, n);
-                    log(`🧭 Navigating ${direction} from chapter ${info.num} to ${n}`, {
-                        source: info.source,
-                        newPath
-                    });
+                    console.log(`🧭 Fallback build ${direction}: ${newPath}`);
                     location.href = newPath;
                     return;
                 }
             }
         }
 
-        if (link && link.href) location.href = link.href;
-        else notify('No further chapters available.');
+        // Stage 5: Navigate using found link
+        if (link && link.href) {
+            console.log(`🧭 Using ${direction} link:`, link.href);
+            location.href = link.href;
+        } else {
+            notify('No further chapters available.');
+        }
     }
 
     /* ========= Help overlay ========= */
@@ -835,6 +864,7 @@
             <li>⚡ Auto-conflict detection</li>
             <li>🔗 Resume links with #nbp=xx.x</li>
             <li>🎯 Smart chapter detection (content-based)</li>
+            <li>🔧 Flexible URL format support</li>
             <li>📊 Dashboard at <a href="https://readsync-n7zp.onrender.com/" target="_blank" style="color:#10b981">ReadSync Dashboard</a></li>
           </ul>
         </div>
