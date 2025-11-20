@@ -9,7 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // 🔹 INTEGRATION: Import bot module
-const bot = require('./chapter-update-bot');
+const bot = require('./chapter-update-bot-enhanced');
 
 /* ---------------------- Middleware ---------------------- */
 app.use(cors());
