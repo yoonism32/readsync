@@ -1692,14 +1692,6 @@ app.get('/api/v1/debug/last', validateApiKey, async (req, res) => {
     }
 });
 
-
-
-
-
-
-
-
-
 /* ---------------------- Static File Serving ---------------------- */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
@@ -1710,14 +1702,23 @@ app.get('/manage', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'manage.html'));
 });
 
-// Serve novels listing page
+// Redirect old novels page to MyList (clean integration)
 app.get('/novels', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'novels.html'));
+    res.redirect('/mylist');
 });
 
-// Serve individual novel detail page
-app.get('/novels/:novelId', (req, res) => {
+// Serve new MyList page
+app.get('/mylist', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'mylist.html'));
+});
+
+app.get('/novel/:novelId', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'novel.html'));
+});
+
+// Redirect old detail page route to new canonical one
+app.get('/novels/:novelId', (req, res) => {
+    res.redirect('/novel/' + encodeURIComponent(req.params.novelId));
 });
 
 // 🔹 INTEGRATION: Admin panel route
@@ -1749,7 +1750,7 @@ async function startServer() {
         const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 ReadSync API server running on port ${PORT}`);
             console.log(`📊 Dashboard: http://localhost:${PORT}`);
-            console.log(`📚 Novels: http://localhost:${PORT}/novels`);
+            console.log(`📚 MyList: http://localhost:${PORT}/mylist`);
             console.log(`🛠️ Manage: http://localhost:${PORT}/manage`);
             console.log(`🤖 Admin Panel: http://localhost:${PORT}/admin`);
             console.log(`🩺 Health check: http://localhost:${PORT}/health`);

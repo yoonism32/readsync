@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyList - ReadSync</title>
+
+    <!-- Favicons / PWA (same as other pages) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="theme-color" content="#0f172a">
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-soft: rgba(99, 102, 241, 0.14);
+            --primary-strong: rgba(99, 102, 241, 0.4);
+            --bg: #020617;
+            --bg-elevated: #020617;
+            --bg-card: #0f172a;
+            --bg-row: #020617;
+            --bg-row-alt: #020617;
+            --bg-hover: #1e293b;
+            --border-subtle: #1e293b;
+            --border-strong: #334155;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --cover-fallback: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1f2933 0, #020617 55%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .page {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px 16px 32px;
+        }
+
+        header {
+            margin-bottom: 16px;
+        }
+
+        header h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+
+        }
+
+        header p {
+            margin-top: 4px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .search-row {
+            margin: 16px 0 10px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1;
+            max-width: 260px;
+        }
+
+        .search-box input {
+            width: 100%;
+            padding: 8px 10px 8px 26px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            background: rgba(15, 23, 42, 0.9);
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .search-box input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 9px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .legend {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: right;
+            flex: 1;
+        }
+
+        .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .legend-arrow {
+            font-size: 0.7rem;
+            opacity: 0.7;
+        }
+
+        /* Table container */
+        .table-shell {
+            background: rgba(15, 23, 42, 0.98);
+            border-radius: 12px;
+            border: 1px solid var(--border-subtle);
+            box-shadow: 0 18px 55px rgba(0, 0, 0, 0.65);
+            overflow: hidden;
+        }
+
+        .table-container {
+            max-height: calc(100vh - 180px);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: #4b5563 #020617;
+        }
+
+        .table-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .table-container::-webkit-scrollbar-track {
+            background: #020617;
+        }
+
+        .table-container::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 999px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        thead {
+            background: linear-gradient(to right, #020617, #020617);
+        }
+
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: #020617;
+            border-bottom: 1px solid var(--border-strong);
+            padding: 9px 10px;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+
+        thead th:first-child {
+            padding-left: 14px;
+        }
+
+        thead th:last-child {
+            padding-right: 14px;
+        }
+
+        .col-cover {
+            width: 60px;
+        }
+
+        .col-title {
+            min-width: 220px;
+        }
+
+        .col-progress {
+            width: 90px;
+        }
+
+        .col-continue {
+            width: 120px;
+        }
+
+        .col-status {
+            width: 110px;
+        }
+
+        .col-time {
+            width: 80px;
+            text-align: right;
+        }
+
+        .sortable {
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            user-select: none;
+        }
+
+        .sort-arrows {
+            display: inline-flex;
+            flex-direction: column;
+            font-size: 0.6rem;
+            line-height: 0.55;
+        }
+
+        .sort-arrow {
+            opacity: 0.4;
+        }
+
+        .sort-arrow.active {
+            color: var(--primary);
+            opacity: 1;
+            text-shadow: 0 0 8px var(--primary-strong);
+        }
+
+        tbody tr {
+            background: var(--bg-row);
+            border-bottom: 1px solid rgba(15, 23, 42, 0.9);
+        }
+
+        tbody tr:nth-child(even) {
+            background: var(--bg-row-alt);
+        }
+
+        tbody tr:hover {
+            background: var(--bg-hover);
+        }
+
+        tbody td {
+            padding: 8px 10px;
+            vertical-align: middle;
+            color: var(--text-secondary);
+        }
+
+        tbody td:first-child {
+            padding-left: 14px;
+        }
+
+        tbody td:last-child {
+            padding-right: 14px;
+        }
+
+        .cell-title-main {
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.9rem;
+            margin-bottom: 2px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cell-title-main a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .cell-title-main a:hover {
+            text-decoration: underline;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            background: rgba(31, 41, 55, 0.9);
+            border: 1px solid #1f2937;
+            color: #e5e7eb;
+        }
+
+        .status-pill.reading {
+            border-color: rgba(59, 130, 246, 0.7);
+            background: rgba(37, 99, 235, 0.2);
+            color: #bfdbfe;
+        }
+
+        .status-pill.completed {
+            border-color: rgba(22, 163, 74, 0.7);
+            background: rgba(22, 163, 74, 0.16);
+            color: #bbf7d0;
+        }
+
+        .status-pill.on-hold {
+            border-color: rgba(245, 158, 11, 0.7);
+            background: rgba(245, 158, 11, 0.16);
+            color: #fed7aa;
+        }
+
+        .status-pill.dropped {
+            border-color: rgba(248, 113, 113, 0.7);
+            background: rgba(248, 113, 113, 0.16);
+            color: #fecaca;
+        }
+
+        .status-pill.removed {
+            border-color: rgba(148, 163, 184, 0.7);
+            background: rgba(148, 163, 184, 0.18);
+            color: #e5e7eb;
+        }
+
+        .status-select {
+            width: 100%;
+            max-width: 115px;
+            background: #020617;
+            color: var(--text-primary);
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            outline: none;
+        }
+
+        .cell-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .cell-progress-main {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .cell-progress-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .time-chip {
+            text-align: right;
+            color: var(--text-secondary);
+            font-size: 0.78rem;
+        }
+
+        .time-chip span {
+            display: inline-flex;
+            align-items: center;
+            justify-content: flex-end;
+            min-width: 36px;
+        }
+
+        .time-chip.empty {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+        .img-wrapper {
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            overflow: hidden;
+            background: var(--cover-fallback);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #020617;
+        }
+
+        .img-wrapper img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .img-wrapper.fallback {
+            background: #020617;
+            border-color: #1f2937;
+        }
+
+        .img-wrapper.fallback span {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .btn-continue {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 5px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(55, 65, 81, 0.85);
+            background: radial-gradient(circle at top left, rgba(79, 70, 229, 0.2), rgba(15, 23, 42, 0.95));
+            color: var(--text-primary);
+            font-size: 0.78rem;
+            font-weight: 500;
+            text-decoration: none;
+            min-width: 100px;
+            transition: background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+            white-space: nowrap;
+        }
+
+        .btn-continue span {
+            font-size: 0.8rem;
+            margin-left: 4px;
+            opacity: 0.9;
+        }
+
+        .btn-continue:hover {
+            border-color: #6366f1;
+            background: radial-gradient(circle at top left, rgba(129, 140, 248, 0.35), rgba(15, 23, 42, 0.95));
+            box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.35), 0 12px 24px rgba(15, 23, 42, 0.8);
+            transform: translateY(-1px);
+        }
+
+        .btn-continue:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+        .btn-continue.disabled {
+            opacity: 0.5;
+            cursor: default;
+            pointer-events: none;
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .favorite-star {
+            font-size: 0.85rem;
+            color: #fbbf24;
+            margin-left: 4px;
+        }
+
+        .favorite-star.inactive {
+            opacity: 0.35;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 32px 16px;
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state h2 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 4px;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 0.72rem;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(55, 65, 81, 0.9);
+            color: var(--text-secondary);
+        }
+
+        .pill-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 999px;
+            background: #22c55e;
+        }
+
+        .meta-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .meta-row span {
+            display: inline-flex;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .dot-sep::before {
+            content: "•";
+            display: inline-block;
+            margin: 0 4px;
+            opacity: 0.6;
+        }
+
+        .loading-state {
+            text-align: center;
+            padding: 40px 16px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            border: 3px solid rgba(148, 163, 184, 0.4);
+            border-top-color: #6366f1;
+            margin: 0 auto 10px;
+            animation: spin 0.7s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .error-banner {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 8px;
+            background: rgba(127, 29, 29, 0.9);
+            border: 1px solid rgba(248, 113, 113, 0.9);
+            color: #fecaca;
+            font-size: 0.78rem;
+            display: none;
+        }
+
+        .error-banner strong {
+            font-weight: 600;
+        }
+
+        @media (max-width: 768px) {
+            header h1 {
+                font-size: 1.5rem;
+            }
+
+            .search-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .legend {
+                text-align: left;
+            }
+
+            .col-continue {
+                width: 110px;
+            }
+
+            .col-title {
+                min-width: 180px;
+            }
+
+            .table-container {
+                max-height: calc(100vh - 220px);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .img-wrapper {
+                width: 40px;
+                height: 40px;
+            }
+
+            thead th {
+                font-size: 0.68rem;
+                padding: 7px 6px;
+            }
+
+            tbody td {
+                padding: 6px 6px;
+            }
+
+            .btn-continue {
+                min-width: 90px;
+                padding: 4px 8px;
+                font-size: 0.75rem;
+            }
+
+            .cell-title-main {
+                font-size: 0.82rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="page">
+        <header>
+            <h1>📚 MyList</h1>
+            <p>Comick-style reading list for all your NovelBin tracking.</p>
+        </header>
+
+        <div class="search-row">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input id="searchInput" type="search" placeholder="Search title…" autocomplete="off">
+            </div>
+            <div class="legend">
+                <span><span class="legend-arrow">▲</span> newer / more recent</span>
+                <span><span class="legend-arrow">▼</span> older / less recent</span>
+            </div>
+        </div>
+
+        <div id="error" class="error-banner"></div>
+
+        <div class="table-shell">
+            <div id="loading" class="loading-state">
+                <div class="spinner"></div>
+                Loading your novels…
+            </div>
+
+            <div id="tableWrapper" class="table-container" style="display:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-cover">Cover</th>
+                            <th class="col-title">Title</th>
+                            <th class="col-progress">Progress</th>
+                            <th class="col-continue">Continue</th>
+                            <th class="col-status">Status</th>
+                            <th class="col-time">
+                                <span class="sortable" data-sort="read_at">
+                                    Last Read
+                                    <span class="sort-arrows">
+                                        <span class="sort-arrow" data-arrow="read_at-desc">▲</span>
+                                        <span class="sort-arrow" data-arrow="read_at-asc">▼</span>
+                                    </span>
+                                </span>
+                            </th>
+                            <th class="col-time">
+                                <span class="sortable" data-sort="updated_at">
+                                    Updated
+                                    <span class="sort-arrows">
+                                        <span class="sort-arrow" data-arrow="updated_at-desc">▲</span>
+                                        <span class="sort-arrow" data-arrow="updated_at-asc">▼</span>
+                                    </span>
+                                </span>
+                            </th>
+                            <th class="col-time">
+                                <span class="sortable" data-sort="started_at">
+                                    Added
+                                    <span class="sort-arrows">
+                                        <span class="sort-arrow" data-arrow="started_at-desc">▲</span>
+                                        <span class="sort-arrow" data-arrow="started_at-asc">▼</span>
+                                    </span>
+                                </span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="listBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API key behaviour: same as existing novels.html
+        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
+        const API_BASE = '/api/v1';
+
+        let allNovels = [];
+        let sortField = 'updated_at'; // read_at | updated_at | started_at
+        let sortOrder = 'desc';       // 'asc' | 'desc'
+        let searchTerm = '';
+
+        const $ = (id) => document.getElementById(id);
+
+        function showError(msg) {
+            const el = $('error');
+            el.innerHTML = `<strong>Error:</strong> ${msg}`;
+            el.style.display = 'block';
+            setTimeout(() => {
+                el.style.display = 'none';
+            }, 4500);
+        }
+
+        function toMs(ts) {
+            if (!ts) return 0;
+            const d = new Date(ts);
+            const v = d.getTime();
+            return Number.isFinite(v) ? v : 0;
+        }
+
+        function formatAgo(ts) {
+            if (!ts) return '';
+            const ms = typeof ts === 'number' ? ts : toMs(ts);
+            if (!ms) return '';
+            const now = Date.now();
+            let diff = Math.max(0, now - ms);
+            const s = diff / 1000;
+            if (s < 60) return 'now';
+            const m = s / 60;
+            if (m < 60) return `${Math.floor(m)}m`;
+            const h = m / 60;
+            if (h < 24) return `${Math.floor(h)}h`;
+            const d = h / 24;
+            if (d < 30) return `${Math.floor(d)}d`;
+            const mo = d / 30;
+            if (mo < 12) return `${Math.floor(mo)}mo`;
+            const y = mo / 12;
+            return `${Math.floor(y)}y`;
+        }
+
+        function buildCoverUrl(novelId) {
+            if (!novelId) return null;
+            const prefix = 'novelbin:';
+            if (!novelId.startsWith(prefix)) return null;
+            const slug = novelId.slice(prefix.length);
+            if (!slug) return null;
+            return `https://novelbin.com/media/novel/${slug}.jpg`;
+        }
+
+        function safePercent(n) {
+            const v = Number(n);
+            if (!Number.isFinite(v)) return 0;
+            return Math.max(0, Math.min(100, v));
+        }
+
+        function computeSortKey(novel, field) {
+            const global = novel.latest_global || null;
+            if (field === 'read_at') {
+                return global ? toMs(global.ts) : 0;
+            } else if (field === 'updated_at') {
+                return toMs(novel.chapters_updated_at);
+            } else if (field === 'started_at') {
+                return toMs(novel.started_at);
+            }
+            return 0;
+        }
+
+        function sortNovels(list) {
+            return list.slice().sort((a, b) => {
+                const ka = computeSortKey(a, sortField);
+                const kb = computeSortKey(b, sortField);
+                if (ka === kb) {
+                    // fallback: last_activity desc
+                    const fa = toMs(a.last_activity);
+                    const fb = toMs(b.last_activity);
+                    return (sortOrder === 'asc' ? fa - fb : fb - fa);
+                }
+                return sortOrder === 'asc' ? ka - kb : kb - ka;
+            });
+        }
+
+        function updateSortIndicators() {
+            const arrows = document.querySelectorAll('.sort-arrow');
+            arrows.forEach(a => a.classList.remove('active'));
+            const key = `${sortField}-${sortOrder}`;
+            const active = document.querySelector(`.sort-arrow[data-arrow="${key}"]`);
+            if (active) active.classList.add('active');
+        }
+
+        function handleSortClick(field) {
+            if (sortField === field) {
+                sortOrder = (sortOrder === 'desc') ? 'asc' : 'desc';
+            } else {
+                sortField = field;
+                sortOrder = 'desc';
+            }
+            updateSortIndicators();
+            renderList();
+        }
+
+        function normalizeTitle(t) {
+            return (t || '').toString().toLowerCase();
+        }
+
+        function formatProgress(novel, global) {
+            const currentCh = global ? Number(global.chapter_num) || 0 : 0;
+            const totalCh = Number(novel.latest_chapter_num) || 0;
+
+            if (!currentCh && !totalCh) return { main: '-', sub: '' };
+
+            if (totalCh > 0) {
+                return {
+                    main: `${currentCh} / ${totalCh}`,
+                    sub: ''
+                };
+            }
+            return {
+                main: `${currentCh}`,
+                sub: ''
+            };
+        }
+
+        function renderList() {
+            const body = $('listBody');
+            const wrapper = $('tableWrapper');
+            const loading = $('loading');
+
+            if (!allNovels.length) {
+                loading.style.display = 'none';
+                wrapper.style.display = 'block';
+                body.innerHTML = `
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <h2>No novels found</h2>
+                <p>Start reading with the NovelBin userscript to see your list here.</p>
+              </div>
+            </td>
+          </tr>
+        `;
+                return;
+            }
+
+            // Filter by search
+            const q = searchTerm.trim().toLowerCase();
+            let filtered = allNovels;
+            if (q) {
+                filtered = allNovels.filter(n => {
+                    const title = normalizeTitle(n.title || n.novel_id);
+                    return title.includes(q);
+                });
+            }
+
+            // Sort
+            const sorted = sortNovels(filtered);
+
+            loading.style.display = 'none';
+            wrapper.style.display = 'block';
+
+            if (!sorted.length) {
+                body.innerHTML = `
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <h2>No novels match your search</h2>
+                <p>Try a different title.</p>
+              </div>
+            </td>
+          </tr>
+        `;
+                return;
+            }
+
+            const rows = sorted.map(novel => {
+                const global = novel.latest_global || null;
+                const coverUrl = buildCoverUrl(novel.novel_id);
+                const fav = !!novel.favorite;
+                const status = (novel.status || 'reading').toLowerCase();
+
+                const progress = formatProgress(novel, global);
+
+                const readTs = global ? global.ts : null;
+                const updatedTs = novel.chapters_updated_at || null;
+                const addedTs = novel.started_at || null;
+
+                const readAgo = formatAgo(readTs);
+                const updatedAgo = formatAgo(updatedTs);
+                const addedAgo = formatAgo(addedTs);
+
+                const readEmpty = !readTs;
+                const updatedEmpty = !updatedTs;
+                const addedEmpty = !addedTs;
+
+                // Continue URL
+                let continueHref = '';
+                let canContinue = false;
+                if (global && global.url) {
+                    const base = global.url.replace(/#.*$/, '');
+                    const p = safePercent(global.percent);
+                    continueHref = `${base}#nbp=${p.toFixed(1)}`;
+                    canContinue = true;
+                }
+
+                const statusClass = ['reading', 'completed', 'on-hold', 'dropped', 'removed'].includes(status)
+                    ? status
+                    : 'reading';
+
+                const titleText = novel.title || novel.novel_id;
+                const detailHref = `/novel/${encodeURIComponent(novel.novel_id)}`;
+
+                const readCellClass = readEmpty ? 'time-chip empty' : 'time-chip';
+                const updCellClass = updatedEmpty ? 'time-chip empty' : 'time-chip';
+                const addCellClass = addedEmpty ? 'time-chip empty' : 'time-chip';
+
+                const readLabel = readEmpty ? '—' : readAgo;
+                const updLabel = updatedEmpty ? '—' : updatedAgo;
+                const addLabel = addedEmpty ? '—' : addedAgo;
+
+                const favClass = fav ? 'favorite-star' : 'favorite-star inactive';
+
+                const coverHtml = coverUrl
+                    ? `
+            <div class="img-wrapper">
+              <img src="${coverUrl}" alt="cover" loading="lazy"
+                   onerror="this.parentElement.classList.add('fallback'); this.remove();">
+            </div>
+          `
+                    : `
+            <div class="img-wrapper fallback">
+              <span>NO</span>
+            </div>
+          `;
+
+                const statusOptions = [
+                    'reading',
+                    'completed',
+                    'on-hold',
+                    'dropped',
+                    'removed'
+                ].map(st => {
+                    const label = st.charAt(0).toUpperCase() + st.slice(1);
+                    const sel = st === statusClass ? 'selected' : '';
+                    return `<option value="${st}" ${sel}>${label}</option>`;
+                }).join('');
+
+                return `
+          <tr data-novel-id="${encodeURIComponent(novel.novel_id)}">
+            <td class="col-cover">
+              ${coverHtml}
+            </td>
+            <td class="col-title">
+              <div class="cell-title-main">
+                <a href="${detailHref}">${titleText}</a>
+                ${fav ? `<span class="${favClass}">★</span>` : ''}
+              </div>
+              <div class="cell-sub meta-row">
+                <span><span class="pill-dot"></span></span>
+                ${global ? `<span>Last ch. ${Number(global.chapter_num) || 0}</span>` : `<span>No progress</span>`}
+              </div>
+            </td>
+            <td class="col-progress">
+              <div class="cell-progress-main">${progress.main}</div>
+            </td>
+            <td class="col-continue">
+              ${canContinue
+                        ? `<a class="btn-continue" href="${continueHref}" target="_blank" rel="noreferrer">
+                    Continue Reading<span>→</span>
+                 </a>`
+                        : `<div class="btn-continue disabled">No progress</div>`
+                    }
+            </td>
+            <td class="col-status">
+              <select class="status-select" onchange="onStatusChange('${encodeURIComponent(novel.novel_id)}', this.value)">
+                ${statusOptions}
+              </select>
+            </td>
+            <td class="col-time">
+              <div class="${readCellClass}">
+                <span>${readLabel}</span>
+              </div>
+            </td>
+            <td class="col-time">
+              <div class="${updCellClass}">
+                <span>${updLabel}</span>
+              </div>
+            </td>
+            <td class="col-time">
+              <div class="${addCellClass}">
+                <span>${addLabel}</span>
+              </div>
+            </td>
+          </tr>
+        `;
+            }).join('');
+
+            body.innerHTML = rows;
+        }
+
+        async function loadMyList() {
+            const loading = $('loading');
+            const wrapper = $('tableWrapper');
+            const body = $('listBody');
+
+            loading.style.display = 'block';
+            wrapper.style.display = 'none';
+            body.innerHTML = '';
+
+            try {
+                const url = new URL(`${API_BASE}/novels`, location.origin);
+                url.searchParams.set('user_key', API_KEY);
+                url.searchParams.set('_t', Date.now().toString());
+
+                const res = await fetch(url.toString(), { cache: 'no-store' });
+                if (!res.ok) {
+                    throw new Error(`${res.status} ${res.statusText}`);
+                }
+                const data = await res.json();
+                if (!Array.isArray(data)) {
+                    throw new Error('Unexpected API response');
+                }
+
+                allNovels = data;
+                updateSortIndicators();
+                renderList();
+            } catch (err) {
+                console.error('Failed to load novels', err);
+                loading.style.display = 'none';
+                const body = $('listBody');
+                $('tableWrapper').style.display = 'block';
+                body.innerHTML = `
+          <tr>
+            <td colspan="8">
+              <div class="empty-state">
+                <h2>Failed to load novels</h2>
+                <p>${err.message}</p>
+              </div>
+            </td>
+          </tr>
+        `;
+            }
+        }
+
+        async function onStatusChange(encodedId, newStatus) {
+            const novelId = decodeURIComponent(encodedId);
+            if (!novelId || !newStatus) return;
+
+            try {
+                const url = new URL(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, location.origin);
+                url.searchParams.set('user_key', API_KEY);
+                url.searchParams.set('_t', Date.now().toString());
+
+                const res = await fetch(url.toString(), {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!res.ok) {
+                    let detail = '';
+                    try {
+                        const j = await res.json();
+                        detail = j.error || j.detail || '';
+                    } catch { }
+                    throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
+                }
+
+                // update local copy
+                const idx = allNovels.findIndex(n => n.novel_id === novelId);
+                if (idx !== -1) {
+                    allNovels[idx] = { ...allNovels[idx], status: newStatus };
+                }
+                renderList();
+            } catch (err) {
+                console.error('Failed to update status', err);
+                showError('Failed to update status: ' + err.message);
+            }
+        }
+
+        // expose for inline handler
+        window.onStatusChange = onStatusChange;
+
+        function attachEvents() {
+            $('searchInput').addEventListener('input', (e) => {
+                searchTerm = e.target.value || '';
+                renderList();
+            });
+
+            document.querySelectorAll('.sortable').forEach(el => {
+                el.addEventListener('click', () => {
+                    const field = el.getAttribute('data-sort');
+                    if (field) handleSortClick(field);
+                });
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            attachEvents();
+            loadMyList();
+        });
+    </script>
+</body>
+
+</html>
