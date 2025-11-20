@@ -484,13 +484,20 @@
         const API_BASE = '/api/v1';
         let currentApiKey = '';
 
+        // Utility: Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // Auth
         document.getElementById('authForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             currentApiKey = document.getElementById('apiKey').value;
 
             try {
-                const res = await fetch(`${API_BASE}/auth/whoami?user_key=${currentApiKey}`);
+                const res = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(currentApiKey)}`);
                 if (res.ok) {
                     const data = await res.json();
                     document.getElementById('authStatus').textContent = `✅ Signed in as ${data.display_name}`;
@@ -507,7 +514,7 @@
         // Load bot status
         async function loadBotStatus() {
             try {
-                const res = await fetch(`${API_BASE}/admin/bot/status?user_key=${currentApiKey}`);
+                const res = await fetch(`${API_BASE}/admin/bot/status?user_key=${encodeURIComponent(currentApiKey)}`);
                 const data = await res.json();
 
                 document.getElementById('botStatus').textContent = data.running ? 'Running' : 'Idle';
@@ -531,7 +538,7 @@
             document.getElementById('empty').style.display = 'none';
 
             try {
-                const res = await fetch(`${API_BASE}/admin/novels/stale?user_key=${currentApiKey}`);
+                const res = await fetch(`${API_BASE}/admin/novels/stale?user_key=${encodeURIComponent(currentApiKey)}`);
                 const novels = await res.json();
 
                 document.getElementById('loading').style.display = 'none';
@@ -546,15 +553,16 @@
                 tbody.innerHTML = novels.map(n => `
                     <tr>
                         <td>
-                            <strong>${n.title || n.id}</strong><br>
-                            <small style="color: var(--text-secondary);">${n.id}</small>
+                            <strong>${escapeHtml(n.title || n.id)}</strong><br>
+                            <small style="color: var(--text-secondary);">${escapeHtml(n.id)}</small>
                         </td>
                         <td>Ch. ${n.latest_chapter_num || '?'}</td>
                         <td>${formatTime(n.chapters_updated_at) || 'Never'}</td>
                         <td>${n.active_readers || 0}</td>
                         <td>
                             <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 12px;" 
-                                    onclick="updateNovel('${n.id}')">
+                                    data-novel-id="${escapeHtml(n.id)}"
+                                    onclick="updateNovel(this.getAttribute('data-novel-id'))">
                                 🔄 Update
                             </button>
                         </td>
@@ -572,7 +580,7 @@
             toast('⏳ Updating novel...', 'warning');
 
             try {
-                const res = await fetch(`${API_BASE}/admin/novels/${encodeURIComponent(novelId)}/update?user_key=${currentApiKey}`, {
+                const res = await fetch(`${API_BASE}/admin/novels/${encodeURIComponent(novelId)}/update?user_key=${encodeURIComponent(currentApiKey)}`, {
                     method: 'POST'
                 });
 
@@ -592,7 +600,7 @@
         // Trigger manual bot run
         document.getElementById('triggerBtn').addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_BASE}/admin/bot/trigger?user_key=${currentApiKey}`, {
+                const res = await fetch(`${API_BASE}/admin/bot/trigger?user_key=${encodeURIComponent(currentApiKey)}`, {
                     method: 'POST'
                 });
                 const data = await res.json();

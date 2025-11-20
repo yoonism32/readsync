@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "bot": "node chapter-update-bot-enhanced.js",
     "dev": "nodemon server.js",
     "setup": "npm install && npm start"
   },

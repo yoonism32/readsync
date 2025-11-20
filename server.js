@@ -8,6 +8,9 @@ const { URL } = require('url');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// 🔹 INTEGRATION: Import bot module
+const bot = require('./chapter-update-bot');
+
 /* ---------------------- Middleware ---------------------- */
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
@@ -904,6 +907,101 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
     }
 });
 
+/* ---------------------- 🔹 ADMIN/BOT MANAGEMENT ROUTES 🔹 ---------------------- */
+
+// Get novels that need chapter updates
+app.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
+    const { hours = 24 } = req.query;
+
+    try {
+        const result = await pool.query(`
+            SELECT 
+                n.id,
+                n.title,
+                n.primary_url,
+                n.latest_chapter_num,
+                n.latest_chapter_title,
+                n.chapters_updated_at,
+                COUNT(DISTINCT p.user_id) as active_readers,
+                MAX(p.created_at) as last_read_at
+            FROM novels n
+            LEFT JOIN progress_snapshots p ON p.novel_id = n.id
+            WHERE 
+                n.primary_url IS NOT NULL
+                AND (
+                    n.chapters_updated_at IS NULL 
+                    OR n.chapters_updated_at < NOW() - INTERVAL '${parseInt(hours)} hours'
+                )
+            GROUP BY n.id, n.title, n.primary_url, n.latest_chapter_num, 
+                     n.latest_chapter_title, n.chapters_updated_at
+            HAVING COUNT(DISTINCT p.user_id) > 0
+            ORDER BY active_readers DESC, n.chapters_updated_at ASC NULLS FIRST
+        `);
+
+        res.json(result.rows);
+    } catch (error) {
+        handleDbError(res, error, 'Get stale novels');
+    }
+});
+
+// Manually trigger update for a specific novel
+app.post('/api/v1/admin/novels/:novelId/update', validateApiKey, validateNovelId, async (req, res) => {
+    const { novelId } = req.params;
+
+    try {
+        if (bot.triggerManualUpdate) {
+            const result = await bot.triggerManualUpdate(novelId);
+            res.json(result);
+        } else {
+            res.status(503).json({
+                error: 'Bot module not loaded',
+                message: 'Chapter update bot is not running'
+            });
+        }
+    } catch (error) {
+        handleDbError(res, error, 'Manual novel update');
+    }
+});
+
+// Get bot status
+app.get('/api/v1/admin/bot/status', validateApiKey, async (req, res) => {
+    try {
+        const status = global.botStatus || {
+            running: false,
+            lastRun: null,
+            lastRunSuccess: false,
+            novelsUpdated: 0,
+            novelsChecked: 0,
+            nextRun: null,
+            errors: []
+        };
+
+        res.json(status);
+    } catch (error) {
+        handleDbError(res, error, 'Get bot status');
+    }
+});
+
+// Trigger manual bot run
+app.post('/api/v1/admin/bot/trigger', validateApiKey, async (req, res) => {
+    try {
+        if (bot.updateNovelChapters) {
+            setImmediate(() => bot.updateNovelChapters());
+            res.json({
+                success: true,
+                message: 'Bot update cycle triggered'
+            });
+        } else {
+            res.status(503).json({
+                error: 'Bot not available',
+                message: 'Chapter update bot is not running'
+            });
+        }
+    } catch (error) {
+        handleDbError(res, error, 'Trigger bot update');
+    }
+});
+
 /* ---------------------- Bookmarks API ---------------------- */
 app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
@@ -1564,6 +1662,14 @@ app.get('/api/v1/debug/last', validateApiKey, async (req, res) => {
     }
 });
 
+
+
+
+
+
+
+
+
 /* ---------------------- Static File Serving ---------------------- */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
@@ -1584,6 +1690,11 @@ app.get('/novels/:novelId', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'novel.html'));
 });
 
+// 🔹 INTEGRATION: Admin panel route
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
     res.status(404).json({
@@ -1598,11 +1709,19 @@ async function startServer() {
     try {
         await initDatabase();
 
+        // 🔹 INTEGRATION: Start the chapter update bot
+        console.log('🤖 Starting chapter update bot...');
+        bot.startBot().catch(err => {
+            console.error('⚠️ Bot failed to start:', err);
+            console.log('📝 Server will continue without bot');
+        });
+
         const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 ReadSync API server running on port ${PORT}`);
             console.log(`📊 Dashboard: http://localhost:${PORT}`);
             console.log(`📚 Novels: http://localhost:${PORT}/novels`);
             console.log(`🛠️ Manage: http://localhost:${PORT}/manage`);
+            console.log(`🤖 Admin Panel: http://localhost:${PORT}/admin`);
             console.log(`🩺 Health check: http://localhost:${PORT}/health`);
             console.log(`📚 API docs: http://localhost:${PORT}/api/v1/`);
         });

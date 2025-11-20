@@ -1,4 +1,3 @@
-// chapter-update-bot.js - Automatic Chapter Update Bot with Genre Detection
 const { Pool } = require('pg');
 const { URL } = require('url');
 
@@ -30,18 +29,33 @@ const pool = new Pool({
     connectionTimeoutMillis: 10000,
 });
 
+// Global status tracking
+global.botStatus = {
+    running: false,
+    lastRun: null,
+    lastRunSuccess: false,
+    novelsUpdated: 0,
+    novelsChecked: 0,
+    nextRun: null,
+    errors: []
+};
+
 /* ==================== Scraping Logic ==================== */
 async function fetchNovelMainPage(novelUrl) {
     try {
         // Extract base novel URL (remove chapter part)
-        const baseUrl = novelUrl.replace(/\/c*chapter-\d+.*$/, '');
+        const baseUrl = novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
 
         console.log(`📖 Fetching novel page: ${baseUrl}`);
 
         const response = await fetch(baseUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Connection': 'keep-alive',
+            },
+            timeout: 10000
         });
 
         if (!response.ok) {
@@ -66,11 +80,11 @@ function parseNovelInfoFromHTML(html, novelUrl) {
         if (match) {
             result.chapter = {
                 num: parseInt(match[1], 10),
-                title: match[2].trim()
+                title: match[2].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
             };
         } else {
             // Strategy 2: Find all chapter links and get the highest number
-            const chapterRegex = /chapter-(\d+)/gi;
+            const chapterRegex = /chapter-?(\d+)/gi;
             const matches = [...html.matchAll(chapterRegex)];
 
             if (matches.length > 0) {
@@ -82,7 +96,7 @@ function parseNovelInfoFromHTML(html, novelUrl) {
 
                 result.chapter = {
                     num: maxChapter,
-                    title: titleMatch ? titleMatch[1].trim() : null
+                    title: titleMatch ? titleMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&') : null
                 };
             } else {
                 // Strategy 3: Look for "latest chapter" text
@@ -96,21 +110,20 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             }
         }
 
-        // === Parse Genres (NovelBin shows them on the page!) ===
-        // Look for: <dt>Genres:</dt><dd>Action, Adventure, Fantasy</dd>
+        // === Parse Genres ===
         const genreMatch = html.match(/<dt[^>]*>Genres?:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i);
         if (genreMatch) {
             result.genres = genreMatch[1]
                 .split(',')
                 .map(g => g.trim())
-                .filter(g => g.length > 0);
+                .filter(g => g.length > 0 && g.length < 50); // Sanity check
         }
 
         // === Parse Author ===
         const authorMatch = html.match(/<dt[^>]*>Author:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i) ||
             html.match(/Author:\s*([^<,\n]+)/i);
         if (authorMatch) {
-            result.author = authorMatch[1].trim();
+            result.author = authorMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
         }
 
         if (!result.chapter) {
@@ -132,7 +145,8 @@ async function getNovelsNeedingUpdate() {
       n.primary_url,
       n.latest_chapter_num,
       n.chapters_updated_at,
-      COUNT(DISTINCT p.user_id) as active_readers
+      COUNT(DISTINCT p.user_id) as active_readers,
+      MAX(p.created_at) as last_read_at
     FROM novels n
     JOIN progress_snapshots p ON p.novel_id = n.id
     WHERE 
@@ -167,30 +181,85 @@ async function updateNovelChapterInfo(novelId, chapterNum, chapterTitle, genre, 
     return result.rows[0];
 }
 
+// Create notifications table if it doesn't exist
+async function initNotifications() {
+    await pool.query(`
+        CREATE TABLE IF NOT EXISTS novel_notifications (
+            id BIGSERIAL PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            novel_id TEXT NOT NULL,
+            previous_chapter INTEGER,
+            new_chapter INTEGER,
+            chapter_title TEXT,
+            read BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+            FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+        )
+    `);
+
+    await pool.query(`
+        CREATE INDEX IF NOT EXISTS idx_notifications_user 
+        ON novel_notifications (user_id, read, created_at DESC)
+    `);
+}
+
+async function createNotificationsForNovelUpdate(novelId, oldChapter, newChapter, chapterTitle) {
+    // Find all users who have read this novel
+    const usersResult = await pool.query(`
+        SELECT DISTINCT user_id 
+        FROM progress_snapshots 
+        WHERE novel_id = $1
+    `, [novelId]);
+
+    for (const { user_id } of usersResult.rows) {
+        await pool.query(`
+            INSERT INTO novel_notifications 
+                (user_id, novel_id, previous_chapter, new_chapter, chapter_title)
+            VALUES ($1, $2, $3, $4, $5)
+        `, [user_id, novelId, oldChapter, newChapter, chapterTitle]);
+    }
+
+    console.log(`   📬 Created notifications for ${usersResult.rows.length} users`);
+}
+
 /* ==================== Bot Main Loop ==================== */
 async function updateNovelChapters() {
     console.log('\n🤖 Starting chapter update cycle...');
+
+    global.botStatus.running = true;
+    global.botStatus.lastRun = new Date().toISOString();
+    global.botStatus.novelsUpdated = 0;
+    global.botStatus.novelsChecked = 0;
+    global.botStatus.errors = [];
 
     try {
         const novels = await getNovelsNeedingUpdate();
 
         if (novels.length === 0) {
             console.log('✅ All novels up to date!');
+            global.botStatus.lastRunSuccess = true;
+            global.botStatus.running = false;
+            global.botStatus.nextRun = new Date(Date.now() + CHECK_INTERVAL_MS).toISOString();
             return;
         }
 
         console.log(`📚 Found ${novels.length} novels needing updates`);
 
         for (const novel of novels) {
+            global.botStatus.novelsChecked++;
+
             console.log(`\n📖 Processing: ${novel.id}`);
             console.log(`   Current: Ch.${novel.latest_chapter_num || '?'}`);
             console.log(`   Readers: ${novel.active_readers}`);
             console.log(`   Last check: ${novel.chapters_updated_at || 'Never'}`);
+            console.log(`   Last read: ${novel.last_read_at || 'Never'}`);
 
             // Fetch and parse
             const html = await fetchNovelMainPage(novel.primary_url);
             if (!html) {
                 console.log('   ⏭️ Skipping (fetch failed)');
+                global.botStatus.errors.push({ novel: novel.id, error: 'Fetch failed' });
                 await sleep(REQUEST_DELAY_MS);
                 continue;
             }
@@ -198,6 +267,7 @@ async function updateNovelChapters() {
             const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
             if (!novelInfo.chapter) {
                 console.log('   ⏭️ Skipping (parse failed)');
+                global.botStatus.errors.push({ novel: novel.id, error: 'Parse failed' });
                 await sleep(REQUEST_DELAY_MS);
                 continue;
             }
@@ -231,6 +301,16 @@ async function updateNovelChapters() {
                 if (novelInfo.genres.length > 0) {
                     console.log(`   🏷️ Genres: ${novelInfo.genres.join(', ')}`);
                 }
+
+                // Create notifications for users
+                await createNotificationsForNovelUpdate(
+                    novel.id,
+                    novel.latest_chapter_num,
+                    updated.latest_chapter_num,
+                    updated.latest_chapter_title
+                );
+
+                global.botStatus.novelsUpdated++;
             }
 
             // Be nice to servers
@@ -238,9 +318,17 @@ async function updateNovelChapters() {
         }
 
         console.log('\n✅ Update cycle complete!');
+        console.log(`📊 Stats: ${global.botStatus.novelsChecked} checked, ${global.botStatus.novelsUpdated} updated`);
+
+        global.botStatus.lastRunSuccess = true;
 
     } catch (error) {
         console.error('❌ Error in update cycle:', error);
+        global.botStatus.lastRunSuccess = false;
+        global.botStatus.errors.push({ error: error.message });
+    } finally {
+        global.botStatus.running = false;
+        global.botStatus.nextRun = new Date(Date.now() + CHECK_INTERVAL_MS).toISOString();
     }
 }
 
@@ -248,7 +336,7 @@ async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-/* ==================== Manual Trigger Endpoint ==================== */
+/* ==================== Manual Trigger Function ==================== */
 async function triggerManualUpdate(novelId) {
     try {
         const result = await pool.query(
@@ -281,13 +369,24 @@ async function triggerManualUpdate(novelId) {
             novelInfo.author
         );
 
+        // Create notifications if new chapter
+        if (novel.latest_chapter_num && novelInfo.chapter.num > novel.latest_chapter_num) {
+            await createNotificationsForNovelUpdate(
+                novelId,
+                novel.latest_chapter_num,
+                updated.latest_chapter_num,
+                updated.latest_chapter_title
+            );
+        }
+
         return {
             success: true,
             previous: novel.latest_chapter_num,
             current: updated.latest_chapter_num,
             title: updated.latest_chapter_title,
             genres: novelInfo.genres,
-            author: updated.author
+            author: updated.author,
+            isNew: !novel.latest_chapter_num || novelInfo.chapter.num > novel.latest_chapter_num
         };
 
     } catch (error) {
@@ -306,11 +405,19 @@ async function startBot() {
     // Test database connection
     try {
         await pool.query('SELECT 1');
-        console.log('✅ Database connected\n');
+        console.log('✅ Database connected');
+
+        // Initialize notifications table
+        await initNotifications();
+        console.log('✅ Notifications system initialized\n');
     } catch (error) {
         console.error('❌ Database connection failed:', error);
         process.exit(1);
     }
+
+    // Make functions available globally
+    global.updateNovelChapters = updateNovelChapters;
+    global.triggerManualUpdate = triggerManualUpdate;
 
     // Run immediately on start
     await updateNovelChapters();
@@ -343,5 +450,8 @@ module.exports = {
 
 // Run if executed directly
 if (require.main === module) {
-    startBot();
+    startBot().catch(err => {
+        console.error('Fatal bot error:', err);
+        process.exit(1);
+    });
 }

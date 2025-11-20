@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables (IMPORTANT!)
+.env
+.env.local
+.env.production
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs/
+*.log
+
+# Build files
+dist/
+build/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Database (if running locally)
+*.sqlite
+*.sqlite3
+*.db
+
+# Secrets (NEVER COMMIT THESE!)
+secrets/
+*.pem
+*.key
+*.cert
+
+# PM2 (if using)
+.pm2/

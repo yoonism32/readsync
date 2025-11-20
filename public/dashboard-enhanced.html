@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ReadSync Dashboard - Enhanced</title>
+    <link rel="icon" href="/favicon.ico">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-dark: #4f46e5;
+            --secondary: #8b5cf6;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-hover: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #cbd5e1;
+            --border: #334155;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, #1a1f3a 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 16px;
+            flex-wrap: wrap;
+        }
+
+        .nav a {
+            padding: 8px 16px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav a:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            text-align: center;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .stat-card h3 {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .stat-card p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        /* Filter Tabs */
+        .filter-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .filter-tab {
+            padding: 10px 20px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* Novel Cards */
+        .novels-grid {
+            display: grid;
+            gap: 20px;
+        }
+
+        .novel-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 24px;
+            transition: all 0.3s;
+        }
+
+        .novel-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .novel-card.has-updates {
+            border-color: var(--warning);
+            box-shadow: 0 0 0 1px var(--warning);
+        }
+
+        .novel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 16px;
+        }
+
+        .novel-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .novel-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-new {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .badge-behind {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .badge-current {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--success);
+        }
+
+        /* Progress Section */
+        .progress-section {
+            background: linear-gradient(135deg, var(--success), #059669);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .chapter-info {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        /* Behind Info */
+        .behind-section {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+        }
+
+        .behind-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .behind-count {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        /* Updated Info */
+        .update-info {
+            background: var(--bg-hover);
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .update-info strong {
+            color: var(--text-primary);
+        }
+
+        /* Actions */
+        .actions {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--bg-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-tabs {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📚 ReadSync Dashboard</h1>
+            <p style="color: var(--text-secondary); margin-top: 8px;">Track your reading progress with automatic
+                updates</p>
+            <div class="nav">
+                <a href="/novels">📖 Browse All</a>
+                <a href="/manage">🛠️ Manage</a>
+                <a href="/admin">🤖 Admin</a>
+            </div>
+        </div>
+
+        <div id="stats" class="stats-grid" style="display: none;">
+            <div class="stat-card">
+                <h3 id="total-novels">0</h3>
+                <p>Active Novels</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="novels-behind">0</h3>
+                <p>Behind on Chapters</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="new-chapters">0</h3>
+                <p>New Chapters Available</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="total-devices">0</h3>
+                <p>Active Devices</p>
+            </div>
+        </div>
+
+        <div class="filter-tabs">
+            <div class="filter-tab active" data-filter="all" onclick="setFilter('all')">All Novels</div>
+            <div class="filter-tab" data-filter="behind" onclick="setFilter('behind')">Behind</div>
+            <div class="filter-tab" data-filter="current" onclick="setFilter('current')">Up to Date</div>
+            <div class="filter-tab" data-filter="favorites" onclick="setFilter('favorites')">⭐ Favorites</div>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading your novels...</p>
+        </div>
+
+        <div id="novels-container" class="novels-grid" style="display: none;"></div>
+    </div>
+
+    <script>
+        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
+        const API_BASE = '/api/v1';
+
+        let allNovels = [];
+        let currentFilter = 'all';
+
+        async function loadDashboard() {
+            try {
+                const res = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(API_KEY)}&_t=${Date.now()}`, {
+                    cache: 'no-store'
+                });
+
+                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+
+                allNovels = await res.json();
+                updateStats();
+                renderNovels();
+
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('stats').style.display = 'grid';
+                document.getElementById('novels-container').style.display = 'grid';
+
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+                document.getElementById('loading').innerHTML =
+                    '<h2>Failed to load data</h2><p>Please check the API server</p>';
+            }
+        }
+
+        function updateStats() {
+            let novelsBehind = 0;
+            let totalNewChapters = 0;
+            const allDevices = new Set();
+
+            allNovels.forEach(novel => {
+                const behind = calculateBehind(novel);
+                if (behind > 0) {
+                    novelsBehind++;
+                    totalNewChapters += behind;
+                }
+
+                Object.keys(novel.latest_per_device || {}).forEach(id => allDevices.add(id));
+            });
+
+            document.getElementById('total-novels').textContent = allNovels.length;
+            document.getElementById('novels-behind').textContent = novelsBehind;
+            document.getElementById('new-chapters').textContent = totalNewChapters;
+            document.getElementById('total-devices').textContent = allDevices.size;
+        }
+
+        function calculateBehind(novel) {
+            if (!novel.latest_chapter_num || !novel.latest_global) return 0;
+
+            const currentChapter = Number(novel.latest_global.chapter_num) || 0;
+            const latestChapter = Number(novel.latest_chapter_num) || 0;
+
+            return Math.max(0, latestChapter - currentChapter);
+        }
+
+        function setFilter(filter) {
+            currentFilter = filter;
+
+            document.querySelectorAll('.filter-tab').forEach(tab => {
+                tab.classList.toggle('active', tab.dataset.filter === filter);
+            });
+
+            renderNovels();
+        }
+
+        function renderNovels() {
+            const container = document.getElementById('novels-container');
+
+            let filtered = allNovels.filter(novel => {
+                if (currentFilter === 'behind') {
+                    return calculateBehind(novel) > 0;
+                } else if (currentFilter === 'current') {
+                    return calculateBehind(novel) === 0;
+                } else if (currentFilter === 'favorites') {
+                    return novel.favorite;
+                }
+                return true;
+            });
+
+            // Sort: behind novels first
+            filtered.sort((a, b) => {
+                const behindA = calculateBehind(a);
+                const behindB = calculateBehind(b);
+                if (behindA !== behindB) return behindB - behindA;
+                return (b.last_activity || '').localeCompare(a.last_activity || '');
+            });
+
+            container.innerHTML = filtered.map(novel => createNovelCard(novel)).join('');
+        }
+
+        function createNovelCard(novel) {
+            const behind = calculateBehind(novel);
+            const global = novel.latest_global;
+            const hasUpdates = behind > 0;
+
+            const lastReadChapter = global ? Number(global.chapter_num) : 0;
+            const latestChapter = Number(novel.latest_chapter_num) || 0;
+
+            return `
+                <div class="novel-card ${hasUpdates ? 'has-updates' : ''}">
+                    <div class="novel-header">
+                        <div>
+                            <h2 class="novel-title">${novel.title || novel.novel_id}</h2>
+                            <div class="novel-meta">
+                                ${hasUpdates ? `<span class="badge badge-behind">${behind} chapter${behind > 1 ? 's' : ''} behind</span>` : ''}
+                                ${!hasUpdates && global ? '<span class="badge badge-current">✓ Up to date</span>' : ''}
+                                ${novel.favorite ? '<span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #f59e0b;">⭐ Favorite</span>' : ''}
+                                ${novel.author ? `<span class="badge" style="background: var(--bg-hover); color: var(--text-secondary);">📖 ${novel.author}</span>` : ''}
+                                ${novel.genre ? `<span class="badge" style="background: var(--bg-hover); color: var(--text-secondary);">🏷️ ${novel.genre}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+
+                    ${global ? `
+                        <div class="${hasUpdates ? 'behind-section' : 'progress-section'}">
+                            <div class="${hasUpdates ? 'behind-header' : 'progress-header'}">
+                                <div class="chapter-info">
+                                    ${hasUpdates ? 'Last Read:' : 'Reading:'} Chapter ${lastReadChapter}
+                                </div>
+                                <div>${Number(global.percent || 0).toFixed(1)}%</div>
+                            </div>
+                            ${hasUpdates ? `
+                                <div style="margin-top: 8px; font-size: 14px; opacity: 0.9;">
+                                    Latest: Chapter ${latestChapter}${novel.latest_chapter_title ? ': ' + novel.latest_chapter_title : ''}
+                                </div>
+                            ` : ''}
+                            <div style="font-size: 13px; opacity: 0.8; margin-top: 8px;">
+                                📱 ${global.device_label} • ${formatTimestamp(global.ts)}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="update-info">
+                        <strong>Latest Chapter:</strong> ${latestChapter ? `Ch.${latestChapter}${novel.latest_chapter_title ? ': ' + novel.latest_chapter_title : ''}` : 'Unknown'}
+                        <br>
+                        <strong>Last Updated:</strong> ${novel.chapters_updated_at ? formatTimestamp(novel.chapters_updated_at) : 'Never'}
+                        ${global ? `<br><strong>Last Read:</strong> ${formatTimestamp(novel.last_activity)}` : ''}
+                    </div>
+
+                    <div class="actions">
+                        ${global && hasUpdates ? `
+                        <a href="${novel.primary_url.replace(/\/c*chapter-?\d+.*$/, '')}/chapter-${latestChapter}" class="btn btn-primary" target="_blank">
+                            📚 Catch Up (${behind} new)
+                        </a>
+                    ` : ''}
+                        ${global ? `
+                            <a href="${(global.url || '#').replace(/#.*$/, '')}#nbp=${Number(global.percent || 0).toFixed(1)}"
+                               class="btn btn-primary" target="_blank">
+                                📖 Resume Reading
+                            </a>
+                        ` : ''}
+                        <a href="/novels/${encodeURIComponent(novel.novel_id)}" class="btn btn-secondary">
+                            📊 Details
+                        </a>
+                        <a href="${novel.primary_url ? novel.primary_url.replace(/\/c*chapter-?\d+.*$/, '') : '#'}" class="btn btn-secondary" target="_blank">
+                            🔗 Novel Page
+                        </a>
+                    </div>
+                </div>
+            `;
+        }
+
+        function formatTimestamp(ts) {
+            if (!ts) return 'Never';
+            const d = new Date(ts);
+            const now = new Date();
+            const diffMs = now - d;
+            const mins = Math.floor(diffMs / 60000);
+            const hours = Math.floor(diffMs / 3600000);
+            const days = Math.floor(diffMs / 86400000);
+
+            if (mins < 1) return 'Just now';
+            if (mins < 60) return `${mins}m ago`;
+            if (hours < 24) return `${hours}h ago`;
+            if (days < 7) return `${days}d ago`;
+            return d.toLocaleDateString();
+        }
+
+        // Auto-refresh every 60s
+        setInterval(loadDashboard, 60000);
+
+        // Load on start
+        loadDashboard();
+    </script>
+</body>
+
+</html>
