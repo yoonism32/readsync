@@ -345,10 +345,10 @@ async function getLatestStates(client, userId, novelId) {
         device_id: globalResult.rows[0].device_id,
         device_label: globalResult.rows[0].device_label,
         url: globalResult.rows[0].url,
-        ts: globalResult.rows[0].created_at,          // <-- key used by dashboard.html
+        ts: globalResult.rows[0].created_at,
     } : null;
 
-    const latest_per_device = {};
+    let latest_per_device = {};
     deviceResult.rows.forEach((row) => {
         latest_per_device[row.device_id] = {
             chapter_num: row.chapter_num,
@@ -356,9 +356,39 @@ async function getLatestStates(client, userId, novelId) {
             percent: parseFloat(row.percent),
             device_label: row.device_label,
             url: row.url,
-            ts: row.created_at,                        // <-- key used by dashboard.html
+            ts: row.created_at,
         };
     });
+    // Clean up device states that are too far behind
+    if (latest_global) {
+        const cleaned = {};
+
+        const globalChapter = Number(latest_global.chapter_num) || 0;
+        const globalPercent = Number(latest_global.percent) || 0;
+        const leaderId = latest_global.device_id;
+
+        for (const [id, d] of Object.entries(latest_per_device)) {
+            const devChapter = Number(d.chapter_num) || 0;
+            const devPercent = Number(d.percent) || 0;
+
+            // Always keep the device that produced the global latest snapshot
+            if (id === leaderId) {
+                cleaned[id] = d;
+                continue;
+            }
+
+            // If device is in a *much earlier* chapter → drop
+            if (devChapter < globalChapter) continue;
+
+            // Same chapter but very far behind (e.g. 45% vs 100%) → drop
+            if (devChapter === globalChapter && devPercent < globalPercent - 20) continue;
+
+            // Otherwise keep
+            cleaned[id] = d;
+        }
+
+        latest_per_device = cleaned;
+    }
 
     return { latest_global, latest_per_device };
 }
