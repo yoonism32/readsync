@@ -175,11 +175,13 @@ async function initDatabase() {
       )
     `);
 
-        // 🔹 Add latest chapter columns
+        // 🔹 Add latest chapter columns (+ new time columns)
         await client.query(`
-          ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_num INTEGER;
-          ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_title TEXT;
-          ALTER TABLE novels ADD COLUMN IF NOT EXISTS chapters_updated_at TIMESTAMP;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_num INTEGER;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_title TEXT;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS chapters_updated_at TIMESTAMP;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS site_latest_chapter_time_raw TEXT;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS site_latest_chapter_time TIMESTAMP;
         `);
 
         // Progress snapshots (time-series data)
