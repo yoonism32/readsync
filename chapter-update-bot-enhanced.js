@@ -3,8 +3,8 @@ const { URL } = require('url');
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-const BATCH_SIZE = 10; // Check 10 novels at a time
-const REQUEST_DELAY_MS = 2000; // 2s delay between requests (be nice to servers)
+const BATCH_SIZE = 5; // Check 10 novels at a time
+const REQUEST_DELAY_MS = 5000; // 2s delay between requests (be nice to servers)
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
 
 /* ==================== Database Setup ==================== */
@@ -469,6 +469,21 @@ async function triggerManualUpdate(novelId) {
 }
 
 /* ==================== Startup ==================== */
+async function safeUpdateCycle() {
+    try {
+        await updateNovelChapters();
+    } catch (error) {
+        console.error('🔴 BOT CYCLE CRASHED:', error);
+        console.error('Stack:', error.stack);
+        global.botStatus.lastRunSuccess = false;
+        global.botStatus.errors.push({
+            timestamp: new Date().toISOString(),
+            error: error.message
+        });
+        // Don't let it kill the server - just log and continue
+    }
+}
+
 async function startBot() {
     console.log('🤖 ReadSync Chapter Update Bot Starting...');
     console.log(`⏰ Check interval: ${CHECK_INTERVAL_MS / 1000 / 60} minutes`);
@@ -490,14 +505,14 @@ async function startBot() {
     }
 
     // Make functions available globally
-    global.updateNovelChapters = updateNovelChapters;
+    global.updateNovelChapters = safeUpdateCycle;
     global.triggerManualUpdate = triggerManualUpdate;
 
     // Run immediately on start
-    await updateNovelChapters();
+    await safeUpdateCycle();
 
     // Then run on interval
-    setInterval(updateNovelChapters, CHECK_INTERVAL_MS);
+    setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
 
     console.log('\n✅ Bot is running! Press Ctrl+C to stop.\n');
 }

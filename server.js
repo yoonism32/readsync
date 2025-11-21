@@ -1,4 +1,15 @@
 // server.js - Enhanced ReadSync API Server
+// 🛡️ CRITICAL: Prevent crashes from unhandled rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('🔴 UNHANDLED REJECTION:', reason);
+    console.error('Promise:', promise);
+});
+
+process.on('uncaughtException', (error) => {
+    console.error('🔴 UNCAUGHT EXCEPTION:', error);
+    console.error('Stack:', error.stack);
+});
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -659,11 +670,14 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
                 whereConditions.push(`m.favorite = TRUE`);
             }
 
-            const whereClause = whereConditions.length ? `WHERE ${whereConditions.join(' AND ')}` : '';
+            const whereClause = whereConditions.length ? `AND ${whereConditions.join(' AND ')}` : '';
 
-            const novelsResult = await client.query(`
-                WITH latest AS (
-                    SELECT DISTINCT ON (novel_id) novel_id, created_at
+            // 🚀 OPTIMIZED: Single query with LATERAL join instead of N+1 queries
+            const novelsQuery = `
+                WITH latest_activity AS (
+                    SELECT DISTINCT ON (novel_id) 
+                        novel_id, 
+                        created_at as last_activity
                     FROM progress_snapshots
                     WHERE user_id = $1
                     ORDER BY novel_id, created_at DESC
@@ -679,48 +693,84 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
                     n.chapters_updated_at,
                     n.site_latest_chapter_time_raw,
                     n.site_latest_chapter_time,
-                    l.created_at AS last_activity,
+                    la.last_activity,
                     COALESCE(m.status, 'reading') AS status,
                     COALESCE(m.favorite, FALSE) AS favorite,
                     COALESCE(m.rating, 0) AS rating,
                     m.notes,
                     m.started_at,
-                    m.completed_at
+                    m.completed_at,
+                    -- Get global latest state
+                    (SELECT row_to_json(global_latest) FROM (
+                        SELECT 
+                            p.chapter_num,
+                            p.chapter_token,
+                            p.percent,
+                            p.device_id,
+                            d.device_label,
+                            p.url,
+                            p.created_at as ts
+                        FROM progress_snapshots p
+                        JOIN devices d ON p.device_id = d.id
+                        WHERE p.user_id = $1 
+                          AND p.novel_id = n.id 
+                          AND d.active = TRUE
+                        ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
+                        LIMIT 1
+                    ) global_latest) as latest_global_json,
+                    -- Get per-device states
+                    (SELECT json_object_agg(device_id, device_state) FROM (
+                        SELECT DISTINCT ON (p.device_id)
+                            p.device_id,
+                            json_build_object(
+                                'chapter_num', p.chapter_num,
+                                'chapter_token', p.chapter_token,
+                                'percent', p.percent,
+                                'device_label', d.device_label,
+                                'url', p.url,
+                                'ts', p.created_at
+                            ) as device_state
+                        FROM progress_snapshots p
+                        JOIN devices d ON p.device_id = d.id
+                        WHERE p.user_id = $1 
+                          AND p.novel_id = n.id 
+                          AND d.active = TRUE
+                        ORDER BY p.device_id, p.created_at DESC
+                    ) per_device) as latest_per_device_json
                 FROM novels n
-                JOIN latest l ON n.id = l.novel_id
+                JOIN latest_activity la ON n.id = la.novel_id
                 LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
-                ${whereClause}
-                ORDER BY l.created_at DESC
+                WHERE 1=1 ${whereClause}
+                ORDER BY la.last_activity DESC
                 LIMIT $${++paramIndex} OFFSET $${++paramIndex}
-            `, [...params, limit, offset]);
+            `;
 
-            const results = [];
-            for (const novel of novelsResult.rows) {
-                const states = await getLatestStates(client, req.user.id, novel.id);
-                results.push({
-                    novel_id: novel.id,
-                    title: novel.title,
-                    primary_url: novel.primary_url,
-                    author: novel.author,
-                    genre: novel.genre,
-                    latest_chapter_num: novel.latest_chapter_num,
-                    latest_chapter_title: novel.latest_chapter_title,
-                    chapters_updated_at: novel.chapters_updated_at,
-                    site_latest_chapter_time_raw: novel.site_latest_chapter_time_raw,
-                    site_latest_chapter_time: novel.site_latest_chapter_time,
-                    status: novel.status,
-                    favorite: novel.favorite,
-                    rating: novel.rating,
-                    notes: novel.notes,
-                    started_at: novel.started_at,
-                    completed_at: novel.completed_at,
-                    last_activity: novel.last_activity,
-                    latest_global: states.latest_global,
-                    latest_per_device: states.latest_per_device,
-                });
-            }
+            params.push(limit, offset);
+            const novelsResult = await client.query(novelsQuery, params);
 
-            // Return plain array for dashboard consumption
+            // Transform results
+            const results = novelsResult.rows.map(novel => ({
+                novel_id: novel.id,
+                title: novel.title,
+                primary_url: novel.primary_url,
+                author: novel.author,
+                genre: novel.genre,
+                latest_chapter_num: novel.latest_chapter_num,
+                latest_chapter_title: novel.latest_chapter_title,
+                chapters_updated_at: novel.chapters_updated_at,
+                site_latest_chapter_time_raw: novel.site_latest_chapter_time_raw,
+                site_latest_chapter_time: novel.site_latest_chapter_time,
+                status: novel.status,
+                favorite: novel.favorite,
+                rating: novel.rating,
+                notes: novel.notes,
+                started_at: novel.started_at,
+                completed_at: novel.completed_at,
+                last_activity: novel.last_activity,
+                latest_global: novel.latest_global_json || null,
+                latest_per_device: novel.latest_per_device_json || {}
+            }));
+
             res.json(results);
         } finally {
             client.release();
@@ -1064,12 +1114,16 @@ app.get('/api/v1/admin/bot/progress', validateApiKey, async (req, res) => {
             novelsUpdated: 0,
         };
 
-        // Get count of remaining stale novels
+        // 🚀 FIXED: Use DISTINCT to prevent query explosion
         const result = await pool.query(`
-            SELECT COUNT(*) as count
+            SELECT COUNT(DISTINCT n.id) as count
             FROM novels n
-            JOIN progress_snapshots p ON p.novel_id = n.id
             WHERE n.primary_url IS NOT NULL
+              AND EXISTS (
+                SELECT 1 FROM progress_snapshots p 
+                WHERE p.novel_id = n.id 
+                LIMIT 1
+              )
               AND (
                 n.chapters_updated_at IS NULL 
                 OR n.chapters_updated_at < NOW() - INTERVAL '24 hours'

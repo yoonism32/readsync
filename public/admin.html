@@ -35,6 +35,8 @@
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+            padding-top: 180px;
+            /* Space for sticky headers */
         }
 
         .container {
@@ -43,15 +45,23 @@
             padding: 20px;
         }
 
-        /* Header */
+        /* Sticky Header */
         .header {
-            background: rgba(30, 41, 59, 0.8);
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
             backdrop-filter: blur(10px);
-            border: 1px solid var(--border);
-            border-radius: 16px;
+            border-bottom: 1px solid var(--border);
             padding: 24px;
-            margin-bottom: 24px;
-            box-shadow: 0 8px 32px var(--shadow);
+            z-index: 1000;
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
         }
 
         .header h1 {
@@ -137,12 +147,17 @@
             gap: 8px;
         }
 
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         .btn-primary {
             background: var(--primary);
             color: white;
         }
 
-        .btn-primary:hover {
+        .btn-primary:hover:not(:disabled) {
             background: var(--primary-dark);
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
@@ -153,7 +168,7 @@
             color: white;
         }
 
-        .btn-success:hover {
+        .btn-success:hover:not(:disabled) {
             background: #059669;
             transform: translateY(-2px);
         }
@@ -167,6 +182,16 @@
             background: var(--bg-hover);
             color: var(--text-primary);
             border: 1px solid var(--border);
+        }
+
+        .btn-icon {
+            padding: 8px;
+            width: 36px;
+            height: 36px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
         }
 
         /* Status Cards */
@@ -260,16 +285,26 @@
             gap: 12px;
             margin-bottom: 24px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
-        /* Table */
+        /* Sticky Table Header */
         .table-container {
             overflow-x: auto;
+            position: relative;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
+        }
+
+        thead {
+            position: sticky;
+            top: 160px;
+            /* Below main header */
+            z-index: 100;
+            background: var(--bg-card);
         }
 
         th,
@@ -321,13 +356,13 @@
         }
 
         .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid var(--border);
+            width: 16px;
+            height: 16px;
+            border: 3px solid var(--border);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
+            display: inline-block;
         }
 
         @keyframes spin {
@@ -354,6 +389,17 @@
             box-shadow: 0 8px 32px var(--shadow);
             z-index: 10000;
             animation: slideIn 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toast.success {
+            border-color: var(--success);
+        }
+
+        .toast.error {
+            border-color: var(--danger);
         }
 
         @keyframes slideIn {
@@ -368,7 +414,48 @@
             }
         }
 
+        /* Refresh Icon Animation */
+        .refreshing {
+            animation: spin 1s linear infinite;
+        }
+
+        /* Update All Progress Bar */
+        .update-progress {
+            background: var(--bg-dark);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            display: none;
+        }
+
+        .update-progress.active {
+            display: block;
+        }
+
+        .progress-bar {
+            background: rgba(99, 102, 241, 0.2);
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            background: var(--primary);
+            height: 100%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
         @media (max-width: 768px) {
+            body {
+                padding-top: 220px;
+            }
+
             .status-grid {
                 grid-template-columns: 1fr;
             }
@@ -384,13 +471,17 @@
             .auth-form input {
                 width: 100%;
             }
+
+            thead {
+                top: 200px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <div class="container">
-        <div class="header">
+    <div class="header">
+        <div class="header-content">
             <h1>🤖 Admin Panel</h1>
             <p>Chapter Update Bot Management</p>
             <div class="nav">
@@ -399,7 +490,9 @@
                 <a href="/manage">🛠️ Manage</a>
             </div>
         </div>
+    </div>
 
+    <div class="container">
         <div class="auth-section">
             <form class="auth-form" id="authForm">
                 <input type="password" id="apiKey" placeholder="Enter API key..." required>
@@ -450,13 +543,21 @@
                         🔄 Refresh Status
                     </button>
                     <button class="btn btn-warning" id="updateAllBtn">
-                        📚 Refresh Stale Novels
+                        📚 Update All MyList Novels
                     </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="update-progress" id="updateProgress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Starting update...</div>
                 </div>
             </div>
 
             <!-- Stale Novels -->
-            <div class=" panel">
+            <div class="panel">
                 <h2>📚 Novels Needing Updates</h2>
                 <div id="loading" class="loading" style="display: none;">
                     <div class="spinner"></div>
@@ -473,7 +574,15 @@
                                 <th>Current Ch.</th>
                                 <th>Last Updated</th>
                                 <th>Readers</th>
-                                <th>Actions</th>
+                                <th>
+                                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                                        <span>Actions</span>
+                                        <button class="btn btn-icon btn-secondary" id="refreshAllBtn"
+                                            title="Refresh all novels">
+                                            <span id="refreshAllIcon">🔄</span>
+                                        </button>
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="novelsTable"></tbody>
@@ -487,9 +596,9 @@
         const API_BASE = '/api/v1';
         let currentApiKey = '';
         let updateAllInProgress = false;
-        let progressInterval = null;
+        let refreshAllInProgress = false;
 
-        // Utility: Escape HTML to prevent XSS
+        // Utility: Escape HTML
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
@@ -512,7 +621,7 @@
                     throw new Error('Invalid API key');
                 }
             } catch (err) {
-                toast('❌ Authentication failed', 'danger');
+                toast('❌ Authentication failed', 'error');
             }
         });
 
@@ -576,106 +685,142 @@
 
             } catch (err) {
                 document.getElementById('loading').style.display = 'none';
-                toast('❌ Failed to load novels', 'danger');
+                toast('❌ Failed to load novels', 'error');
             }
         }
 
-        // Force update all stale novels
-        document.getElementById("updateAllBtn").addEventListener("click", async () => {
+        // Update All MyList Novels
+        document.getElementById('updateAllBtn').addEventListener('click', async () => {
             if (updateAllInProgress) {
                 toast('⚠️ Update already in progress', 'warning');
                 return;
             }
 
-            if (!confirm('This will update ALL novels in the database. Continue?')) {
+            if (!confirm('Update all novels in your reading list? This may take a few minutes.')) {
                 return;
             }
 
             try {
                 updateAllInProgress = true;
-                const btn = document.getElementById("updateAllBtn");
-                const originalText = btn.innerHTML;
+                const btn = document.getElementById('updateAllBtn');
+                const progress = document.getElementById('updateProgress');
+                const progressFill = document.getElementById('progressFill');
+                const progressText = document.getElementById('progressText');
+
                 btn.disabled = true;
-                btn.innerHTML = '⏳ Starting update...';
+                progress.classList.add('active');
+                progressFill.style.width = '0%';
+                progressText.textContent = 'Fetching novels...';
 
-                const res = await fetch('/admin/force-refresh-all', { method: 'POST' });
-                const json = await res.json();
+                // Get all novels from MyList
+                const novelsRes = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(currentApiKey)}`);
+                const novels = await novelsRes.json();
 
-                if (json.success) {
-                    toast('✅ ' + (json.message || 'Update started!'), 'success');
-                    btn.innerHTML = '🔄 Updating...';
-                    startProgressTracking(btn, originalText);
-                } else {
-                    throw new Error(json.error || 'Failed to start update');
+                if (!novels || novels.length === 0) {
+                    throw new Error('No novels found');
                 }
+
+                progressText.textContent = `Found ${novels.length} novels. Starting updates...`;
+
+                let completed = 0;
+                let updated = 0;
+
+                // Update each novel
+                for (const novel of novels) {
+                    progressText.textContent = `Updating ${novel.title || novel.novel_id}... (${completed + 1}/${novels.length})`;
+
+                    try {
+                        const updateRes = await fetch(
+                            `${API_BASE}/admin/novels/${encodeURIComponent(novel.novel_id)}/update?user_key=${encodeURIComponent(currentApiKey)}`,
+                            { method: 'POST' }
+                        );
+
+                        const result = await updateRes.json();
+                        if (result.success && result.isNew) {
+                            updated++;
+                        }
+                    } catch (err) {
+                        console.error(`Failed to update ${novel.novel_id}:`, err);
+                    }
+
+                    completed++;
+                    const percent = (completed / novels.length) * 100;
+                    progressFill.style.width = `${percent}%`;
+
+                    // Small delay to avoid overwhelming the server
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+
+                progressText.textContent = `✅ Complete! ${updated} novels had new chapters`;
+                toast(`✅ Updated ${novels.length} novels (${updated} new chapters found)`, 'success');
+
+                setTimeout(() => {
+                    progress.classList.remove('active');
+                    btn.disabled = false;
+                    loadData();
+                }, 3000);
+
             } catch (err) {
-                toast('❌ Failed to start update: ' + err.message, 'danger');
+                toast('❌ Update failed: ' + err.message, 'error');
+                document.getElementById('updateProgress').classList.remove('active');
+                document.getElementById('updateAllBtn').disabled = false;
+            } finally {
                 updateAllInProgress = false;
-                document.getElementById("updateAllBtn").disabled = false;
             }
         });
 
-        // Add this NEW function for progress tracking
-        function startProgressTracking(btn, originalText) {
-            let lastCheck = 0;
-            let consecutiveNoChange = 0;
+        // Refresh All (Silent)
+        document.getElementById('refreshAllBtn').addEventListener('click', async () => {
+            if (refreshAllInProgress) return;
 
-            if (progressInterval) clearInterval(progressInterval);
+            refreshAllInProgress = true;
+            const icon = document.getElementById('refreshAllIcon');
+            icon.classList.add('refreshing');
 
-            progressInterval = setInterval(async () => {
-                try {
-                    const res = await fetch(`${API_BASE}/admin/bot/progress?user_key=${encodeURIComponent(currentApiKey)}`);
-                    const data = await res.json();
+            try {
+                // Get all novels from MyList
+                const novelsRes = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(currentApiKey)}`);
+                const novels = await novelsRes.json();
 
-                    const checked = data.novelsChecked || 0;
-                    const updated = data.novelsUpdated || 0;
-                    const remaining = data.remainingNovels || 0;
-
-                    btn.innerHTML = `🔄 Updating... (${checked} checked, ${updated} updated, ${remaining} left)`;
-
-                    if (!data.running) {
-                        if (remaining === 0) {
-                            toast('✅ All novels updated!', 'success');
-                            btn.innerHTML = originalText;
-                            btn.disabled = false;
-                            updateAllInProgress = false;
-                            clearInterval(progressInterval);
-                            loadStaleNovels();
-                        } else {
-                            if (checked === lastCheck) {
-                                consecutiveNoChange++;
-                                if (consecutiveNoChange >= 3) {
-                                    toast('⚠️ Update complete or stalled.', 'warning');
-                                    btn.innerHTML = originalText;
-                                    btn.disabled = false;
-                                    updateAllInProgress = false;
-                                    clearInterval(progressInterval);
-                                    loadStaleNovels();
-                                }
-                            } else {
-                                consecutiveNoChange = 0;
-                                lastCheck = checked;
-                            }
-                        }
-                    } else {
-                        consecutiveNoChange = 0;
-                        lastCheck = checked;
-                    }
-
-                    if (data.running && checked % 5 === 0) {
-                        loadStaleNovels();
-                    }
-                } catch (err) {
-                    console.error('Progress check failed:', err);
+                if (!novels || novels.length === 0) {
+                    throw new Error('No novels found');
                 }
-            }, 3000);
-        }
 
-        // Make sure to clear interval on page unload
-        window.addEventListener('beforeunload', () => {
-            if (progressInterval) clearInterval(progressInterval);
+                let updated = 0;
+
+                // Update each novel silently
+                for (const novel of novels) {
+                    try {
+                        const updateRes = await fetch(
+                            `${API_BASE}/admin/novels/${encodeURIComponent(novel.novel_id)}/update?user_key=${encodeURIComponent(currentApiKey)}`,
+                            { method: 'POST' }
+                        );
+
+                        const result = await updateRes.json();
+                        if (result.success && result.isNew) {
+                            updated++;
+                        }
+                    } catch (err) {
+                        console.error(`Failed to update ${novel.novel_id}:`, err);
+                    }
+
+                    // Small delay
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                }
+
+                if (updated > 0) {
+                    toast(`🔄 Refreshed! ${updated} new chapters found`, 'success');
+                }
+
+                loadData();
+
+            } catch (err) {
+                toast('❌ Refresh failed: ' + err.message, 'error');
+            } finally {
+                refreshAllInProgress = false;
+                icon.classList.remove('refreshing');
+            }
         });
-
 
         // Update single novel
         async function updateNovel(novelId) {
@@ -708,7 +853,7 @@
                     throw new Error(data.error);
                 }
             } catch (err) {
-                toast(`❌ Update failed: ${err.message}`, 'danger');
+                toast(`❌ Update failed: ${err.message}`, 'error');
                 btn.disabled = false;
                 btn.innerHTML = originalText;
             }
@@ -729,7 +874,7 @@
                     throw new Error(data.error);
                 }
             } catch (err) {
-                toast(`❌ Failed: ${err.message}`, 'danger');
+                toast(`❌ Failed: ${err.message}`, 'error');
             }
         });
 
@@ -762,11 +907,17 @@
 
         function toast(message, type = 'success') {
             const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = message;
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `
+                <div class="spinner" style="display: ${type === 'success' ? 'none' : 'none'}"></div>
+                <span>${message}</span>
+            `;
             document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
+            setTimeout(() => toast.remove(), 4000);
         }
+
+        // Expose for inline handlers
+        window.updateNovel = updateNovel;
     </script>
 </body>
 
