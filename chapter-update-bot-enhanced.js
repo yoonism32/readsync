@@ -44,10 +44,10 @@ global.botStatus = {
 function parseTimeAgo(raw) {
     if (!raw) return null;
 
-    const m = raw.match(/(\d+)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
+    const m = raw.match(/(?:(\d+)|a)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
     if (!m) return null;
 
-    const val = parseInt(m[1], 10);
+    const val = m[1] ? parseInt(m[1], 10) : 1;
     const unit = m[2].toLowerCase();
 
     const ms = {
