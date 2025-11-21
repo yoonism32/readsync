@@ -500,6 +500,12 @@
                         <h3>Latest Chapter</h3>
                         <p id="latest-chapter">Unknown</p>
                     </div>
+                    <!-- ⚠️ ADD THIS NEW CARD -->
+                    <div class="info-card">
+                        <h3>Last Updated (Site)</h3>
+                        <p id="site-updated">-</p>
+                    </div>
+                    <!-- END NEW CARD -->
                     <div class="info-card">
                         <h3>Completed At</h3>
                         <p id="completed-at">-</p>
@@ -640,6 +646,15 @@
                     document.getElementById('latest-chapter').textContent = 'Unknown';
                 }
 
+                // Site update time - show RAW value 
+                if (currentNovel.site_latest_chapter_time_raw) {
+                    document.getElementById('site-updated').textContent = currentNovel.site_latest_chapter_time_raw;
+                } else if (currentNovel.chapters_updated_at) {
+                    document.getElementById('site-updated').textContent = formatTimestamp(currentNovel.chapters_updated_at);
+                } else {
+                    document.getElementById('site-updated').textContent = 'Never';
+                }
+
                 // Notes
                 document.getElementById('notes').value = currentNovel.notes || '';
 
@@ -764,18 +779,24 @@
         }
 
         function formatTimestamp(ts) {
+            if (!ts) return '';
             const d = new Date(ts);
-            const now = new Date();
-            const diffMs = now - d;
-            const mins = Math.floor(diffMs / 60000);
-            const hours = Math.floor(diffMs / 3600000);
-            const days = Math.floor(diffMs / 86400000);
+            if (isNaN(d)) return '';
+            const now = Date.now();
+            const diff = Math.max(0, now - d.getTime());
+            const s = diff / 1000;
 
-            if (mins < 1) return 'Just now';
-            if (mins < 60) return `${mins}m ago`;
-            if (hours < 24) return `${hours}h ago`;
-            if (days < 7) return `${days}d ago`;
-            return d.toLocaleDateString();
+            if (s < 60) return 'now';
+            const m = s / 60;
+            if (m < 60) return `${Math.floor(m)}m`;
+            const h = m / 60;
+            if (h < 24) return `${Math.floor(h)}h`;
+            const d_val = h / 24;
+            if (d_val < 30) return `${Math.floor(d_val)}d`;
+            const mo = d_val / 30;
+            if (mo < 12) return `${Math.floor(mo)}mo`;
+            const y = mo / 12;
+            return `${Math.floor(y)}y`;
         }
 
         function showError(message) {

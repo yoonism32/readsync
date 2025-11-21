@@ -41,15 +41,14 @@ global.botStatus = {
 };
 
 // == 'Time-ago- timestamp parser (e.g., "3 days ago") ==
-function parseTimeAgo(str) {
-    if (!str) return null;
+function parseTimeAgo(raw) {
+    if (!raw) return null;
 
-    const now = new Date();
-    const match = str.match(/(\d+)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
-    if (!match) return null;
+    const m = raw.match(/(\d+)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
+    if (!m) return null;
 
-    const value = parseInt(match[1], 10);
-    const unit = match[2].toLowerCase();
+    const val = parseInt(m[1], 10);
+    const unit = m[2].toLowerCase();
 
     const ms = {
         second: 1000,
@@ -57,10 +56,10 @@ function parseTimeAgo(str) {
         hour: 3600000,
         day: 86400000,
         month: 2592000000,
-        year: 31536000000
+        year: 31536000000,
     }[unit];
 
-    return new Date(now - value * ms);
+    return new Date(Date.now() - val * ms);
 }
 
 
@@ -96,81 +95,111 @@ async function fetchNovelMainPage(novelUrl) {
 
 function parseNovelInfoFromHTML(html, novelUrl) {
     try {
-        const result = { chapter: null, genres: [], author: null };
+        const result = {
+            chapter: null,
+            genres: [],
+            author: null,
+            site_latest_chapter_time_raw: null,
+            site_latest_chapter_time: null,
+        };
 
-        // === Parse Latest Chapter ===
-        // Strategy 1: Find .l-chapter structure (NovelBin specific)
-        let match = html.match(/<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*:\s*([^<]+)/i);
+        // --- Latest chapter (same as before, minor tidy) ---
+        let match = html.match(
+            /<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*:?\s*([^<]*)/i
+        );
+
         if (match) {
             result.chapter = {
                 num: parseInt(match[1], 10),
                 title: match[2].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
             };
         } else {
-            // Strategy 2: Find all chapter links and get the highest number
             const chapterRegex = /chapter-?(\d+)/gi;
             const matches = [...html.matchAll(chapterRegex)];
-
             if (matches.length > 0) {
                 const maxChapter = Math.max(...matches.map(m => parseInt(m[1], 10)));
-
-                // Try to find title for this chapter
-                const titlePattern = new RegExp(`Chapter\\s+${maxChapter}\\s*:\\s*([^<>"]+)`, 'i');
+                const titlePattern = new RegExp(
+                    `Chapter\\s+${maxChapter}\\s*:?\\s*([^<>"]+)`,
+                    'i'
+                );
                 const titleMatch = html.match(titlePattern);
-
                 result.chapter = {
                     num: maxChapter,
-                    title: titleMatch ? titleMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&') : null
+                    title: titleMatch
+                        ? titleMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+                        : null
                 };
             } else {
-                // Strategy 3: Look for "latest chapter" text
                 match = html.match(/latest[^>]*chapter[^>]*?:\s*Chapter\s+(\d+)/i);
                 if (match) {
-                    result.chapter = {
-                        num: parseInt(match[1], 10),
-                        title: null
-                    };
+                    result.chapter = { num: parseInt(match[1], 10), title: null };
                 }
             }
         }
 
-        // === Parse Genres ===
-        const genreMatch = html.match(/<dt[^>]*>Genres?:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i);
-        if (genreMatch) {
-            result.genres = genreMatch[1]
+        // --- Genres & author via <meta> first ---
+        const metaGenre = html.match(
+            /<meta[^>]+property=["']og:novel:genre["'][^>]+content=["']([^"']+)["']/i
+        );
+        if (metaGenre) {
+            result.genres = metaGenre[1]
                 .split(',')
                 .map(g => g.trim())
-                .filter(g => g.length > 0 && g.length < 50); // Sanity check
-        }
-
-        // === Parse Author ===
-        const authorMatch = html.match(/<dt[^>]*>Author:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i) ||
-            html.match(/Author:\s*([^<,\n]+)/i);
-        if (authorMatch) {
-            result.author = authorMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
-        }
-
-        /* === Parse Latest Chapter Time (NEW) === */
-        const timeMatch = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)/i);
-
-        if (timeMatch) {
-            result.site_latest_chapter_time_raw = timeMatch[1].trim();
-            result.site_latest_chapter_time = parseTimeAgo(result.site_latest_chapter_time_raw);
+                .filter(g => g.length > 0 && g.length < 50);
         } else {
-            result.site_latest_chapter_time_raw = null;
-            result.site_latest_chapter_time = null;
+            const genreMatch = html.match(/<dt[^>]*>Genres?:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i);
+            if (genreMatch) {
+                result.genres = genreMatch[1]
+                    .split(',')
+                    .map(g => g.trim())
+                    .filter(g => g.length > 0 && g.length < 50);
+            }
+        }
+
+        const metaAuthor = html.match(
+            /<meta[^>]+property=["']og:novel:author["'][^>]+content=["']([^"']+)["']/i
+        );
+        if (metaAuthor) {
+            result.author = metaAuthor[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+        } else {
+            const authorMatch =
+                html.match(/<dt[^>]*>Author:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i) ||
+                html.match(/Author:\s*([^<,\n]+)/i);
+            if (authorMatch) {
+                result.author = authorMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+            }
+        }
+
+        // --- Updated time: prefer .item-time, fallback to og:novel:update_time ---
+        const itemTime = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)<\/div>/i);
+        if (itemTime) {
+            result.site_latest_chapter_time_raw = itemTime[1].trim();     // e.g. "a year ago"
+            result.site_latest_chapter_time = parseTimeAgo(
+                result.site_latest_chapter_time_raw
+            );
+        } else {
+            // fallback: ISO from meta
+            const metaUpdate = html.match(
+                /<meta[^>]+property=["']og:novel:update_time["'][^>]+content=["']([^"']+)["']/i
+            );
+            if (metaUpdate) {
+                result.site_latest_chapter_time_raw = metaUpdate[1];  // keep ISO raw
+                const parsed = new Date(metaUpdate[1]);
+                result.site_latest_chapter_time = isNaN(parsed.getTime()) ? null : parsed;
+            }
         }
 
         if (!result.chapter) {
             console.log(`⚠️ Could not parse chapter from ${novelUrl}`);
         }
-
         return result;
     } catch (error) {
         console.error('Parse error:', error);
         return { chapter: null, genres: [], author: null };
     }
 }
+
+
 
 /* ==================== Database Operations ==================== */
 async function getNovelsNeedingUpdate() {
@@ -316,7 +345,7 @@ async function updateNovelChapters() {
                 await pool.query(`
                 UPDATE novels SET 
                     chapters_updated_at = CURRENT_TIMESTAMP,
-                    genre = COALESCE($2, genre),
+                    genre = COALESCE($2, genre),            
                     author = COALESCE($3, author),
                     site_latest_chapter_time_raw = $4,
                     site_latest_chapter_time = $5
