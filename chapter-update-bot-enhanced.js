@@ -163,9 +163,9 @@ function parseNovelInfoFromHTML(html, novelUrl) {
         const itemTime = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)<\/div>/i);
         if (itemTime) {
             result.site_latest_chapter_time_raw = itemTime[1].trim();
-            result.site_latest_chapter_time = parseTimeAgo(
-                result.site_latest_chapter_time_raw
-            );
+            const parsed = parseTimeAgo(result.site_latest_chapter_time_raw);
+            result.site_latest_chapter_time = parsed ? parsed.toISOString() : null;
+
         } else {
             const metaUpdate = html.match(
                 /<meta[^>]+property=["']og:novel:update_time["'][^>]+content=["']([^"']+)["']/i
@@ -173,7 +173,7 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             if (metaUpdate) {
                 result.site_latest_chapter_time_raw = metaUpdate[1];
                 const parsed = new Date(metaUpdate[1]);
-                result.site_latest_chapter_time = isNaN(parsed.getTime()) ? null : parsed;
+                result.site_latest_chapter_time = isNaN(parsed.getTime()) ? null : parsed.toISOString();
             }
         }
 
