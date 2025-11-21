@@ -583,7 +583,13 @@
             const res = await fetch('/admin/force-refresh-all', { method: 'POST' });
             const json = await res.json();
             alert(json.message || "Started!");
+
+            // ⛔ Hide all “Update” buttons in table
+            document.querySelectorAll('td button[data-novel-id]').forEach(btn => {
+                btn.style.display = 'none';
+            });
         });
+
 
         // Update single novel
         async function updateNovel(novelId) {
