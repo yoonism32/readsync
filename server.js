@@ -748,28 +748,63 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
             params.push(limit, offset);
             const novelsResult = await client.query(novelsQuery, params);
 
-            // Transform results
-            const results = novelsResult.rows.map(novel => ({
-                novel_id: novel.id,
-                title: novel.title,
-                primary_url: novel.primary_url,
-                author: novel.author,
-                genre: novel.genre,
-                latest_chapter_num: novel.latest_chapter_num,
-                latest_chapter_title: novel.latest_chapter_title,
-                chapters_updated_at: novel.chapters_updated_at,
-                site_latest_chapter_time_raw: novel.site_latest_chapter_time_raw,
-                site_latest_chapter_time: novel.site_latest_chapter_time,
-                status: novel.status,
-                favorite: novel.favorite,
-                rating: novel.rating,
-                notes: novel.notes,
-                started_at: novel.started_at,
-                completed_at: novel.completed_at,
-                last_activity: novel.last_activity,
-                latest_global: novel.latest_global_json || null,
-                latest_per_device: novel.latest_per_device_json || {}
-            }));
+            // Transform results with device cleanup
+            const results = novelsResult.rows.map(novel => {
+                const latest_global = novel.latest_global_json || null;
+                let latest_per_device = novel.latest_per_device_json || {};
+
+                // 🚀 CLEANUP: Remove stale device states
+                if (latest_global && latest_per_device && Object.keys(latest_per_device).length > 0) {
+                    const cleaned = {};
+                    const globalChapter = Number(latest_global.chapter_num) || 0;
+                    const globalPercent = Number(latest_global.percent) || 0;
+                    const leaderId = latest_global.device_id;
+
+                    for (const [id, d] of Object.entries(latest_per_device)) {
+                        const devChapter = Number(d.chapter_num) || 0;
+                        const devPercent = Number(d.percent) || 0;
+
+                        // Always keep the device that produced the global latest snapshot
+                        if (id === leaderId) {
+                            cleaned[id] = d;
+                            continue;
+                        }
+
+                        // If device is in a *much earlier* chapter → drop
+                        if (devChapter < globalChapter) continue;
+
+                        // Same chapter but very far behind (e.g. 45% vs 100%) → drop
+                        if (devChapter === globalChapter && devPercent < globalPercent - 20) continue;
+
+                        // Otherwise keep
+                        cleaned[id] = d;
+                    }
+
+                    latest_per_device = cleaned;
+                }
+
+                return {
+                    novel_id: novel.id,
+                    title: novel.title,
+                    primary_url: novel.primary_url,
+                    author: novel.author,
+                    genre: novel.genre,
+                    latest_chapter_num: novel.latest_chapter_num,
+                    latest_chapter_title: novel.latest_chapter_title,
+                    chapters_updated_at: novel.chapters_updated_at,
+                    site_latest_chapter_time_raw: novel.site_latest_chapter_time_raw,
+                    site_latest_chapter_time: novel.site_latest_chapter_time,
+                    status: novel.status,
+                    favorite: novel.favorite,
+                    rating: novel.rating,
+                    notes: novel.notes,
+                    started_at: novel.started_at,
+                    completed_at: novel.completed_at,
+                    last_activity: novel.last_activity,
+                    latest_global: latest_global,
+                    latest_per_device: latest_per_device
+                };
+            });
 
             res.json(results);
         } finally {
