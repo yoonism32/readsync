@@ -1090,6 +1090,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             attachEvents();
             loadMyList();
+
+            // Auto-refresh every 3 minutes to get latest chapter updates
+            setInterval(() => {
+                console.log('🔄 Auto-refreshing novel list for latest chapters...');
+                loadMyList();
+            }, 3 * 60 * 1000); // 3 minutes
         });
     </script>
 </body>

@@ -486,6 +486,8 @@
     <script>
         const API_BASE = '/api/v1';
         let currentApiKey = '';
+        let updateAllInProgress = false;
+        let progressInterval = null;
 
         // Utility: Escape HTML to prevent XSS
         function escapeHtml(text) {
@@ -580,20 +582,108 @@
 
         // Force update all stale novels
         document.getElementById("updateAllBtn").addEventListener("click", async () => {
-            const res = await fetch('/admin/force-refresh-all', { method: 'POST' });
-            const json = await res.json();
-            alert(json.message || "Started!");
+            if (updateAllInProgress) {
+                toast('⚠️ Update already in progress', 'warning');
+                return;
+            }
 
-            // ⛔ Hide all “Update” buttons in table
-            document.querySelectorAll('td button[data-novel-id]').forEach(btn => {
-                btn.style.display = 'none';
-            });
+            if (!confirm('This will update ALL novels in the database. Continue?')) {
+                return;
+            }
+
+            try {
+                updateAllInProgress = true;
+                const btn = document.getElementById("updateAllBtn");
+                const originalText = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '⏳ Starting update...';
+
+                const res = await fetch('/admin/force-refresh-all', { method: 'POST' });
+                const json = await res.json();
+
+                if (json.success) {
+                    toast('✅ ' + (json.message || 'Update started!'), 'success');
+                    btn.innerHTML = '🔄 Updating...';
+                    startProgressTracking(btn, originalText);
+                } else {
+                    throw new Error(json.error || 'Failed to start update');
+                }
+            } catch (err) {
+                toast('❌ Failed to start update: ' + err.message, 'danger');
+                updateAllInProgress = false;
+                document.getElementById("updateAllBtn").disabled = false;
+            }
+        });
+
+        // Add this NEW function for progress tracking
+        function startProgressTracking(btn, originalText) {
+            let lastCheck = 0;
+            let consecutiveNoChange = 0;
+
+            if (progressInterval) clearInterval(progressInterval);
+
+            progressInterval = setInterval(async () => {
+                try {
+                    const res = await fetch(`${API_BASE}/admin/bot/progress?user_key=${encodeURIComponent(currentApiKey)}`);
+                    const data = await res.json();
+
+                    const checked = data.novelsChecked || 0;
+                    const updated = data.novelsUpdated || 0;
+                    const remaining = data.remainingNovels || 0;
+
+                    btn.innerHTML = `🔄 Updating... (${checked} checked, ${updated} updated, ${remaining} left)`;
+
+                    if (!data.running) {
+                        if (remaining === 0) {
+                            toast('✅ All novels updated!', 'success');
+                            btn.innerHTML = originalText;
+                            btn.disabled = false;
+                            updateAllInProgress = false;
+                            clearInterval(progressInterval);
+                            loadStaleNovels();
+                        } else {
+                            if (checked === lastCheck) {
+                                consecutiveNoChange++;
+                                if (consecutiveNoChange >= 3) {
+                                    toast('⚠️ Update complete or stalled.', 'warning');
+                                    btn.innerHTML = originalText;
+                                    btn.disabled = false;
+                                    updateAllInProgress = false;
+                                    clearInterval(progressInterval);
+                                    loadStaleNovels();
+                                }
+                            } else {
+                                consecutiveNoChange = 0;
+                                lastCheck = checked;
+                            }
+                        }
+                    } else {
+                        consecutiveNoChange = 0;
+                        lastCheck = checked;
+                    }
+
+                    if (data.running && checked % 5 === 0) {
+                        loadStaleNovels();
+                    }
+                } catch (err) {
+                    console.error('Progress check failed:', err);
+                }
+            }, 3000);
+        }
+
+        // Make sure to clear interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (progressInterval) clearInterval(progressInterval);
         });
 
 
         // Update single novel
         async function updateNovel(novelId) {
-            toast('⏳ Updating novel...', 'warning');
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+
+            btn.disabled = true;
+            btn.innerHTML = '⏳ Updating...';
 
             try {
                 const res = await fetch(`${API_BASE}/admin/novels/${encodeURIComponent(novelId)}/update?user_key=${encodeURIComponent(currentApiKey)}`, {
@@ -603,13 +693,24 @@
                 const data = await res.json();
 
                 if (data.success) {
-                    toast(`✅ Updated to Ch.${data.current}`, 'success');
-                    loadStaleNovels();
+                    toast(`✅ Updated to Ch.${data.current}${data.isNew ? ' (New!)' : ' (No change)'}`, 'success');
+
+                    // Animate row removal
+                    const row = btn.closest('tr');
+                    row.style.transition = 'opacity 0.3s, transform 0.3s';
+                    row.style.opacity = '0';
+                    row.style.transform = 'translateX(-20px)';
+
+                    setTimeout(() => {
+                        loadStaleNovels();
+                    }, 300);
                 } else {
                     throw new Error(data.error);
                 }
             } catch (err) {
                 toast(`❌ Update failed: ${err.message}`, 'danger');
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         }
 

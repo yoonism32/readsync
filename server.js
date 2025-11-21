@@ -1041,16 +1041,47 @@ app.post('/api/v1/admin/bot/trigger', validateApiKey, async (req, res) => {
 // ==================== FORCE UPDATE ALL ====================
 app.post('/admin/force-refresh-all', async (req, res) => {
     try {
-        // Make all novels appear stale
         await pool.query(`UPDATE novels SET chapters_updated_at = NULL`);
 
-        // Immediately trigger the bot to process the first batch
-        updateNovelChapters();
+        // ✅ CORRECT - use bot.updateNovelChapters()
+        if (bot.updateNovelChapters) {
+            setImmediate(() => bot.updateNovelChapters());
+        }
 
         return res.json({ success: true, message: "Global refresh started." });
     } catch (err) {
         console.error("Force refresh failed:", err);
         return res.status(500).json({ error: err.message });
+    }
+});
+
+// New endpoint to track update progress
+app.get('/api/v1/admin/bot/progress', validateApiKey, async (req, res) => {
+    try {
+        const status = global.botStatus || {
+            running: false,
+            novelsChecked: 0,
+            novelsUpdated: 0,
+        };
+
+        // Get count of remaining stale novels
+        const result = await pool.query(`
+            SELECT COUNT(*) as count
+            FROM novels n
+            JOIN progress_snapshots p ON p.novel_id = n.id
+            WHERE n.primary_url IS NOT NULL
+              AND (
+                n.chapters_updated_at IS NULL 
+                OR n.chapters_updated_at < NOW() - INTERVAL '24 hours'
+              )
+        `);
+
+        res.json({
+            ...status,
+            remainingNovels: parseInt(result.rows[0].count)
+        });
+    } catch (error) {
+        handleDbError(res, error, 'Get bot progress');
     }
 });
 
