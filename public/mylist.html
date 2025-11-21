@@ -752,7 +752,7 @@
             if (field === 'read_at') {
                 return global ? toMs(global.ts) : 0;
             } else if (field === 'updated_at') {
-                return toMs(novel.chapters_updated_at);
+                return toMs(novel.site_latest_chapter_time || novel.chapters_updated_at);
             } else if (field === 'started_at') {
                 return toMs(novel.started_at);
             }
@@ -874,7 +874,7 @@
                 const progress = formatProgress(novel, global);
 
                 const readTs = global ? global.ts : null;
-                const updatedTs = novel.chapters_updated_at || null;
+                const updatedTs = novel.site_latest_chapter_time || novel.chapters_updated_at || null;
                 const addedTs = novel.started_at || null;
 
                 const readAgo = formatAgo(readTs);

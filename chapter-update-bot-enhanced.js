@@ -40,6 +40,30 @@ global.botStatus = {
     errors: []
 };
 
+// == 'Time-ago- timestamp parser (e.g., "3 days ago") ==
+function parseTimeAgo(str) {
+    if (!str) return null;
+
+    const now = new Date();
+    const match = str.match(/(\d+)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
+    if (!match) return null;
+
+    const value = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+
+    const ms = {
+        second: 1000,
+        minute: 60000,
+        hour: 3600000,
+        day: 86400000,
+        month: 2592000000,
+        year: 31536000000
+    }[unit];
+
+    return new Date(now - value * ms);
+}
+
+
 /* ==================== Scraping Logic ==================== */
 async function fetchNovelMainPage(novelUrl) {
     try {
@@ -126,6 +150,17 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             result.author = authorMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
         }
 
+        /* === Parse Latest Chapter Time (NEW) === */
+        const timeMatch = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)/i);
+
+        if (timeMatch) {
+            result.site_latest_chapter_time_raw = timeMatch[1].trim();
+            result.site_latest_chapter_time = parseTimeAgo(result.site_latest_chapter_time_raw);
+        } else {
+            result.site_latest_chapter_time_raw = null;
+            result.site_latest_chapter_time = null;
+        }
+
         if (!result.chapter) {
             console.log(`⚠️ Could not parse chapter from ${novelUrl}`);
         }
@@ -164,23 +199,24 @@ async function getNovelsNeedingUpdate() {
     return result.rows;
 }
 
-async function updateNovelChapterInfo(novelId, chapterNum, chapterTitle, genre, author) {
+async function updateNovelChapterInfo(novelId, chapterNum, chapterTitle, genre, author, siteTimeRaw, siteTime) {
     const query = `
-    UPDATE novels 
-    SET 
-      latest_chapter_num = $2,
-      latest_chapter_title = $3,
-      genre = COALESCE($4, genre),
-      author = COALESCE($5, author),
-      chapters_updated_at = CURRENT_TIMESTAMP
-    WHERE id = $1
-    RETURNING id, latest_chapter_num, latest_chapter_title, genre, author
-  `;
+        UPDATE novels 
+        SET 
+            latest_chapter_num = $2,
+            latest_chapter_title = $3,
+            genre = COALESCE($4, genre),
+            author = COALESCE($5, author),
+            site_latest_chapter_time_raw = $6,
+            site_latest_chapter_time = $7,
+            chapters_updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1
+        RETURNING id, latest_chapter_num, latest_chapter_title, genre, author;
+    `;
 
-    const result = await pool.query(query, [novelId, chapterNum, chapterTitle, genre, author]);
+    const result = await pool.query(query, [novelId, chapterNum, chapterTitle, genre, author, siteTimeRaw, siteTime]);
     return result.rows[0];
 }
-
 // Create notifications table if it doesn't exist
 async function initNotifications() {
     await pool.query(`
@@ -276,14 +312,23 @@ async function updateNovelChapters() {
             if (novel.latest_chapter_num && novelInfo.chapter.num <= novel.latest_chapter_num) {
                 console.log(`   ℹ️ No new chapters (still at Ch.${novelInfo.chapter.num})`);
 
-                // Update timestamp and other info even if no new chapters
+                // Update timestamp + metadata even if chapter didn't advance
                 await pool.query(`
-          UPDATE novels SET 
-            chapters_updated_at = CURRENT_TIMESTAMP,
-            genre = COALESCE($2, genre),
-            author = COALESCE($3, author)
-          WHERE id = $1
-        `, [novel.id, novelInfo.genres.join(', ') || null, novelInfo.author]);
+                UPDATE novels SET 
+                    chapters_updated_at = CURRENT_TIMESTAMP,
+                    genre = COALESCE($2, genre),
+                    author = COALESCE($3, author),
+                    site_latest_chapter_time_raw = $4,
+                    site_latest_chapter_time = $5
+                WHERE id = $1
+            `, [
+                    novel.id,
+                    novelInfo.genres.join(', ') || null,
+                    novelInfo.author,
+                    novelInfo.site_latest_chapter_time_raw,
+                    novelInfo.site_latest_chapter_time
+                ]);
+
             } else {
                 // New chapter found!
                 const updated = await updateNovelChapterInfo(
@@ -291,7 +336,9 @@ async function updateNovelChapters() {
                     novelInfo.chapter.num,
                     novelInfo.chapter.title,
                     novelInfo.genres.join(', ') || null,
-                    novelInfo.author
+                    novelInfo.author,
+                    novelInfo.site_latest_chapter_time_raw,
+                    novelInfo.site_latest_chapter_time
                 );
 
                 console.log(`   🎉 Updated! Ch.${novel.latest_chapter_num || '?'} → Ch.${updated.latest_chapter_num}`);
@@ -362,12 +409,15 @@ async function triggerManualUpdate(novelId) {
         }
 
         const updated = await updateNovelChapterInfo(
-            novelId,
+            novel.id,
             novelInfo.chapter.num,
             novelInfo.chapter.title,
             novelInfo.genres.join(', ') || null,
-            novelInfo.author
+            novelInfo.author,
+            novelInfo.site_latest_chapter_time_raw,
+            novelInfo.site_latest_chapter_time
         );
+
 
         // Create notifications if new chapter
         if (novel.latest_chapter_num && novelInfo.chapter.num > novel.latest_chapter_num) {
