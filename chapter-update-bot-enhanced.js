@@ -103,7 +103,7 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             site_latest_chapter_time: null,
         };
 
-        // --- Latest chapter (same as before, minor tidy) ---
+        // 🎯 STRATEGY 1: Look for .l-chapter (latest chapter widget) - MOST RELIABLE
         let match = html.match(
             /<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*:?\s*([^<]*)/i
         );
@@ -113,27 +113,91 @@ function parseNovelInfoFromHTML(html, novelUrl) {
                 num: parseInt(match[1], 10),
                 title: match[2].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
             };
-        } else {
+            console.log('✅ Found chapter via .l-chapter:', result.chapter.num);
+        }
+
+        // 🎯 STRATEGY 2: Try meta tag for chapter count
+        if (!result.chapter) {
+            const metaLastChapter = html.match(
+                /<meta[^>]+property=["']og:novel:latest_chapter_name["'][^>]+content=["']Chapter\s+(\d+)[^"']*["']/i
+            );
+
+            if (metaLastChapter) {
+                result.chapter = {
+                    num: parseInt(metaLastChapter[1], 10),
+                    title: null
+                };
+                console.log('✅ Found chapter via meta tag:', result.chapter.num);
+            }
+        }
+
+        // 🎯 STRATEGY 3: Look specifically in chapter list container
+        if (!result.chapter) {
+            // Try to find the chapter list section specifically
+            const chapterSectionMatch = html.match(
+                /<div[^>]*id=["']chapter[^"']*["'][^>]*>([\s\S]{0,50000}?)<\/div>/i
+            ) || html.match(
+                /<ul[^>]*class=["'][^"']*chapter[^"']*["'][^>]*>([\s\S]{0,50000}?)<\/ul>/i
+            );
+
+            if (chapterSectionMatch) {
+                const chapterSection = chapterSectionMatch[1];
+                const chapterRegex = /chapter-?(\d+)/gi;
+                const matches = [...chapterSection.matchAll(chapterRegex)];
+
+                if (matches.length > 0) {
+                    const chapters = matches.map(m => parseInt(m[1], 10));
+                    const maxChapter = Math.max(...chapters);
+
+                    // Sanity check: if we found many chapters, take the max
+                    if (chapters.length > 3 && maxChapter > 10) {
+                        result.chapter = { num: maxChapter, title: null };
+                        console.log(`✅ Found chapter via chapter list (${chapters.length} chapters):`, maxChapter);
+                    }
+                }
+            }
+        }
+
+        // 🎯 STRATEGY 4: Full page scan with HEAVY FILTERING
+        if (!result.chapter) {
             const chapterRegex = /chapter-?(\d+)/gi;
             const matches = [...html.matchAll(chapterRegex)];
+
             if (matches.length > 0) {
-                const maxChapter = Math.max(...matches.map(m => parseInt(m[1], 10)));
-                const titlePattern = new RegExp(
-                    `Chapter\\s+${maxChapter}\\s*:?\\s*([^<>"]+)`,
-                    'i'
-                );
-                const titleMatch = html.match(titlePattern);
-                result.chapter = {
-                    num: maxChapter,
-                    title: titleMatch
-                        ? titleMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
-                        : null
-                };
-            } else {
-                match = html.match(/latest[^>]*chapter[^>]*?:\s*Chapter\s+(\d+)/i);
-                if (match) {
-                    result.chapter = { num: parseInt(match[1], 10), title: null };
+                const chapters = matches.map(m => parseInt(m[1], 10));
+
+                // 🚨 CRITICAL FILTER: Remove obvious outliers
+                const filtered = chapters.filter(n => {
+                    return n > 0 && n < 50000; // sanity bounds
+                });
+
+                // Count frequency - the real chapter numbers appear more often
+                const frequency = {};
+                filtered.forEach(n => {
+                    frequency[n] = (frequency[n] || 0) + 1;
+                });
+
+                // Get the highest chapter number that appears at least twice
+                // OR if only one occurrence, take max but only if it's > 50
+                const maxChapter = Math.max(...filtered);
+
+                // If max chapter is suspiciously low (< 10), it's probably wrong
+                if (maxChapter < 10 && filtered.length > 5) {
+                    console.log('⚠️ Max chapter too low, likely parsing error:', maxChapter);
+                    result.chapter = null;
+                } else {
+                    result.chapter = { num: maxChapter, title: null };
+                    console.log(`⚠️ Found via full scan (uncertain): ${maxChapter} from ${filtered.length} matches`);
                 }
+            }
+        }
+
+        // 🎯 STRATEGY 5: Fallback to text pattern
+        if (!result.chapter) {
+            match = html.match(/latest[^>]*chapter[^>]*?:\s*Chapter\s+(\d+)/i);
+            if (match) {
+                result.chapter = { num: parseInt(match[1], 10), title: null };
+                console.log('✅ Found via text pattern:', result.chapter.num);
             }
         }
 
@@ -173,17 +237,16 @@ function parseNovelInfoFromHTML(html, novelUrl) {
         // --- Updated time: prefer .item-time, fallback to og:novel:update_time ---
         const itemTime = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)<\/div>/i);
         if (itemTime) {
-            result.site_latest_chapter_time_raw = itemTime[1].trim();     // e.g. "a year ago"
+            result.site_latest_chapter_time_raw = itemTime[1].trim();
             result.site_latest_chapter_time = parseTimeAgo(
                 result.site_latest_chapter_time_raw
             );
         } else {
-            // fallback: ISO from meta
             const metaUpdate = html.match(
                 /<meta[^>]+property=["']og:novel:update_time["'][^>]+content=["']([^"']+)["']/i
             );
             if (metaUpdate) {
-                result.site_latest_chapter_time_raw = metaUpdate[1];  // keep ISO raw
+                result.site_latest_chapter_time_raw = metaUpdate[1];
                 const parsed = new Date(metaUpdate[1]);
                 result.site_latest_chapter_time = isNaN(parsed.getTime()) ? null : parsed;
             }
@@ -191,15 +254,22 @@ function parseNovelInfoFromHTML(html, novelUrl) {
 
         if (!result.chapter) {
             console.log(`⚠️ Could not parse chapter from ${novelUrl}`);
+        } else {
+            console.log(`📖 Successfully parsed ${novelUrl}:`, {
+                chapter: result.chapter.num,
+                title: result.chapter.title,
+                genres: result.genres.length,
+                author: result.author ? 'yes' : 'no',
+                time: result.site_latest_chapter_time_raw
+            });
         }
+
         return result;
     } catch (error) {
         console.error('Parse error:', error);
         return { chapter: null, genres: [], author: null };
     }
 }
-
-
 
 /* ==================== Database Operations ==================== */
 async function getNovelsNeedingUpdate() {
