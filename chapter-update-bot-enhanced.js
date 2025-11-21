@@ -103,101 +103,26 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             site_latest_chapter_time: null,
         };
 
-        // 🎯 STRATEGY 1: Look for .l-chapter (latest chapter widget) - MOST RELIABLE
+        // 1) Best source: .l-chapter
         let match = html.match(
-            /<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*:?\s*([^<]*)/i
+            /<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*[: ]\s*([^<]*)/i
         );
 
         if (match) {
             result.chapter = {
                 num: parseInt(match[1], 10),
-                title: match[2].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+                title: match[2].trim()
             };
-            console.log('✅ Found chapter via .l-chapter:', result.chapter.num);
-        }
-
-        // 🎯 STRATEGY 2: Try meta tag for chapter count
-        if (!result.chapter) {
-            const metaLastChapter = html.match(
-                /<meta[^>]+property=["']og:novel:latest_chapter_name["'][^>]+content=["']Chapter\s+(\d+)[^"']*["']/i
+        } else {
+            // 2) Meta tag fallback
+            const metaLast = html.match(
+                /<meta[^>]+property=["']og:novel:latest_chapter_name["'][^>]+content=["'][^0-9]*([0-9]+)[^"']*["']/i
             );
-
-            if (metaLastChapter) {
+            if (metaLast) {
                 result.chapter = {
-                    num: parseInt(metaLastChapter[1], 10),
+                    num: parseInt(metaLast[1], 10),
                     title: null
                 };
-                console.log('✅ Found chapter via meta tag:', result.chapter.num);
-            }
-        }
-
-        // 🎯 STRATEGY 3: Look specifically in chapter list container
-        if (!result.chapter) {
-            // Try to find the chapter list section specifically
-            const chapterSectionMatch = html.match(
-                /<div[^>]*id=["']chapter[^"']*["'][^>]*>([\s\S]{0,50000}?)<\/div>/i
-            ) || html.match(
-                /<ul[^>]*class=["'][^"']*chapter[^"']*["'][^>]*>([\s\S]{0,50000}?)<\/ul>/i
-            );
-
-            if (chapterSectionMatch) {
-                const chapterSection = chapterSectionMatch[1];
-                const chapterRegex = /chapter-?(\d+)/gi;
-                const matches = [...chapterSection.matchAll(chapterRegex)];
-
-                if (matches.length > 0) {
-                    const chapters = matches.map(m => parseInt(m[1], 10));
-                    const maxChapter = Math.max(...chapters);
-
-                    // Sanity check: if we found many chapters, take the max
-                    if (chapters.length > 3 && maxChapter > 10) {
-                        result.chapter = { num: maxChapter, title: null };
-                        console.log(`✅ Found chapter via chapter list (${chapters.length} chapters):`, maxChapter);
-                    }
-                }
-            }
-        }
-
-        // 🎯 STRATEGY 4: Full page scan with HEAVY FILTERING
-        if (!result.chapter) {
-            const chapterRegex = /chapter-?(\d+)/gi;
-            const matches = [...html.matchAll(chapterRegex)];
-
-            if (matches.length > 0) {
-                const chapters = matches.map(m => parseInt(m[1], 10));
-
-                // 🚨 CRITICAL FILTER: Remove obvious outliers
-                const filtered = chapters.filter(n => {
-                    return n > 0 && n < 50000; // sanity bounds
-                });
-
-                // Count frequency - the real chapter numbers appear more often
-                const frequency = {};
-                filtered.forEach(n => {
-                    frequency[n] = (frequency[n] || 0) + 1;
-                });
-
-                // Get the highest chapter number that appears at least twice
-                // OR if only one occurrence, take max but only if it's > 50
-                const maxChapter = Math.max(...filtered);
-
-                // If max chapter is suspiciously low (< 10), it's probably wrong
-                if (maxChapter < 10 && filtered.length > 5) {
-                    console.log('⚠️ Max chapter too low, likely parsing error:', maxChapter);
-                    result.chapter = null;
-                } else {
-                    result.chapter = { num: maxChapter, title: null };
-                    console.log(`⚠️ Found via full scan (uncertain): ${maxChapter} from ${filtered.length} matches`);
-                }
-            }
-        }
-
-        // 🎯 STRATEGY 5: Fallback to text pattern
-        if (!result.chapter) {
-            match = html.match(/latest[^>]*chapter[^>]*?:\s*Chapter\s+(\d+)/i);
-            if (match) {
-                result.chapter = { num: parseInt(match[1], 10), title: null };
-                console.log('✅ Found via text pattern:', result.chapter.num);
             }
         }
 

@@ -449,11 +449,14 @@
                     <button class="btn btn-secondary" id="refreshBtn">
                         🔄 Refresh Status
                     </button>
+                    <button class="btn btn-warning" id="updateAllBtn">
+                        📚 Refresh Stale Novels
+                    </button>
                 </div>
             </div>
 
             <!-- Stale Novels -->
-            <div class="panel">
+            <div class=" panel">
                 <h2>📚 Novels Needing Updates</h2>
                 <div id="loading" class="loading" style="display: none;">
                     <div class="spinner"></div>
@@ -574,6 +577,13 @@
                 toast('❌ Failed to load novels', 'danger');
             }
         }
+
+        // Force update all stale novels
+        document.getElementById("updateAllBtn").addEventListener("click", async () => {
+            const res = await fetch('/admin/force-refresh-all', { method: 'POST' });
+            const json = await res.json();
+            alert(json.message || "Started!");
+        });
 
         // Update single novel
         async function updateNovel(novelId) {

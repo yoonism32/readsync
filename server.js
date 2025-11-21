@@ -1038,6 +1038,22 @@ app.post('/api/v1/admin/bot/trigger', validateApiKey, async (req, res) => {
     }
 });
 
+// ==================== FORCE UPDATE ALL ====================
+app.post('/admin/force-refresh-all', async (req, res) => {
+    try {
+        // Make all novels appear stale
+        await pool.query(`UPDATE novels SET chapters_updated_at = NULL`);
+
+        // Immediately trigger the bot to process the first batch
+        updateNovelChapters();
+
+        return res.json({ success: true, message: "Global refresh started." });
+    } catch (err) {
+        console.error("Force refresh failed:", err);
+        return res.status(500).json({ error: err.message });
+    }
+});
+
 /* ---------------------- Bookmarks API ---------------------- */
 app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
