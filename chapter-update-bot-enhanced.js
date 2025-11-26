@@ -1,4 +1,4 @@
-const { createPool } = require('./server');
+const { createPool } = require('./db-utils');
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
