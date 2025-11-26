@@ -1,5 +1,4 @@
-const { Pool } = require('pg');
-const { URL } = require('url');
+const { createPool } = require('./server');
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
@@ -8,22 +7,8 @@ const REQUEST_DELAY_MS = 5000; // 2s delay between requests (be nice to servers)
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
 
 /* ==================== Database Setup ==================== */
-function forceNoVerify(dbUrl) {
-    try {
-        const u = new URL(dbUrl);
-        u.searchParams.set('sslmode', 'no-verify');
-        return u.toString();
-    } catch {
-        if (/sslmode=/.test(dbUrl)) return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
-        return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
-    }
-}
-
-const connectionString = forceNoVerify(process.env.DATABASE_URL);
-
-const pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
+const pool = createPool({
+    connectionString: process.env.DATABASE_URL,
     max: 5,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,
@@ -37,8 +22,13 @@ global.botStatus = {
     novelsUpdated: 0,
     novelsChecked: 0,
     nextRun: null,
-    errors: []
+    errors: [],
+    cycleStartTime: null,
+    cycleDuration: null
 };
+
+// Race condition protection: prevent concurrent execution
+let isRunning = false;
 
 // == 'Time-ago- timestamp parser (e.g., "3 days ago") ==
 function parseTimeAgo(raw) {
@@ -69,8 +59,6 @@ async function fetchNovelMainPage(novelUrl) {
         // Extract base novel URL (remove chapter part)
         const baseUrl = novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
 
-        console.log(`📖 Fetching novel page: ${baseUrl}`);
-
         // Use AbortController for timeout (Node.js fetch doesn't support timeout option)
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
@@ -94,10 +82,12 @@ async function fetchNovelMainPage(novelUrl) {
         const html = await response.text();
         return html;
     } catch (error) {
+        // Error details will be logged by caller with context
+        // But we still log here for debugging if needed
         if (error.name === 'AbortError') {
-            console.error(`❌ Timeout fetching ${novelUrl} (10s)`);
+            // Timeout - caller will handle logging
         } else {
-            console.error(`❌ Failed to fetch ${novelUrl}:`, error.message);
+            // Other fetch errors - caller will handle logging
         }
         return null;
     }
@@ -188,15 +178,10 @@ function parseNovelInfoFromHTML(html, novelUrl) {
         }
 
         if (!result.chapter) {
-            console.log(`⚠️ Could not parse chapter from ${novelUrl}`);
+            // Logging will be handled by caller with more context
         } else {
-            console.log(`📖 Successfully parsed ${novelUrl}:`, {
-                chapter: result.chapter.num,
-                title: result.chapter.title,
-                genres: result.genres.length,
-                author: result.author ? 'yes' : 'no',
-                time: result.site_latest_chapter_time_raw
-            });
+            // Log successful parse - this is useful for debugging
+            // Note: Full logging with context happens in caller
         }
 
         return result;
@@ -222,14 +207,14 @@ async function getNovelsNeedingUpdate() {
       n.primary_url IS NOT NULL
       AND (
         n.chapters_updated_at IS NULL 
-        OR n.chapters_updated_at < NOW() - INTERVAL '${STALE_THRESHOLD_HOURS} hours'
+        OR n.chapters_updated_at < NOW() - make_interval(hours => $2)
       )
     GROUP BY n.id, n.primary_url, n.latest_chapter_num, n.chapters_updated_at
     ORDER BY active_readers DESC, n.chapters_updated_at ASC NULLS FIRST
     LIMIT $1
   `;
 
-    const result = await pool.query(query, [BATCH_SIZE]);
+    const result = await pool.query(query, [BATCH_SIZE, STALE_THRESHOLD_HOURS]);
     return result.rows;
 }
 
@@ -294,11 +279,55 @@ async function createNotificationsForNovelUpdate(novelId, oldChapter, newChapter
 }
 
 /* ==================== Bot Main Loop ==================== */
+// Structured logging helper
+function log(level, message, context = {}) {
+    const timestamp = new Date().toISOString();
+    const logEntry = {
+        timestamp,
+        level,
+        message,
+        ...context
+    };
+
+    const prefix = {
+        info: 'ℹ️',
+        warn: '⚠️',
+        error: '❌',
+        success: '✅'
+    }[level] || '📝';
+
+    console.log(`${prefix} [${timestamp}] ${message}`, Object.keys(context).length > 0 ? context : '');
+    return logEntry;
+}
+
+// Helper function to limit error array size
+function addError(error) {
+    global.botStatus.errors.push({
+        ...error,
+        timestamp: new Date().toISOString()
+    });
+    // Keep only last 50 errors if array exceeds 100
+    if (global.botStatus.errors.length > 100) {
+        global.botStatus.errors = global.botStatus.errors.slice(-50);
+    }
+}
+
 async function updateNovelChapters() {
-    console.log('\n🤖 Starting chapter update cycle...');
+    // Race condition protection: prevent concurrent execution
+    if (isRunning) {
+        log('warn', 'Update cycle already in progress, skipping...');
+        return;
+    }
+
+    isRunning = true;
+    const cycleStartTime = Date.now();
+    const cycleId = `cycle-${Date.now()}`;
+
+    log('info', 'Starting chapter update cycle', { cycleId });
 
     global.botStatus.running = true;
     global.botStatus.lastRun = new Date().toISOString();
+    global.botStatus.cycleStartTime = new Date(cycleStartTime).toISOString();
     global.botStatus.novelsUpdated = 0;
     global.botStatus.novelsChecked = 0;
     global.botStatus.errors = [];
@@ -307,44 +336,58 @@ async function updateNovelChapters() {
         const novels = await getNovelsNeedingUpdate();
 
         if (novels.length === 0) {
-            console.log('✅ All novels up to date!');
+            log('success', 'All novels up to date!', { cycleId });
             global.botStatus.lastRunSuccess = true;
             global.botStatus.running = false;
             global.botStatus.nextRun = new Date(Date.now() + CHECK_INTERVAL_MS).toISOString();
             return;
         }
 
-        console.log(`📚 Found ${novels.length} novels needing updates`);
+        log('info', `Found ${novels.length} novels needing updates`, { cycleId, count: novels.length });
 
         for (const novel of novels) {
             global.botStatus.novelsChecked++;
 
-            console.log(`\n📖 Processing: ${novel.id}`);
-            console.log(`   Current: Ch.${novel.latest_chapter_num || '?'}`);
-            console.log(`   Readers: ${novel.active_readers}`);
-            console.log(`   Last check: ${novel.chapters_updated_at || 'Never'}`);
-            console.log(`   Last read: ${novel.last_read_at || 'Never'}`);
+            log('info', `Processing novel`, {
+                cycleId,
+                novelId: novel.id,
+                currentChapter: novel.latest_chapter_num || '?',
+                activeReaders: novel.active_readers,
+                lastCheck: novel.chapters_updated_at || 'Never',
+                lastRead: novel.last_read_at || 'Never'
+            });
 
             // Fetch and parse
             const html = await fetchNovelMainPage(novel.primary_url);
             if (!html) {
-                console.log('   ⏭️ Skipping (fetch failed)');
-                global.botStatus.errors.push({ novel: novel.id, error: 'Fetch failed' });
+                log('warn', 'Skipping novel (fetch failed)', { cycleId, novelId: novel.id });
+                addError({ novel: novel.id, error: 'Fetch failed', type: 'network', cycleId });
                 await sleep(REQUEST_DELAY_MS);
                 continue;
             }
 
             const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
             if (!novelInfo.chapter) {
-                console.log('   ⏭️ Skipping (parse failed)');
-                global.botStatus.errors.push({ novel: novel.id, error: 'Parse failed' });
+                log('warn', 'Skipping novel (parse failed)', { cycleId, novelId: novel.id });
+                addError({ novel: novel.id, error: 'Parse failed', type: 'parse', cycleId });
                 await sleep(REQUEST_DELAY_MS);
                 continue;
             }
 
+            // Log successful parse with details
+            log('info', 'Successfully parsed novel', {
+                cycleId,
+                novelId: novel.id,
+                chapter: novelInfo.chapter.num,
+                title: novelInfo.chapter.title,
+                genresCount: novelInfo.genres.length,
+                hasAuthor: !!novelInfo.author,
+                timeRaw: novelInfo.site_latest_chapter_time_raw
+            });
+
             // Check if this is actually new
             if (novel.latest_chapter_num && novelInfo.chapter.num <= novel.latest_chapter_num) {
-                console.log(`   ℹ️ No new chapters (still at Ch.${novelInfo.chapter.num})`);
+                log('info', `No new chapters (still at Ch.${novelInfo.chapter.num})`, { cycleId, novelId: novel.id });
 
                 // Update timestamp + metadata even if chapter didn't advance
                 await pool.query(`
@@ -375,13 +418,14 @@ async function updateNovelChapters() {
                     novelInfo.site_latest_chapter_time
                 );
 
-                console.log(`   🎉 Updated! Ch.${novel.latest_chapter_num || '?'} → Ch.${updated.latest_chapter_num}`);
-                if (updated.latest_chapter_title) {
-                    console.log(`   📝 Title: ${updated.latest_chapter_title}`);
-                }
-                if (novelInfo.genres.length > 0) {
-                    console.log(`   🏷️ Genres: ${novelInfo.genres.join(', ')}`);
-                }
+                log('success', `Updated novel`, {
+                    cycleId,
+                    novelId: novel.id,
+                    previousChapter: novel.latest_chapter_num || '?',
+                    newChapter: updated.latest_chapter_num,
+                    title: updated.latest_chapter_title,
+                    genres: novelInfo.genres.length > 0 ? novelInfo.genres.join(', ') : null
+                });
 
                 // Create notifications for users
                 await createNotificationsForNovelUpdate(
@@ -398,18 +442,40 @@ async function updateNovelChapters() {
             await sleep(REQUEST_DELAY_MS);
         }
 
-        console.log('\n✅ Update cycle complete!');
-        console.log(`📊 Stats: ${global.botStatus.novelsChecked} checked, ${global.botStatus.novelsUpdated} updated`);
+        const cycleDuration = Date.now() - cycleStartTime;
+        global.botStatus.cycleDuration = cycleDuration;
+
+        log('success', 'Update cycle complete!', {
+            cycleId,
+            duration: `${(cycleDuration / 1000).toFixed(1)}s`,
+            novelsChecked: global.botStatus.novelsChecked,
+            novelsUpdated: global.botStatus.novelsUpdated
+        });
 
         global.botStatus.lastRunSuccess = true;
 
     } catch (error) {
-        console.error('❌ Error in update cycle:', error);
+        const cycleDuration = Date.now() - cycleStartTime;
+        global.botStatus.cycleDuration = cycleDuration;
+
+        log('error', 'Error in update cycle', {
+            cycleId,
+            error: error.message,
+            stack: error.stack,
+            duration: `${(cycleDuration / 1000).toFixed(1)}s`
+        });
+
         global.botStatus.lastRunSuccess = false;
-        global.botStatus.errors.push({ error: error.message });
+        addError({
+            error: error.message,
+            stack: error.stack,
+            type: 'database',
+            cycleId
+        });
     } finally {
         global.botStatus.running = false;
         global.botStatus.nextRun = new Date(Date.now() + CHECK_INTERVAL_MS).toISOString();
+        isRunning = false;
     }
 }
 
@@ -483,34 +549,38 @@ async function safeUpdateCycle() {
     try {
         await updateNovelChapters();
     } catch (error) {
-        console.error('🔴 BOT CYCLE CRASHED:', error);
-        console.error('Stack:', error.stack);
+        log('error', 'BOT CYCLE CRASHED', {
+            error: error.message,
+            stack: error.stack
+        });
         global.botStatus.lastRunSuccess = false;
-        global.botStatus.errors.push({
-            timestamp: new Date().toISOString(),
-            error: error.message
+        addError({
+            error: error.message,
+            stack: error.stack,
+            type: 'fatal'
         });
         // Don't let it kill the server - just log and continue
     }
 }
 
 async function startBot() {
-    console.log('🤖 ReadSync Chapter Update Bot Starting...');
-    console.log(`⏰ Check interval: ${CHECK_INTERVAL_MS / 1000 / 60} minutes`);
-    console.log(`📦 Batch size: ${BATCH_SIZE} novels`);
-    console.log(`⏱️ Request delay: ${REQUEST_DELAY_MS / 1000}s`);
-    console.log(`📅 Stale threshold: ${STALE_THRESHOLD_HOURS} hours\n`);
+    log('info', 'ReadSync Chapter Update Bot Starting...', {
+        checkInterval: `${CHECK_INTERVAL_MS / 1000 / 60} minutes`,
+        batchSize: BATCH_SIZE,
+        requestDelay: `${REQUEST_DELAY_MS / 1000}s`,
+        staleThreshold: `${STALE_THRESHOLD_HOURS} hours`
+    });
 
     // Test database connection
     try {
         await pool.query('SELECT 1');
-        console.log('✅ Database connected');
+        log('success', 'Database connected');
 
         // Initialize notifications table
         await initNotifications();
-        console.log('✅ Notifications system initialized\n');
+        log('success', 'Notifications system initialized');
     } catch (error) {
-        console.error('❌ Database connection failed:', error);
+        log('error', 'Database connection failed', { error: error.message });
         process.exit(1);
     }
 
@@ -524,21 +594,35 @@ async function startBot() {
     // Then run on interval
     setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
 
-    console.log('\n✅ Bot is running! Press Ctrl+C to stop.\n');
+    log('success', 'Bot is running! Press Ctrl+C to stop.');
 }
 
 // Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('\n🛑 Shutting down bot...');
-    await pool.end();
-    process.exit(0);
-});
+async function gracefulShutdown(signal) {
+    log('warn', `Received ${signal}, shutting down bot gracefully...`);
 
-process.on('SIGINT', async () => {
-    console.log('\n🛑 Shutting down bot...');
-    await pool.end();
-    process.exit(0);
-});
+    // Wait for current cycle to finish if running
+    if (isRunning) {
+        log('info', 'Waiting for current cycle to complete...');
+        let waitCount = 0;
+        while (isRunning && waitCount < 60) { // Max 60 seconds wait
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            waitCount++;
+        }
+    }
+
+    try {
+        await pool.end();
+        log('success', 'Database pool closed, bot shutdown complete');
+        process.exit(0);
+    } catch (error) {
+        log('error', 'Error during shutdown', { error: error.message });
+        process.exit(1);
+    }
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
 // Export for use as module
 module.exports = {

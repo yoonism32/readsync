@@ -15,15 +15,61 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 const { URL } = require('url');
+const rateLimit = require('express-rate-limit');
+const { body, param, query, validationResult } = require('express-validator');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 🔹 INTEGRATION: Import bot module
-const bot = require('./chapter-update-bot-enhanced');
+// Export database utilities before requiring bot (to avoid circular dependency)
+// These will be available when bot requires this file
+let bot;
+if (require.main === module) {
+    // Only require bot when server.js is run directly, not when required as module
+    bot = require('./chapter-update-bot-enhanced');
+}
+
+/* ---------------------- Rate Limiting ---------------------- */
+// General API rate limiter: 100 requests per 15 minutes per IP
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+// Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: 'Too many authentication attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+
+/* ---------------------- CORS Configuration ---------------------- */
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+    : ['https://readsync-n7zp.onrender.com', 'http://localhost:3000'];
+
+app.use(cors({
+    origin: (origin, callback) => {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
 
 /* ---------------------- Middleware ---------------------- */
-app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
@@ -37,6 +83,71 @@ app.use((req, res, next) => {
     next();
 });
 
+/* ---------------------- Database Utilities ---------------------- */
+/**
+ * Force SSL mode to 'no-verify' in database URL
+ * @param {string} dbUrl - Database connection URL
+ * @returns {string} - Modified database URL with sslmode=no-verify
+ */
+function forceNoVerify(dbUrl) {
+    try {
+        const u = new URL(dbUrl);
+        u.searchParams.set('sslmode', 'no-verify');
+        return u.toString();
+    } catch {
+        if (/sslmode=/.test(dbUrl)) {
+            return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
+        }
+        return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
+    }
+}
+
+/**
+ * Create a PostgreSQL connection pool with standardized configuration
+ * @param {Object} options - Pool configuration options
+ * @param {string} options.connectionString - Database connection string
+ * @param {number} [options.max=20] - Maximum number of clients in the pool
+ * @param {number} [options.idleTimeoutMillis=30000] - Idle timeout in milliseconds
+ * @param {number} [options.connectionTimeoutMillis=10000] - Connection timeout in milliseconds
+ * @returns {Pool} - PostgreSQL connection pool
+ */
+function createPool(options = {}) {
+    const {
+        connectionString,
+        max = 20,
+        idleTimeoutMillis = 30000,
+        connectionTimeoutMillis = 10000
+    } = options;
+
+    if (!connectionString) {
+        throw new Error('connectionString is required');
+    }
+
+    const processedConnectionString = forceNoVerify(connectionString);
+
+    const pool = new Pool({
+        connectionString: processedConnectionString,
+        ssl: { rejectUnauthorized: false },
+        max: Number(max),
+        idleTimeoutMillis: Number(idleTimeoutMillis),
+        connectionTimeoutMillis: Number(connectionTimeoutMillis),
+        keepAlive: true,
+        statement_timeout: 30000,
+        query_timeout: 30000,
+    });
+
+    // Set up error handlers
+    pool.on('error', (err) => {
+        console.error('PostgreSQL pool error:', err);
+    });
+
+    pool.on('connect', () => {
+        console.log('New PostgreSQL connection established');
+    });
+
+    return pool;
+}
+
 /* ---------------------- Database Connection ---------------------- */
 const raw = process.env.DATABASE_URL || '';
 if (!raw) {
@@ -44,32 +155,12 @@ if (!raw) {
     process.exit(1);
 }
 
-function forceNoVerify(dbUrl) {
-    try {
-        const u = new URL(dbUrl);
-        u.searchParams.set('sslmode', 'no-verify');
-        return u.toString();
-    } catch {
-        if (/sslmode=/.test(dbUrl)) return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
-        return dbUrl + (dbUrl.includes('?') ? '&' : '?') + 'sslmode=no-verify';
-    }
-}
-
-const connectionString = forceNoVerify(raw);
-
-const pool = new Pool({
-    connectionString,
-    ssl: { rejectUnauthorized: false },
-    max: Number(process.env.PG_POOL_MAX || 20),
-    idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
-    connectionTimeoutMillis: Number(process.env.PG_CONN_TIMEOUT || 10000),
-    keepAlive: true,
-    statement_timeout: 30000,
-    query_timeout: 30000,
+const pool = createPool({
+    connectionString: raw,
+    max: process.env.PG_POOL_MAX || 20,
+    idleTimeoutMillis: process.env.PG_IDLE_TIMEOUT || 30000,
+    connectionTimeoutMillis: process.env.PG_CONN_TIMEOUT || 10000,
 });
-
-pool.on('error', (err) => console.error('PostgreSQL pool error:', err));
-pool.on('connect', () => console.log('New PostgreSQL connection established'));
 
 /* ---------------------- Error Handling Utilities ---------------------- */
 const handleDbError = (res, error, operation) => {
@@ -105,6 +196,18 @@ const withTransaction = async (callback) => {
 };
 
 /* ---------------------- Validation Middleware ---------------------- */
+// Validation result handler
+const handleValidationErrors = (req, res, next) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({
+            error: 'Validation failed',
+            errors: errors.array()
+        });
+    }
+    next();
+};
+
 const validateApiKey = async (req, res, next) => {
     const user_key = req.body?.user_key || req.query?.user_key;
     if (!user_key) {
@@ -439,7 +542,7 @@ app.get('/healthz', async (req, res) => {
 });
 
 /* ---------------------- Authentication Routes ---------------------- */
-app.get('/api/v1/auth/whoami', validateApiKey, (req, res) => {
+app.get('/api/v1/auth/whoami', authLimiter, validateApiKey, (req, res) => {
     res.json({
         id: req.user.id,
         display_name: req.user.display_name,
@@ -448,47 +551,54 @@ app.get('/api/v1/auth/whoami', validateApiKey, (req, res) => {
 });
 
 /* ---------------------- Core Progress API ---------------------- */
-app.post('/api/v1/progress', validateApiKey, async (req, res) => {
-    const { device_id, device_label, novel_url, percent, seconds_on_page = 0 } = req.body;
+// Apply rate limiting to all API routes
+app.use('/api/v1/', apiLimiter);
 
-    if (!device_id || !device_label || !novel_url || percent == null) {
-        return res.status(400).json({
-            error: 'Missing required fields: device_id, device_label, novel_url, percent'
+app.post('/api/v1/progress',
+    [
+        body('device_id').isString().isLength({ min: 1, max: 200 }).withMessage('device_id must be a string between 1-200 characters'),
+        body('device_label').isString().isLength({ min: 1, max: 200 }).withMessage('device_label must be a string between 1-200 characters'),
+        body('novel_url').isURL().withMessage('novel_url must be a valid URL'),
+        body('percent').isFloat({ min: 0, max: 100 }).withMessage('percent must be a number between 0 and 100'),
+        body('seconds_on_page').optional().isInt({ min: 0 }).withMessage('seconds_on_page must be a non-negative integer'),
+        handleValidationErrors
+    ],
+    validateApiKey,
+    async (req, res) => {
+        const { device_id, device_label, novel_url, percent, seconds_on_page = 0 } = req.body;
+
+        const user_id = req.user.id;
+        const novel_id = normalizeNovelId(novel_url);
+        const novel_title = extractNovelTitle(novel_url);
+
+        // 🔹 FIXED: Use current_chapter_num from userscript if available, fallback to URL parsing
+        const chapterInfo = req.body.current_chapter_num ?
+            { token: 'chapter', num: req.body.current_chapter_num } :
+            parseChapterFromUrl(novel_url);
+
+        // Log chapter detection for debugging
+        console.log('📊 Chapter detection:', {
+            current_chapter_num: req.body.current_chapter_num,
+            current_chapter_source: req.body.current_chapter_source,
+            url_parsed: parseChapterFromUrl(novel_url),
+            final_chapter: chapterInfo?.num
         });
-    }
 
-    const user_id = req.user.id;
-    const novel_id = normalizeNovelId(novel_url);
-    const novel_title = extractNovelTitle(novel_url);
+        if (!novel_id || !chapterInfo) {
+            return res.status(400).json({ error: 'Invalid novel URL format or missing chapter info' });
+        }
 
-    // 🔹 FIXED: Use current_chapter_num from userscript if available, fallback to URL parsing
-    const chapterInfo = req.body.current_chapter_num ?
-        { token: 'chapter', num: req.body.current_chapter_num } :
-        parseChapterFromUrl(novel_url);
+        const percentValue = Math.max(0, Math.min(100, Number(percent)));
+        const latestChapterNum = req.body.latest_chapter_num != null ? Number(req.body.latest_chapter_num) : null;
+        const latestChapterTitle = req.body.latest_chapter_title || null;
 
-    // Log chapter detection for debugging
-    console.log('📊 Chapter detection:', {
-        current_chapter_num: req.body.current_chapter_num,
-        current_chapter_source: req.body.current_chapter_source,
-        url_parsed: parseChapterFromUrl(novel_url),
-        final_chapter: chapterInfo?.num
-    });
+        try {
+            const result = await withTransaction(async (client) => {
+                // Upsert device with type detection - FIXED to prevent duplicates
+                const deviceType = /iPad|iPhone|iPod/.test(req.get('User-Agent')) ? 'mobile' :
+                    /Android/.test(req.get('User-Agent')) ? 'mobile' : 'desktop';
 
-    if (!novel_id || !chapterInfo) {
-        return res.status(400).json({ error: 'Invalid novel URL format or missing chapter info' });
-    }
-
-    const percentValue = Math.max(0, Math.min(100, Number(percent)));
-    const latestChapterNum = req.body.latest_chapter_num != null ? Number(req.body.latest_chapter_num) : null;
-    const latestChapterTitle = req.body.latest_chapter_title || null;
-
-    try {
-        const result = await withTransaction(async (client) => {
-            // Upsert device with type detection - FIXED to prevent duplicates
-            const deviceType = /iPad|iPhone|iPod/.test(req.get('User-Agent')) ? 'mobile' :
-                /Android/.test(req.get('User-Agent')) ? 'mobile' : 'desktop';
-
-            await client.query(`
+                await client.query(`
         INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
         VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
         ON CONFLICT (id) DO UPDATE SET
@@ -499,8 +609,8 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
           active = TRUE
       `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
-            // 🔹 Upsert novel with latest chapter info
-            await client.query(`
+                // 🔹 Upsert novel with latest chapter info
+                await client.query(`
         INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
         VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
         ON CONFLICT (id) DO UPDATE SET
@@ -525,15 +635,15 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
                 ELSE novels.chapters_updated_at 
             END
         `, [novel_id, novel_title, novel_url, latestChapterNum, latestChapterTitle]);
-            // Ensure user novel metadata exists
-            await client.query(`
+                // Ensure user novel metadata exists
+                await client.query(`
         INSERT INTO user_novel_meta (user_id, novel_id, started_at)
         VALUES ($1, $2, CURRENT_TIMESTAMP)
         ON CONFLICT (user_id, novel_id) DO NOTHING
       `, [user_id, novel_id]);
 
-            // Check if we should update (max-progress policy)
-            const lastProgress = await client.query(`
+                // Check if we should update (max-progress policy)
+                const lastProgress = await client.query(`
         SELECT percent, chapter_num, created_at
         FROM progress_snapshots
         WHERE user_id = $1 AND device_id = $2 AND novel_id = $3
@@ -541,45 +651,45 @@ app.post('/api/v1/progress', validateApiKey, async (req, res) => {
         LIMIT 1
       `, [user_id, device_id, novel_id]);
 
-            let shouldUpdate = true;
-            if (lastProgress.rows.length > 0) {
-                const prev = lastProgress.rows[0];
-                // Don't update if going backwards in same chapter
-                if (prev.chapter_num === chapterInfo.num && percentValue <= parseFloat(prev.percent)) {
-                    shouldUpdate = false;
+                let shouldUpdate = true;
+                if (lastProgress.rows.length > 0) {
+                    const prev = lastProgress.rows[0];
+                    // Don't update if going backwards in same chapter
+                    if (prev.chapter_num === chapterInfo.num && percentValue <= parseFloat(prev.percent)) {
+                        shouldUpdate = false;
+                    }
+                    // Don't update if going to earlier chapter
+                    if (chapterInfo.num < prev.chapter_num) {
+                        shouldUpdate = false;
+                    }
+                    // Ignore noise at chapter start if previously made progress
+                    if (percentValue <= 1 && parseFloat(prev.percent) > 10 && prev.chapter_num === chapterInfo.num) {
+                        shouldUpdate = false;
+                    }
                 }
-                // Don't update if going to earlier chapter
-                if (chapterInfo.num < prev.chapter_num) {
-                    shouldUpdate = false;
-                }
-                // Ignore noise at chapter start if previously made progress
-                if (percentValue <= 1 && parseFloat(prev.percent) > 10 && prev.chapter_num === chapterInfo.num) {
-                    shouldUpdate = false;
-                }
-            }
 
-            if (shouldUpdate) {
-                await client.query(`
+                if (shouldUpdate) {
+                    await client.query(`
           INSERT INTO progress_snapshots
             (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page]);
-            }
+                }
 
-            return await getLatestStates(client, user_id, novel_id);
-        });
+                return await getLatestStates(client, user_id, novel_id);
+            });
 
-        res.json({
-            status: 'success',
-            updated: true,
-            novel_id,
-            ...result
-        });
+            res.json({
+                status: 'success',
+                updated: true,
+                novel_id,
+                ...result
+            });
 
-    } catch (error) {
-        handleDbError(res, error, 'Progress update');
-    }
-});
+        } catch (error) {
+            handleDbError(res, error, 'Progress update');
+        }
+    });
 
 app.get('/api/v1/progress', validateApiKey, async (req, res) => {
     const { novel_id } = req.query;
@@ -816,26 +926,29 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
 });
 
 // 🔴 FIXED status endpoint
-app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async (req, res) => {
-    const { novelId } = req.params;
-    const { status } = req.body;
+app.put('/api/v1/novels/:novelId/status',
+    [
+        param('novelId').isString().isLength({ min: 1, max: 200 }).withMessage('Invalid novel ID format'),
+        body('status').isIn(['reading', 'completed', 'on-hold', 'dropped', 'removed']).withMessage('Invalid status'),
+        handleValidationErrors
+    ],
+    validateApiKey,
+    validateNovelId,
+    async (req, res) => {
+        const { novelId } = req.params;
+        const { status } = req.body;
 
-    const allowedStatuses = ['reading', 'completed', 'on-hold', 'dropped', 'removed'];
-    if (!status || !allowedStatuses.includes(status)) {
-        return res.status(400).json({ error: 'Invalid status', allowed: allowedStatuses });
-    }
-
-    try {
-        const result = await withTransaction(async (client) => {
-            // First ensure the novel exists in user_novel_meta
-            await client.query(`
+        try {
+            const result = await withTransaction(async (client) => {
+                // First ensure the novel exists in user_novel_meta
+                await client.query(`
                 INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at)
                 VALUES ($1, $2, 'reading', CURRENT_TIMESTAMP)
                 ON CONFLICT (user_id, novel_id) DO NOTHING
             `, [req.user.id, novelId]);
 
-            // Update the status
-            const updateResult = await client.query(`
+                // Update the status
+                const updateResult = await client.query(`
                 UPDATE user_novel_meta SET
                     status = $3,
                     updated_at = CURRENT_TIMESTAMP,
@@ -848,14 +961,14 @@ app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async
                 RETURNING *
             `, [req.user.id, novelId, status]);
 
-            if (updateResult.rows.length === 0) {
-                throw new Error('Novel not found for user');
-            }
+                if (updateResult.rows.length === 0) {
+                    throw new Error('Novel not found for user');
+                }
 
-            // If marking as completed, create a 100% progress snapshot
-            if (status === 'completed') {
-                // Get the latest progress to determine chapter info
-                const latestProgress = await client.query(`
+                // If marking as completed, create a 100% progress snapshot
+                if (status === 'completed') {
+                    // Get the latest progress to determine chapter info
+                    const latestProgress = await client.query(`
                     SELECT chapter_num, chapter_token, url, novel_id
                     FROM progress_snapshots
                     WHERE user_id = $1 AND novel_id = $2
@@ -863,36 +976,36 @@ app.put('/api/v1/novels/:novelId/status', validateApiKey, validateNovelId, async
                     LIMIT 1
                 `, [req.user.id, novelId]);
 
-                if (latestProgress.rows.length > 0) {
-                    const latest = latestProgress.rows[0];
-                    await client.query(`
+                    if (latestProgress.rows.length > 0) {
+                        const latest = latestProgress.rows[0];
+                        await client.query(`
                         INSERT INTO progress_snapshots (
                             user_id, device_id, novel_id, chapter_token, 
                             chapter_num, percent, url, seconds_on_page
                         )
                         VALUES ($1, 'system', $2, $3, $4, 100, $5, 0)
                     `, [
-                        req.user.id,
-                        latest.novel_id,
-                        latest.chapter_token,
-                        latest.chapter_num,
-                        latest.url
-                    ]);
+                            req.user.id,
+                            latest.novel_id,
+                            latest.chapter_token,
+                            latest.chapter_num,
+                            latest.url
+                        ]);
+                    }
                 }
-            }
 
-            return updateResult.rows[0];
-        });
+                return updateResult.rows[0];
+            });
 
-        res.json({
-            success: true,
-            status: result.status,
-            updated_at: result.updated_at
-        });
-    } catch (error) {
-        handleDbError(res, error, 'Update novel status');
-    }
-});
+            res.json({
+                success: true,
+                status: result.status,
+                updated_at: result.updated_at
+            });
+        } catch (error) {
+            handleDbError(res, error, 'Update novel status');
+        }
+    });
 
 app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
@@ -1033,6 +1146,7 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
 // Get novels that need chapter updates
 app.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
     const { hours = 24 } = req.query;
+    const hoursValue = Math.max(1, Math.min(168, parseInt(hours, 10) || 24)); // Clamp between 1 and 168 hours
 
     try {
         const result = await pool.query(`
@@ -1051,13 +1165,13 @@ app.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
                 n.primary_url IS NOT NULL
                 AND (
                     n.chapters_updated_at IS NULL 
-                    OR n.chapters_updated_at < NOW() - INTERVAL '${parseInt(hours)} hours'
+                    OR n.chapters_updated_at < NOW() - make_interval(hours => $1)
                 )
             GROUP BY n.id, n.title, n.primary_url, n.latest_chapter_num, 
                      n.latest_chapter_title, n.chapters_updated_at
             HAVING COUNT(DISTINCT p.user_id) > 0
             ORDER BY active_readers DESC, n.chapters_updated_at ASC NULLS FIRST
-        `);
+        `, [hoursValue]);
 
         res.json(result.rows);
     } catch (error) {
@@ -1225,56 +1339,53 @@ app.get('/api/v1/bookmarks', validateApiKey, validatePagination, async (req, res
     }
 });
 
-app.post('/api/v1/bookmarks', validateApiKey, async (req, res) => {
-    const { novel_id, chapter_url, percent, bookmark_type = 'position', title, note } = req.body;
+app.post('/api/v1/bookmarks',
+    [
+        body('novel_id').isString().isLength({ min: 1, max: 200 }).withMessage('novel_id must be a string between 1-200 characters'),
+        body('chapter_url').isURL().withMessage('chapter_url must be a valid URL'),
+        body('percent').isFloat({ min: 0, max: 100 }).withMessage('percent must be a number between 0 and 100'),
+        body('bookmark_type').optional().isIn(['position', 'highlight', 'note', 'favorite']).withMessage('Invalid bookmark_type'),
+        body('title').optional().isString().isLength({ max: 500 }).withMessage('title must be a string up to 500 characters'),
+        body('note').optional().isString().isLength({ max: 5000 }).withMessage('note must be a string up to 5000 characters'),
+        handleValidationErrors
+    ],
+    validateApiKey,
+    async (req, res) => {
+        const { novel_id, chapter_url, percent, bookmark_type = 'position', title, note } = req.body;
 
-    if (!novel_id || !chapter_url || percent == null) {
-        return res.status(400).json({
-            error: 'Missing required fields: novel_id, chapter_url, percent'
-        });
-    }
+        const percentValue = Math.max(0, Math.min(100, Number(percent)));
 
-    const validTypes = ['position', 'highlight', 'note', 'favorite'];
-    if (!validTypes.includes(bookmark_type)) {
-        return res.status(400).json({
-            error: 'Invalid bookmark_type',
-            allowed: validTypes
-        });
-    }
-
-    const percentValue = Math.max(0, Math.min(100, Number(percent)));
-
-    try {
-        const result = await withTransaction(async (client) => {
-            // Ensure novel exists
-            await client.query(`
+        try {
+            const result = await withTransaction(async (client) => {
+                // Ensure novel exists
+                await client.query(`
         INSERT INTO novels (id, title, primary_url)
         VALUES ($1, $2, $3)
         ON CONFLICT (id) DO NOTHING
       `, [novel_id, extractNovelTitle(chapter_url), chapter_url]);
 
-            // Create bookmark
-            const insertResult = await client.query(`
+                // Create bookmark
+                const insertResult = await client.query(`
         INSERT INTO bookmarks (user_id, novel_id, chapter_url, percent, bookmark_type, title, note)
         VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, created_at
       `, [req.user.id, novel_id, chapter_url, percentValue, bookmark_type, title || null, note || null]);
 
-            return insertResult.rows[0];
-        });
+                return insertResult.rows[0];
+            });
 
-        res.status(201).json({
-            success: true,
-            id: result.id,
-            created_at: result.created_at
-        });
-    } catch (error) {
-        if (error.code === '23505') {
-            return res.status(409).json({ error: 'Bookmark already exists at this position' });
+            res.status(201).json({
+                success: true,
+                id: result.id,
+                created_at: result.created_at
+            });
+        } catch (error) {
+            if (error.code === '23505') {
+                return res.status(409).json({ error: 'Bookmark already exists at this position' });
+            }
+            handleDbError(res, error, 'Create bookmark');
         }
-        handleDbError(res, error, 'Create bookmark');
-    }
-});
+    });
 
 app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
     const { bookmarkId } = req.params;
@@ -1877,17 +1988,47 @@ app.use('/api/*', (req, res) => {
     });
 });
 
+/* ---------------------- Environment Validation ---------------------- */
+function validateEnvironment() {
+    const required = ['DATABASE_URL'];
+    const missing = required.filter(key => !process.env[key]);
+
+    if (missing.length > 0) {
+        console.error('❌ Missing required environment variables:');
+        missing.forEach(key => console.error(`   - ${key}`));
+        console.error('\nPlease set these environment variables before starting the server.');
+        process.exit(1);
+    }
+
+    // Validate optional variables with defaults
+    const optional = {
+        PORT: process.env.PORT || '3000',
+        NODE_ENV: process.env.NODE_ENV || 'development',
+        ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 'default'
+    };
+
+    console.log('✅ Environment variables validated');
+    console.log(`   PORT: ${optional.PORT}`);
+    console.log(`   NODE_ENV: ${optional.NODE_ENV}`);
+    console.log(`   ALLOWED_ORIGINS: ${optional.ALLOWED_ORIGINS}`);
+}
+
 /* ---------------------- Server Startup ---------------------- */
 async function startServer() {
     try {
+        // Validate environment variables first
+        validateEnvironment();
+
         await initDatabase();
 
         // 🔹 INTEGRATION: Start the chapter update bot
-        console.log('🤖 Starting chapter update bot...');
-        bot.startBot().catch(err => {
-            console.error('⚠️ Bot failed to start:', err);
-            console.log('📝 Server will continue without bot');
-        });
+        if (bot) {
+            console.log('🤖 Starting chapter update bot...');
+            bot.startBot().catch(err => {
+                console.error('⚠️ Bot failed to start:', err);
+                console.log('📝 Server will continue without bot');
+            });
+        }
 
         const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 ReadSync API server running on port ${PORT}`);
@@ -1926,4 +2067,13 @@ async function startServer() {
     }
 }
 
-startServer();
+// Export database utilities for use by bot (must be before startServer)
+module.exports = {
+    forceNoVerify,
+    createPool
+};
+
+// Only start server if this file is run directly
+if (require.main === module) {
+    startServer();
+}
