@@ -2,9 +2,17 @@ const { createPool } = require('./server');
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-const BATCH_SIZE = 5; // Check 10 novels at a time
-const REQUEST_DELAY_MS = 5000; // 2s delay between requests (be nice to servers)
+const BATCH_SIZE = 5; // Check 5 novels at a time
+const REQUEST_DELAY_MS = 5000; // 5s delay between requests (be nice to servers)
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
+
+// Error management constants
+const MAX_ERRORS = 100; // Maximum errors to keep in array
+const RETAIN_ERRORS = 50; // Number of errors to retain when limit exceeded
+
+// Timeout constants
+const FETCH_TIMEOUT_MS = 10000; // 10 seconds timeout for HTTP requests
+const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60; // Max wait time for graceful shutdown
 
 /* ==================== Database Setup ==================== */
 const pool = createPool({
@@ -61,7 +69,7 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Use AbortController for timeout (Node.js fetch doesn't support timeout option)
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
 
         const response = await fetch(baseUrl, {
             signal: controller.signal,
@@ -306,9 +314,9 @@ function addError(error) {
         ...error,
         timestamp: new Date().toISOString()
     });
-    // Keep only last 50 errors if array exceeds 100
-    if (global.botStatus.errors.length > 100) {
-        global.botStatus.errors = global.botStatus.errors.slice(-50);
+    // Keep only last RETAIN_ERRORS errors if array exceeds MAX_ERRORS
+    if (global.botStatus.errors.length > MAX_ERRORS) {
+        global.botStatus.errors = global.botStatus.errors.slice(-RETAIN_ERRORS);
     }
 }
 
@@ -605,7 +613,7 @@ async function gracefulShutdown(signal) {
     if (isRunning) {
         log('info', 'Waiting for current cycle to complete...');
         let waitCount = 0;
-        while (isRunning && waitCount < 60) { // Max 60 seconds wait
+        while (isRunning && waitCount < GRACEFUL_SHUTDOWN_WAIT_SECONDS) {
             await new Promise(resolve => setTimeout(resolve, 1000));
             waitCount++;
         }

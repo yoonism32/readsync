@@ -17,8 +17,21 @@ const path = require('path');
 const { URL } = require('url');
 const rateLimit = require('express-rate-limit');
 const { body, param, query, validationResult } = require('express-validator');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: process.env.ALLOWED_ORIGINS
+            ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
+            : ['https://readsync-n7zp.onrender.com', 'http://localhost:3000'],
+        methods: ['GET', 'POST'],
+        credentials: true
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 
 // Export database utilities before requiring bot (to avoid circular dependency)
@@ -417,6 +430,22 @@ async function initDatabase() {
 }
 
 /* ---------------------- Utility Functions ---------------------- */
+
+/**
+ * Detect device type from User-Agent string
+ * @param {string} userAgent - User-Agent header value
+ * @returns {string} Device type: 'mobile' or 'desktop'
+ */
+function detectDeviceType(userAgent) {
+    if (!userAgent) return 'desktop';
+
+    const ua = userAgent.toLowerCase();
+    if (/ipad|iphone|ipod|android/.test(ua)) {
+        return 'mobile';
+    }
+    return 'desktop';
+}
+
 function normalizeNovelId(url) {
     const match = url.match(/\/b\/([^/]+)/);
     return match ? `novelbin:${match[1].toLowerCase()}` : null;
@@ -595,8 +624,7 @@ app.post('/api/v1/progress',
         try {
             const result = await withTransaction(async (client) => {
                 // Upsert device with type detection - FIXED to prevent duplicates
-                const deviceType = /iPad|iPhone|iPod/.test(req.get('User-Agent')) ? 'mobile' :
-                    /Android/.test(req.get('User-Agent')) ? 'mobile' : 'desktop';
+                const deviceType = detectDeviceType(req.get('User-Agent'));
 
                 await client.query(`
         INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
@@ -610,27 +638,24 @@ app.post('/api/v1/progress',
       `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
                 // 🔹 Upsert novel with latest chapter info
+                // Simplified: Use GREATEST to only update if new chapter is higher
                 await client.query(`
         INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
         VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
             primary_url = EXCLUDED.primary_url,
-            latest_chapter_num = CASE 
-                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
-                THEN EXCLUDED.latest_chapter_num::integer 
-                ELSE novels.latest_chapter_num 
-            END,
+            latest_chapter_num = GREATEST(
+                COALESCE(novels.latest_chapter_num, 0),
+                COALESCE(EXCLUDED.latest_chapter_num::integer, 0)
+            ),
             latest_chapter_title = CASE 
-                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                WHEN EXCLUDED.latest_chapter_num::integer > COALESCE(novels.latest_chapter_num, 0)
                 THEN EXCLUDED.latest_chapter_title 
                 ELSE novels.latest_chapter_title 
             END,
             chapters_updated_at = CASE 
-                WHEN EXCLUDED.latest_chapter_num IS NOT NULL 
-                AND (novels.latest_chapter_num IS NULL OR EXCLUDED.latest_chapter_num > novels.latest_chapter_num)
+                WHEN EXCLUDED.latest_chapter_num::integer > COALESCE(novels.latest_chapter_num, 0)
                 THEN CURRENT_TIMESTAMP 
                 ELSE novels.chapters_updated_at 
             END
@@ -679,12 +704,26 @@ app.post('/api/v1/progress',
                 return await getLatestStates(client, user_id, novel_id);
             });
 
-            res.json({
+            const response = {
                 status: 'success',
                 updated: true,
                 novel_id,
                 ...result
-            });
+            };
+
+            // Emit WebSocket event to user's room for real-time sync
+            try {
+                io.to(`user:${user_id}`).emit('progress:updated', {
+                    novel_id,
+                    ...result,
+                    timestamp: new Date().toISOString()
+                });
+            } catch (wsError) {
+                // Don't fail the request if WebSocket fails
+                console.error('WebSocket emit error:', wsError);
+            }
+
+            res.json(response);
 
         } catch (error) {
             handleDbError(res, error, 'Progress update');
@@ -2030,7 +2069,48 @@ async function startServer() {
             });
         }
 
-        const server = app.listen(PORT, '0.0.0.0', () => {
+        // WebSocket authentication and room management
+        io.use(async (socket, next) => {
+            const apiKey = socket.handshake.auth?.apiKey || socket.handshake.query?.apiKey;
+            if (!apiKey) {
+                return next(new Error('API key required'));
+            }
+
+            try {
+                const result = await pool.query('SELECT id FROM users WHERE api_key = $1', [apiKey]);
+                if (result.rows.length === 0) {
+                    return next(new Error('Invalid API key'));
+                }
+
+                socket.userId = result.rows[0].id;
+                next();
+            } catch (error) {
+                next(new Error('Authentication failed'));
+            }
+        });
+
+        io.on('connection', (socket) => {
+            const userId = socket.userId;
+            const room = `user:${userId}`;
+
+            socket.join(room);
+            console.log(`🔌 WebSocket: User ${userId} connected (room: ${room})`);
+
+            socket.on('disconnect', () => {
+                console.log(`🔌 WebSocket: User ${userId} disconnected`);
+            });
+
+            // Allow clients to subscribe to specific novels
+            socket.on('subscribe:novel', (novelId) => {
+                socket.join(`novel:${novelId}`);
+            });
+
+            socket.on('unsubscribe:novel', (novelId) => {
+                socket.leave(`novel:${novelId}`);
+            });
+        });
+
+        httpServer.listen(PORT, '0.0.0.0', () => {
             console.log(`🚀 ReadSync API server running on port ${PORT}`);
             console.log(`📊 Dashboard: http://localhost:${PORT}`);
             console.log(`📚 MyList: http://localhost:${PORT}/mylist`);
@@ -2038,12 +2118,14 @@ async function startServer() {
             console.log(`🤖 Admin Panel: http://localhost:${PORT}/admin`);
             console.log(`🩺 Health check: http://localhost:${PORT}/health`);
             console.log(`📚 API docs: http://localhost:${PORT}/api/v1/`);
+            console.log(`🔌 WebSocket server ready`);
         });
 
         // Graceful shutdown
         process.on('SIGTERM', () => {
             console.log('SIGTERM received, shutting down gracefully...');
-            server.close(() => {
+            httpServer.close(() => {
+                io.close();
                 pool.end().then(() => {
                     console.log('Database pool closed');
                     process.exit(0);
@@ -2053,7 +2135,8 @@ async function startServer() {
 
         process.on('SIGINT', () => {
             console.log('SIGINT received, shutting down gracefully...');
-            server.close(() => {
+            httpServer.close(() => {
+                io.close();
                 pool.end().then(() => {
                     console.log('Database pool closed');
                     process.exit(0);

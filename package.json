@@ -17,7 +17,8 @@
     "pg": "^8.8.0",
     "cors": "^2.8.5",
     "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1"
+    "express-validator": "^7.0.1",
+    "socket.io": "^4.7.2"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

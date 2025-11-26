@@ -536,7 +536,8 @@
 
                 <div class="actions">
                     <a href="#" id="resume-btn" class="btn btn-primary" style="display:none;">📖 Resume Reading</a>
-                    <button class="btn btn-secondary" id="copy-btn" onclick="copyResumeLink()" style="display:none;">📋
+                    <button class="btn btn-secondary" id="copy-btn" onclick="copyNovelResumeLink()"
+                        style="display:none;">📋
                         Copy Resume Link</button>
                     <a href="#" id="novel-link" class="btn btn-secondary" target="_blank">🔗 Open on NovelBin</a>
                     <a href="/" class="btn btn-secondary">← Back to Dashboard</a>
@@ -545,10 +546,19 @@
         </div>
     </div>
 
+    <script src="/js/shared.js"></script>
     <script>
-        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
+        // Get API key from URL param or localStorage
+        const urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+            setApiKey(urlKey);
+        }
+        // Fallback to demo key if nothing set
+        if (!hasApiKey()) {
+            setApiKey('demo-api-key-12345');
+        }
+
         const NOVEL_ID = decodeURIComponent(location.pathname.split('/').pop());
-        const API_BASE = '/api/v1';
 
         let currentNovel = null;
 
@@ -558,10 +568,7 @@
                 document.getElementById('novel-content').style.display = 'none';
 
                 // Fetch novels list
-                const res = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(API_KEY)}&_t=${Date.now()}`);
-                if (!res.ok) throw new Error('Failed to load novels');
-
-                const novels = await res.json();
+                const novels = await getJSON('novels');
                 currentNovel = novels.find(n => n.novel_id === NOVEL_ID);
 
                 if (!currentNovel) {
@@ -696,16 +703,10 @@
 
         async function setStatus(status) {
             try {
-                const res = await fetch(`${API_BASE}/novels/${encodeURIComponent(NOVEL_ID)}/status`, {
+                await getJSON(`novels/${encodeURIComponent(NOVEL_ID)}/status`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_key: API_KEY, status })
+                    body: { status }
                 });
-
-                if (!res.ok) {
-                    const error = await res.json();
-                    throw new Error(error.error || 'Failed to update status');
-                }
 
                 document.querySelectorAll('.status-btn').forEach(btn => {
                     btn.classList.toggle('active', btn.dataset.status === status);
@@ -730,13 +731,9 @@
                 const isFavorite = document.getElementById('favorite-btn').classList.contains('active');
                 const method = isFavorite ? 'DELETE' : 'POST';
 
-                const res = await fetch(`${API_BASE}/novels/${encodeURIComponent(NOVEL_ID)}/favorite`, {
-                    method: method,
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_key: API_KEY })
+                await getJSON(`novels/${encodeURIComponent(NOVEL_ID)}/favorite`, {
+                    method: method
                 });
-
-                if (!res.ok) throw new Error('Failed to update favorite');
 
                 document.getElementById('favorite-btn').classList.toggle('active');
                 toast(isFavorite ? 'Removed from favorites' : 'Added to favorites!');
@@ -748,13 +745,10 @@
         async function saveNotes() {
             try {
                 const notes = document.getElementById('notes').value;
-                const res = await fetch(`${API_BASE}/novels/${encodeURIComponent(NOVEL_ID)}/notes`, {
+                await getJSON(`novels/${encodeURIComponent(NOVEL_ID)}/notes`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_key: API_KEY, notes })
+                    body: { notes }
                 });
-
-                if (!res.ok) throw new Error('Failed to save notes');
 
                 toast('Notes saved successfully!');
             } catch (error) {
@@ -762,62 +756,20 @@
             }
         }
 
-        function copyResumeLink() {
+        function copyNovelResumeLink() {
             if (!currentNovel || !currentNovel.latest_global) {
                 showError('No progress to copy');
                 return;
             }
 
             const global = currentNovel.latest_global;
-            const url = `${global.url.replace(/#.*$/, '')}#nbp=${global.percent.toFixed(1)}`;
-
-            navigator.clipboard.writeText(url).then(() => {
-                toast(`Copied resume link (${global.percent.toFixed(1)}%)`);
-            }).catch(() => {
-                prompt('Copy this link:', url);
-            });
+            copyResumeLink(global.url, global.percent);
         }
 
-        function formatTimestamp(ts) {
-            if (!ts) return '';
-            const d = new Date(ts);
-            if (isNaN(d)) return '';
-            const now = Date.now();
-            const diff = Math.max(0, now - d.getTime());
-            const s = diff / 1000;
-
-            if (s < 60) return 'now';
-            const m = s / 60;
-            if (m < 60) return `${Math.floor(m)}m`;
-            const h = m / 60;
-            if (h < 24) return `${Math.floor(h)}h`;
-            const d_val = h / 24;
-            if (d_val < 30) return `${Math.floor(d_val)}d`;
-            const mo = d_val / 30;
-            if (mo < 12) return `${Math.floor(mo)}mo`;
-            const y = mo / 12;
-            return `${Math.floor(y)}y`;
-        }
-
-        function showError(message) {
-            const el = document.getElementById('error');
-            el.textContent = message;
-            el.style.display = 'block';
-            setTimeout(() => { el.style.display = 'none'; }, 5000);
-        }
-
-        function toast(message) {
-            const el = document.createElement('div');
-            el.textContent = message;
-            el.style.cssText = `
-                position: fixed; bottom: 24px; right: 24px;
-                background: rgba(16, 185, 129, 0.95); color: white;
-                padding: 12px 20px; border-radius: 8px; font-weight: 500;
-                z-index: 10000; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            `;
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 2000);
-        }
+        // Functions now imported from shared.js:
+        // - formatTimestamp()
+        // - showError()
+        // - toast()
 
         // Load on page load
         loadNovelDetails();

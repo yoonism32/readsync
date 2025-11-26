@@ -441,17 +441,21 @@
         </svg>
     </button>
 
+    <script src="/js/shared.js"></script>
     <script>
-        // Allow override via ?key=... but default to your demo key.
-        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
-        const API_BASE = '/api/v1';
+        // Get API key from URL param or localStorage
+        const urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+            setApiKey(urlKey);
+        }
+        // Fallback to demo key if nothing set
+        if (!hasApiKey()) {
+            setApiKey('demo-api-key-12345');
+        }
 
         async function loadDashboard() {
             try {
-                const url = `${API_BASE}/novels?user_key=${encodeURIComponent(API_KEY)}&_t=${Date.now()}`;
-                const res = await fetch(url, { cache: 'no-store' });
-                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-                const novels = await res.json();
+                const novels = await getJSON('novels');
 
                 document.getElementById('loading').style.display = 'none';
 
@@ -471,6 +475,7 @@
                 console.error('Failed to load dashboard:', err);
                 document.getElementById('loading').innerHTML =
                     '<h2>Failed to load data</h2><p>Please check the API server is running</p>';
+                showError(err.message || 'Failed to load dashboard');
             }
         }
 
@@ -565,56 +570,10 @@
             return card;
         }
 
-        function formatTimestamp(ts) {
-            if (!ts) return '';
-            const d = new Date(ts);
-            if (isNaN(d)) return '';
-            const now = Date.now();
-            const diff = Math.max(0, now - d.getTime());
-            const s = diff / 1000;
-
-            if (s < 60) return 'now';
-            const m = s / 60;
-            if (m < 60) return `${Math.floor(m)}m`;
-            const h = m / 60;
-            if (h < 24) return `${Math.floor(h)}h`;
-            const d_val = h / 24;
-            if (d_val < 30) return `${Math.floor(d_val)}d`;
-            const mo = d_val / 30;
-            if (mo < 12) return `${Math.floor(mo)}mo`;
-            const y = mo / 12;
-            return `${Math.floor(y)}y`;
-        }
-
-        async function copyResumeLink(url, percent) {
-            const clean = (url || '').replace(/#.*$/, '');
-            const resume = `${clean}#nbp=${Number(percent || 0).toFixed(1)}`;
-            try {
-                await navigator.clipboard.writeText(resume);
-                toast(`Copied resume link (${Number(percent || 0).toFixed(1)}%)`);
-            } catch {
-                const t = document.createElement('textarea');
-                t.value = resume;
-                document.body.appendChild(t);
-                t.select();
-                document.execCommand('copy');
-                document.body.removeChild(t);
-                toast(`Copied resume link (${Number(percent || 0).toFixed(1)}%)`);
-            }
-        }
-
-        function toast(message) {
-            const el = document.createElement('div');
-            el.textContent = message;
-            el.style.cssText = `
-        position: fixed; bottom: 100px; right: 24px;
-        background: rgba(16,185,129,.95); color: white;
-        padding: 12px 16px; border-radius: 8px; font-weight: 500;
-        z-index: 10000; box-shadow: 0 4px 12px rgba(0,0,0,.15);
-      `;
-            document.body.appendChild(el);
-            setTimeout(() => el.remove(), 1800);
-        }
+        // Functions now imported from shared.js:
+        // - formatTimestamp()
+        // - copyResumeLink()
+        // - toast()
 
         // Auto-refresh every 30s, but don't flicker the loading spinner
         let firstLoad = true;

@@ -634,34 +634,28 @@
         </div>
     </div>
 
+    <script src="/js/shared.js"></script>
     <script>
-        const API_BASE = '/api/v1';
-        let currentApiKey = '';
         let updateAllInProgress = false;
         let refreshAllInProgress = false;
 
-        // Utility: Escape HTML
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        // Functions now imported from shared.js:
+        // - getApiKey(), setApiKey(), hasApiKey()
+        // - getJSON()
+        // - toast()
+        // - escapeHtml()
 
         // Auth
         document.getElementById('authForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            currentApiKey = document.getElementById('apiKey').value;
+            const apiKey = document.getElementById('apiKey').value;
+            setApiKey(apiKey);
 
             try {
-                const res = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(currentApiKey)}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    document.getElementById('authStatus').textContent = `✅ Signed in as ${data.display_name}`;
-                    document.getElementById('content').style.display = 'block';
-                    loadData();
-                } else {
-                    throw new Error('Invalid API key');
-                }
+                const data = await getJSON('auth/whoami');
+                document.getElementById('authStatus').textContent = `✅ Signed in as ${data.display_name}`;
+                document.getElementById('content').style.display = 'block';
+                loadData();
             } catch (err) {
                 toast('❌ Authentication failed', 'error');
             }
@@ -670,8 +664,7 @@
         // Load bot status
         async function loadBotStatus() {
             try {
-                const res = await fetch(`${API_BASE}/admin/bot/status?user_key=${encodeURIComponent(currentApiKey)}`);
-                const data = await res.json();
+                const data = await getJSON('admin/bot/status');
 
                 document.getElementById('botStatus').textContent = data.running ? 'Running' : 'Idle';
                 document.getElementById('botIndicator').className = `status-indicator ${data.running ? 'running' : 'stopped'}`;
@@ -694,8 +687,7 @@
             document.getElementById('empty').style.display = 'none';
 
             try {
-                const res = await fetch(`${API_BASE}/admin/novels/stale?user_key=${encodeURIComponent(currentApiKey)}`);
-                const novels = await res.json();
+                const novels = await getJSON('admin/novels/stale');
 
                 document.getElementById('loading').style.display = 'none';
 
@@ -755,8 +747,7 @@
                 progressText.textContent = 'Fetching novels...';
 
                 // Get all novels from MyList
-                const novelsRes = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(currentApiKey)}`);
-                const novels = await novelsRes.json();
+                const novels = await getJSON('novels');
 
                 if (!novels || novels.length === 0) {
                     throw new Error('No novels found');
@@ -772,12 +763,9 @@
                     progressText.textContent = `Updating ${novel.title || novel.novel_id}... (${completed + 1}/${novels.length})`;
 
                     try {
-                        const updateRes = await fetch(
-                            `${API_BASE}/admin/novels/${encodeURIComponent(novel.novel_id)}/update?user_key=${encodeURIComponent(currentApiKey)}`,
-                            { method: 'POST' }
-                        );
-
-                        const result = await updateRes.json();
+                        const result = await getJSON(`admin/novels/${encodeURIComponent(novel.novel_id)}/update`, {
+                            method: 'POST'
+                        });
                         if (result.success && result.isNew) {
                             updated++;
                         }
@@ -821,8 +809,7 @@
 
             try {
                 // Get all novels from MyList
-                const novelsRes = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(currentApiKey)}`);
-                const novels = await novelsRes.json();
+                const novels = await getJSON('novels');
 
                 if (!novels || novels.length === 0) {
                     throw new Error('No novels found');
@@ -833,12 +820,9 @@
                 // Update each novel silently
                 for (const novel of novels) {
                     try {
-                        const updateRes = await fetch(
-                            `${API_BASE}/admin/novels/${encodeURIComponent(novel.novel_id)}/update?user_key=${encodeURIComponent(currentApiKey)}`,
-                            { method: 'POST' }
-                        );
-
-                        const result = await updateRes.json();
+                        const result = await getJSON(`admin/novels/${encodeURIComponent(novel.novel_id)}/update`, {
+                            method: 'POST'
+                        });
                         if (result.success && result.isNew) {
                             updated++;
                         }
@@ -873,11 +857,9 @@
             btn.innerHTML = '⏳ Updating...';
 
             try {
-                const res = await fetch(`${API_BASE}/admin/novels/${encodeURIComponent(novelId)}/update?user_key=${encodeURIComponent(currentApiKey)}`, {
+                const data = await getJSON(`admin/novels/${encodeURIComponent(novelId)}/update`, {
                     method: 'POST'
                 });
-
-                const data = await res.json();
 
                 if (data.success) {
                     toast(`✅ Updated to Ch.${data.current}${data.isNew ? ' (New!)' : ' (No change)'}`, 'success');
@@ -904,10 +886,9 @@
         // Trigger manual bot run
         document.getElementById('triggerBtn').addEventListener('click', async () => {
             try {
-                const res = await fetch(`${API_BASE}/admin/bot/trigger?user_key=${encodeURIComponent(currentApiKey)}`, {
+                const data = await getJSON('admin/bot/trigger', {
                     method: 'POST'
                 });
-                const data = await res.json();
 
                 if (data.success) {
                     toast('✅ Bot update triggered!', 'success');
@@ -931,7 +912,7 @@
 
         // Auto refresh every 30s
         setInterval(() => {
-            if (currentApiKey) loadBotStatus();
+            if (hasApiKey()) loadBotStatus();
         }, 30000);
 
         // Utilities
@@ -957,16 +938,7 @@
             return d.toLocaleString();
         }
 
-        function toast(message, type = 'success') {
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `
-                <div class="spinner" style="display: ${type === 'success' ? 'none' : 'none'}"></div>
-                <span>${message}</span>
-            `;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 4000);
-        }
+        // toast() function now imported from shared.js
 
         // Expose for inline handlers
         window.updateNovel = updateNovel;

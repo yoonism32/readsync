@@ -253,64 +253,22 @@
         </section>
     </div>
 
+    <script src="/js/shared.js"></script>
     <script>
-        const API_BASE = '/api/v1';
-        const $ = id => document.getElementById(id);
-
-        // ----- auth helpers
-        const getKey = () => localStorage.getItem('readsync_api_key') || '';
-        const setKey = k => localStorage.setItem('readsync_api_key', k);
-
-        function showError(msg) {
-            const el = $('error');
-            el.textContent = msg;
-            el.style.display = 'block';
-            setTimeout(() => { el.style.display = 'none'; }, 3000);
-        }
-
-        // generic fetch with key + cache-bust
-        async function getJSON(path, { method = 'GET', body = null, qs = {} } = {}) {
-            const key = getKey();
-            if (!key) throw new Error('API key required');
-            const url = new URL(path, location.origin);
-            url.searchParams.set('user_key', key);
-            url.searchParams.set('_t', Date.now().toString());
-            for (const [k, v] of Object.entries(qs)) {
-                if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v);
-            }
-            const res = await fetch(url.toString(), {
-                method,
-                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
-                cache: 'no-store',
-                body: body ? JSON.stringify(body) : null
-            });
-            if (!res.ok) {
-                let detail = '';
-                try { const j = await res.json(); detail = j.error || j.detail || JSON.stringify(j); } catch { }
-                throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
-            }
-            return res.json();
-        }
-
-        function fmtAgo(ts) {
-            if (!ts) return '';
-            const d = new Date(ts); const s = (Date.now() - d.getTime()) / 1000;
-            if (s < 60) return 'just now';
-            if (s < 3600) return `${Math.floor(s / 60)}m ago`;
-            if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-            if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
-            return d.toLocaleString();
-        }
+        // Functions now imported from shared.js:
+        // - getApiKey(), setApiKey(), hasApiKey()
+        // - getJSON()
+        // - showError()
+        // - formatTimestamp() (replaces fmtAgo)
+        // - $() shorthand
 
         // ----- auth flow
         async function connect() {
             const key = ($('apiKey').value || '').trim();
             if (!key) return showError('Please enter your API key.');
             try {
-                const ok = await fetch(`${API_BASE}/auth/whoami?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, { cache: 'no-store' });
-                if (!ok.ok) throw new Error('Invalid key');
-                const who = await ok.json();
-                setKey(key);
+                const who = await getJSON('auth/whoami', { qs: { user_key: key } });
+                setApiKey(key);
                 $('who').textContent = `Signed in as: ${who.display_name || who.id}`;
                 $('panel').style.display = 'block';
                 reload(true);
@@ -349,7 +307,7 @@
             ${latest ? `
               Last: <strong>${latest.chapter_token || 'Chapter'} ${Number(latest.chapter_num) || 0}</strong>
               • ${Number(latest.percent || 0).toFixed(1)}%
-              • ${latest.device_label || ''} • ${fmtAgo(latest.ts)}
+              • ${latest.device_label || ''} • ${formatTimestamp(latest.ts)}
             ` : 'No recent progress'}
           </div>
 
@@ -379,19 +337,10 @@
             if (!valid.has(next)) return showError('Invalid status');
 
             try {
-                // Use standard fetch with user_key in URL for consistency
-                const key = getKey();
-                const response = await fetch(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status?user_key=${encodeURIComponent(key)}&_t=${Date.now()}`, {
+                await getJSON(`novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: next })
+                    body: { status: next }
                 });
-
-                if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.error || `${response.status} ${response.statusText}`);
-                }
-
                 await reload(false);
             } catch (e) {
                 showError('Failed to set status: ' + e.message);
@@ -407,7 +356,7 @@
             const answer = prompt(msg, '');
             if (answer !== expect) return;
             try {
-                await getJSON(`${API_BASE}/novels/${encodeURIComponent(novelId)}`, {
+                await getJSON(`novels/${encodeURIComponent(novelId)}`, {
                     method: 'DELETE',
                     body: { hard: !!hard }
                 });
@@ -422,7 +371,7 @@
             $('loading').style.display = showSpinner ? 'block' : 'none';
             try {
                 const status = $('statusFilter').value;
-                const data = await getJSON(`${API_BASE}/novels`, { qs: { status } });
+                const data = await getJSON('novels', { qs: { status } });
                 // API returns { novels: [...], pagination: {...} }
                 const novels = Array.isArray(data) ? data : (data.novels || []);
                 const q = ($('q').value || '').toLowerCase();
@@ -442,7 +391,7 @@
         $('q').addEventListener('input', () => reload(false));
 
         // auto-connect if key saved
-        const saved = getKey();
+        const saved = getApiKey();
         if (saved) { $('apiKey').value = saved; connect(); }
     </script>
 </body>

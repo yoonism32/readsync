@@ -375,22 +375,24 @@
         <div id="novels-container" class="novels-grid" style="display: none;"></div>
     </div>
 
+    <script src="/js/shared.js"></script>
     <script>
-        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
-        const API_BASE = '/api/v1';
+        // Get API key from URL param or localStorage
+        const urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+            setApiKey(urlKey);
+        }
+        // Fallback to demo key if nothing set
+        if (!hasApiKey()) {
+            setApiKey('demo-api-key-12345');
+        }
 
         let allNovels = [];
         let currentFilter = 'all';
 
         async function loadDashboard() {
             try {
-                const res = await fetch(`${API_BASE}/novels?user_key=${encodeURIComponent(API_KEY)}&_t=${Date.now()}`, {
-                    cache: 'no-store'
-                });
-
-                if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-
-                allNovels = await res.json();
+                allNovels = await getJSON('novels');
                 updateStats();
                 renderNovels();
 
@@ -542,21 +544,7 @@
             `;
         }
 
-        function formatTimestamp(ts) {
-            if (!ts) return 'Never';
-            const d = new Date(ts);
-            const now = new Date();
-            const diffMs = now - d;
-            const mins = Math.floor(diffMs / 60000);
-            const hours = Math.floor(diffMs / 3600000);
-            const days = Math.floor(diffMs / 86400000);
-
-            if (mins < 1) return 'Just now';
-            if (mins < 60) return `${mins}m ago`;
-            if (hours < 24) return `${hours}h ago`;
-            if (days < 7) return `${days}d ago`;
-            return d.toLocaleDateString();
-        }
+        // formatTimestamp() now imported from shared.js
 
         // Auto-refresh every 60s
         setInterval(loadDashboard, 60000);

@@ -684,53 +684,27 @@
         </div>
     </div>
 
+    <script src="/js/shared.js"></script>
     <script>
-        // API key behaviour: same as existing novels.html
-        const API_KEY = new URLSearchParams(location.search).get('key') || 'demo-api-key-12345';
-        const API_BASE = '/api/v1';
+        // Get API key from URL param or localStorage
+        const urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+            setApiKey(urlKey);
+        }
+        // Fallback to demo key if nothing set
+        if (!hasApiKey()) {
+            setApiKey('demo-api-key-12345');
+        }
 
         let allNovels = [];
         let sortField = 'updated_at'; // read_at | updated_at | started_at
         let sortOrder = 'desc';       // 'asc' | 'desc'
         let searchTerm = '';
 
-        const $ = (id) => document.getElementById(id);
-
-        function showError(msg) {
-            const el = $('error');
-            el.innerHTML = `<strong>Error:</strong> ${msg}`;
-            el.style.display = 'block';
-            setTimeout(() => {
-                el.style.display = 'none';
-            }, 4500);
-        }
-
-        function toMs(ts) {
-            if (!ts) return 0;
-            const d = new Date(ts);
-            const v = d.getTime();
-            return Number.isFinite(v) ? v : 0;
-        }
-
-        function formatAgo(ts) {
-            if (!ts) return '';
-            const ms = typeof ts === 'number' ? ts : toMs(ts);
-            if (!ms) return '';
-            const now = Date.now();
-            let diff = Math.max(0, now - ms);
-            const s = diff / 1000;
-            if (s < 60) return 'now';
-            const m = s / 60;
-            if (m < 60) return `${Math.floor(m)}m`;
-            const h = m / 60;
-            if (h < 24) return `${Math.floor(h)}h`;
-            const d = h / 24;
-            if (d < 30) return `${Math.floor(d)}d`;
-            const mo = d / 30;
-            if (mo < 12) return `${Math.floor(mo)}mo`;
-            const y = mo / 12;
-            return `${Math.floor(y)}y`;
-        }
+        // Functions now imported from shared.js:
+        // - $() shorthand
+        // - showError()
+        // - formatTimestamp() (replaces formatAgo)
 
         function buildCoverUrl(novelId) {
             if (!novelId) return null;
@@ -877,9 +851,9 @@
                 const updatedTs = novel.site_latest_chapter_time || novel.chapters_updated_at || null;
                 const addedTs = novel.started_at || null;
 
-                const readAgo = formatAgo(readTs);
-                const updatedAgo = formatAgo(updatedTs);
-                const addedAgo = formatAgo(addedTs);
+                const readAgo = formatTimestamp(readTs);
+                const updatedAgo = formatTimestamp(updatedTs);
+                const addedAgo = formatTimestamp(addedTs);
 
                 const readEmpty = !readTs;
                 const updatedEmpty = !updatedTs;
@@ -1000,15 +974,7 @@
             body.innerHTML = '';
 
             try {
-                const url = new URL(`${API_BASE}/novels`, location.origin);
-                url.searchParams.set('user_key', API_KEY);
-                url.searchParams.set('_t', Date.now().toString());
-
-                const res = await fetch(url.toString(), { cache: 'no-store' });
-                if (!res.ok) {
-                    throw new Error(`${res.status} ${res.statusText}`);
-                }
-                const data = await res.json();
+                const data = await getJSON('novels');
                 if (!Array.isArray(data)) {
                     throw new Error('Unexpected API response');
                 }
@@ -1039,24 +1005,10 @@
             if (!novelId || !newStatus) return;
 
             try {
-                const url = new URL(`${API_BASE}/novels/${encodeURIComponent(novelId)}/status`, location.origin);
-                url.searchParams.set('user_key', API_KEY);
-                url.searchParams.set('_t', Date.now().toString());
-
-                const res = await fetch(url.toString(), {
+                await getJSON(`novels/${encodeURIComponent(novelId)}/status`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: newStatus })
+                    body: { status: newStatus }
                 });
-
-                if (!res.ok) {
-                    let detail = '';
-                    try {
-                        const j = await res.json();
-                        detail = j.error || j.detail || '';
-                    } catch { }
-                    throw new Error(`${res.status} ${res.statusText}${detail ? ' — ' + detail : ''}`);
-                }
 
                 // update local copy
                 const idx = allNovels.findIndex(n => n.novel_id === novelId);
