@@ -32,6 +32,7 @@ build/
 tmp/
 temp/
 *.tmp
+*.csv
 
 # Database (if running locally)
 *.sqlite
