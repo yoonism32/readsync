@@ -71,15 +71,21 @@ async function fetchNovelMainPage(novelUrl) {
 
         console.log(`📖 Fetching novel page: ${baseUrl}`);
 
+        // Use AbortController for timeout (Node.js fetch doesn't support timeout option)
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
+
         const response = await fetch(baseUrl, {
+            signal: controller.signal,
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
                 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
                 'Accept-Language': 'en-US,en;q=0.5',
                 'Connection': 'keep-alive',
-            },
-            timeout: 10000
+            }
         });
+
+        clearTimeout(timeoutId);
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
@@ -88,7 +94,11 @@ async function fetchNovelMainPage(novelUrl) {
         const html = await response.text();
         return html;
     } catch (error) {
-        console.error(`❌ Failed to fetch ${novelUrl}:`, error.message);
+        if (error.name === 'AbortError') {
+            console.error(`❌ Timeout fetching ${novelUrl} (10s)`);
+        } else {
+            console.error(`❌ Failed to fetch ${novelUrl}:`, error.message);
+        }
         return null;
     }
 }
