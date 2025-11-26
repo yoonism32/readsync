@@ -62,22 +62,14 @@ const authLimiter = rateLimit({
     legacyHeaders: false,
 });
 
+/* ---------------------- Proxy Configuration ---------------------- */
+// Enable trust proxy for accurate client IP detection behind Render's proxy
+app.set('trust proxy', 1);
+
 /* ---------------------- CORS Configuration ---------------------- */
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-    ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-    : ['https://readsync-n7zp.onrender.com', 'http://localhost:3000'];
-
+// Simplified CORS for personal use - allows all origins
 app.use(cors({
-    origin: (origin, callback) => {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-
-        if (allowedOrigins.indexOf(origin) !== -1) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: true, // Allow all origins
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']

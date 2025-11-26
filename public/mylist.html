@@ -721,6 +721,13 @@
             return Math.max(0, Math.min(100, v));
         }
 
+        // Convert timestamp to milliseconds for sorting
+        function toMs(timestamp) {
+            if (!timestamp) return 0;
+            const date = new Date(timestamp);
+            return isNaN(date.getTime()) ? 0 : date.getTime();
+        }
+
         function computeSortKey(novel, field) {
             const global = novel.latest_global || null;
             if (field === 'read_at') {
