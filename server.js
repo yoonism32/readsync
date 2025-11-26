@@ -15,7 +15,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 const { URL } = require('url');
-const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit');
 const { body, param, query, validationResult } = require('express-validator');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -43,24 +43,24 @@ if (require.main === module) {
     bot = require('./chapter-update-bot-enhanced');
 }
 
-/* ---------------------- Rate Limiting ---------------------- */
-// General API rate limiter: 100 requests per 15 minutes per IP
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// /* ---------------------- Rate Limiting ---------------------- */
+// // General API rate limiter: 100 requests per 15 minutes per IP
+// const apiLimiter = rateLimit({
+//     windowMs: 15 * 60 * 1000, // 15 minutes
+//     max: 100, // limit each IP to 100 requests per windowMs
+//     message: 'Too many requests from this IP, please try again later.',
+//     standardHeaders: true,
+//     legacyHeaders: false,
+// });
 
-// Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    message: 'Too many authentication attempts, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-});
+// // Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
+// const authLimiter = rateLimit({
+//     windowMs: 15 * 60 * 1000,
+//     max: 20,
+//     message: 'Too many authentication attempts, please try again later.',
+//     standardHeaders: true,
+//     legacyHeaders: false,
+// });
 
 /* ---------------------- Proxy Configuration ---------------------- */
 // Enable trust proxy for accurate client IP detection behind Render's proxy
@@ -505,7 +505,7 @@ app.get('/healthz', async (req, res) => {
 });
 
 /* ---------------------- Authentication Routes ---------------------- */
-app.get('/api/v1/auth/whoami', authLimiter, validateApiKey, (req, res) => {
+app.get('/api/v1/auth/whoami', /* authLimiter, */ validateApiKey, (req, res) => {
     res.json({
         id: req.user.id,
         display_name: req.user.display_name,
@@ -515,7 +515,7 @@ app.get('/api/v1/auth/whoami', authLimiter, validateApiKey, (req, res) => {
 
 /* ---------------------- Core Progress API ---------------------- */
 // Apply rate limiting to all API routes
-app.use('/api/v1/', apiLimiter);
+// app.use('/api/v1/', apiLimiter);
 
 app.post('/api/v1/progress',
     [
