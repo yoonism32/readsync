@@ -1,4 +1,7 @@
 // server.js - Enhanced ReadSync API Server
+// databaseurl env var required
+require('dotenv').config();
+
 // 🛡️ CRITICAL: Prevent crashes from unhandled rejections
 process.on('unhandledRejection', (reason, promise) => {
     console.error('🔴 UNHANDLED REJECTION:', reason);
