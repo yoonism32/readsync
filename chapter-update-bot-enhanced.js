@@ -557,7 +557,6 @@ async function triggerManualUpdate(novelId) {
                 novelInfo.genres.join(', ') || null,
                 novelInfo.author,
                 novelInfo.site_latest_chapter_time_raw,
-                novelInfo.site_latest_chapter_time_raw,
                 novelInfo.site_latest_chapter_time
             );
 
@@ -584,8 +583,9 @@ async function triggerManualUpdate(novelId) {
         } catch (fetchError) {
             // Log detailed error info
             console.error(`❌ Fetch error for ${novel.id}:`, fetchError.message);
+            console.error(`   Error name:`, fetchError.name);
+            console.error(`   Full error:`, fetchError);
             console.error(`   Stack:`, fetchError.stack);
-
             // Handle rate limiting and fetch errors specifically
             if (fetchError.message.includes('429')) {
                 return { error: 'Rate limited - please wait a few minutes before trying again' };
@@ -596,7 +596,8 @@ async function triggerManualUpdate(novelId) {
             if (fetchError.message.includes('timeout') || fetchError.name === 'AbortError') {
                 return { error: 'Request timed out - site may be slow or blocking requests' };
             }
-            return { error: `Failed to fetch novel page: ${fetchError.message}` };
+            // Return the ACTUAL error message without modification
+            return { error: fetchError.message };
         }
 
     } catch (error) {
