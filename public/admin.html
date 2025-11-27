@@ -1031,24 +1031,22 @@
 
             status.style.display = 'block';
             status.textContent = '🔄 Running single-novel fetch...\n\nPlease wait 60+ seconds due to rate limiting.';
-            status.style.background = '#e3f2fd';
-            status.style.border = '2px solid #2196f3';
+            status.style.background = 'rgba(59, 130, 246, 0.1)';
+            status.style.border = '1px solid #3b82f6';
 
             btn.disabled = true;
             btn.textContent = '⏳ Running...';
 
             try {
-                const res = await fetch(`${API_BASE}admin/novels/single-run?user_key=${API_KEY}`, {
+                const data = await fetch('/api/v1/admin/novels/single-run?user_key=' + localStorage.getItem('userKey'), {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ novelId })
-                });
-
-                const data = await res.json();
+                }).then(r => r.json());
 
                 if (data.success) {
-                    status.style.background = '#d4edda';
-                    status.style.border = '2px solid #28a745';
+                    status.style.background = 'rgba(16, 185, 129, 0.1)';
+                    status.style.border = '1px solid var(--success)';
                     status.textContent = `✅ SUCCESS!\n\n` +
                         `Novel: ${novelId}\n` +
                         `Previous Chapter: ${data.previous || 'None'}\n` +
@@ -1063,8 +1061,8 @@
                         loadNovelsForDropdown();
                     }, 2000);
                 } else {
-                    status.style.background = '#f8d7da';
-                    status.style.border = '2px solid #dc3545';
+                    status.style.background = 'rgba(239, 68, 68, 0.1)';
+                    status.style.border = '1px solid var(--danger)';
                     status.textContent = `❌ FAILED\n\nError: ${data.error}\n\n` +
                         `Common causes:\n` +
                         `- 403: NovelBin Cloudflare block (wait 6 hours)\n` +
@@ -1074,8 +1072,8 @@
                     toast('❌ Single-novel fetch failed', 'error');
                 }
             } catch (err) {
-                status.style.background = '#f8d7da';
-                status.style.border = '2px solid #dc3545';
+                status.style.background = 'rgba(239, 68, 68, 0.1)';
+                status.style.border = '1px solid var(--danger)';
                 status.textContent = `❌ REQUEST FAILED\n\n${err.message}`;
                 toast('❌ Network error', 'error');
             } finally {
