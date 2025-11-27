@@ -3,7 +3,7 @@ const { createPool } = require('./db-utils');
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 const BATCH_SIZE = 5; // Check 5 novels at a time
-const REQUEST_DELAY_MS = 5000; // 5s delay between requests (be nice to servers)
+const REQUEST_DELAY_MS = 10000; // 10s delay between requests (increased to avoid 429)
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
 
 // Error management constants
@@ -84,6 +84,10 @@ async function fetchNovelMainPage(novelUrl) {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
+            // Special handling for rate limiting
+            if (response.status === 429) {
+                throw new Error(`Rate limited by server (429) - please wait before retrying`);
+            }
             throw new Error(`HTTP ${response.status}`);
         }
 
@@ -91,13 +95,15 @@ async function fetchNovelMainPage(novelUrl) {
         return html;
     } catch (error) {
         // Error details will be logged by caller with context
-        // But we still log here for debugging if needed
         if (error.name === 'AbortError') {
             // Timeout - caller will handle logging
+        } else if (error.message.includes('429')) {
+            // Rate limit - propagate this specific error
+            console.error('⚠️ Rate limited by novel website:', error.message);
         } else {
             // Other fetch errors - caller will handle logging
         }
-        return null;
+        throw error; // Propagate error instead of returning null
     }
 }
 
@@ -504,48 +510,82 @@ async function triggerManualUpdate(novelId) {
         }
 
         const novel = result.rows[0];
-        const html = await fetchNovelMainPage(novel.primary_url);
 
-        if (!html) {
-            return { error: 'Failed to fetch novel page' };
+        // Validate primary_url exists
+        if (!novel.primary_url) {
+            console.error(`❌ Novel ${novel.id} has no primary_url set`);
+            return { error: 'Novel has no URL - cannot fetch updates' };
         }
 
-        const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
+        console.log(`🔍 Manual update for: ${novel.id}`);
+        console.log(`   URL: ${novel.primary_url}`);
 
-        if (!novelInfo.chapter) {
-            return { error: 'Failed to parse chapter info' };
-        }
+        try {
+            const html = await fetchNovelMainPage(novel.primary_url);
 
-        const updated = await updateNovelChapterInfo(
-            novel.id,
-            novelInfo.chapter.num,
-            novelInfo.chapter.title,
-            novelInfo.genres.join(', ') || null,
-            novelInfo.author,
-            novelInfo.site_latest_chapter_time_raw,
-            novelInfo.site_latest_chapter_time
-        );
+            if (!html) {
+                console.error(`❌ No HTML returned for ${novel.primary_url}`);
+                return { error: 'Failed to fetch novel page - site may be blocking requests' };
+            }
 
+            console.log(`✓ Fetched HTML (${html.length} bytes)`);
 
-        // Create notifications if new chapter
-        if (novel.latest_chapter_num && novelInfo.chapter.num > novel.latest_chapter_num) {
-            await createNotificationsForNovelUpdate(
-                novelId,
-                novel.latest_chapter_num,
-                updated.latest_chapter_num,
-                updated.latest_chapter_title
+            const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
+
+            if (!novelInfo.chapter) {
+                console.error(`❌ Failed to parse chapter from HTML`);
+                return { error: 'Failed to parse chapter info - page structure may have changed' };
+            }
+
+            console.log(`✓ Parsed chapter: ${novelInfo.chapter.num} - ${novelInfo.chapter.title}`);
+
+            const updated = await updateNovelChapterInfo(
+                novel.id,
+                novelInfo.chapter.num,
+                novelInfo.chapter.title,
+                novelInfo.genres.join(', ') || null,
+                novelInfo.author,
+                novelInfo.site_latest_chapter_time_raw,
+                novelInfo.site_latest_chapter_time
             );
-        }
 
-        return {
-            success: true,
-            previous: novel.latest_chapter_num,
-            current: updated.latest_chapter_num,
-            title: updated.latest_chapter_title,
-            genres: novelInfo.genres,
-            author: updated.author,
-            isNew: !novel.latest_chapter_num || novelInfo.chapter.num > novel.latest_chapter_num
-        };
+
+            // Create notifications if new chapter
+            if (novel.latest_chapter_num && novelInfo.chapter.num > novel.latest_chapter_num) {
+                await createNotificationsForNovelUpdate(
+                    novelId,
+                    novel.latest_chapter_num,
+                    updated.latest_chapter_num,
+                    updated.latest_chapter_title
+                );
+            }
+
+            return {
+                success: true,
+                previous: novel.latest_chapter_num,
+                current: updated.latest_chapter_num,
+                title: updated.latest_chapter_title,
+                genres: novelInfo.genres,
+                author: updated.author,
+                isNew: !novel.latest_chapter_num || novelInfo.chapter.num > novel.latest_chapter_num
+            };
+        } catch (fetchError) {
+            // Log detailed error info
+            console.error(`❌ Fetch error for ${novel.id}:`, fetchError.message);
+            console.error(`   Stack:`, fetchError.stack);
+
+            // Handle rate limiting and fetch errors specifically
+            if (fetchError.message.includes('429')) {
+                return { error: 'Rate limited - please wait a few minutes before trying again' };
+            }
+            if (fetchError.message.includes('403')) {
+                return { error: 'Access forbidden - site is blocking the bot' };
+            }
+            if (fetchError.message.includes('timeout') || fetchError.name === 'AbortError') {
+                return { error: 'Request timed out - site may be slow or blocking requests' };
+            }
+            return { error: `Failed to fetch novel page: ${fetchError.message}` };
+        }
 
     } catch (error) {
         return { error: error.message };
