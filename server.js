@@ -15,7 +15,7 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 const { URL } = require('url');
-// const rateLimit = require('express-rate-limit');
+// const rateLimit = require('express-rate-limit'); // DISABLED
 const { body, param, query, validationResult } = require('express-validator');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -43,24 +43,27 @@ if (require.main === module) {
     bot = require('./chapter-update-bot-enhanced');
 }
 
-// /* ---------------------- Rate Limiting ---------------------- */
-// // General API rate limiter: 100 requests per 15 minutes per IP
-// const apiLimiter = rateLimit({
-//     windowMs: 15 * 60 * 1000, // 15 minutes
-//     max: 100, // limit each IP to 100 requests per windowMs
-//     message: 'Too many requests from this IP, please try again later.',
-//     standardHeaders: true,
-//     legacyHeaders: false,
-// });
+/* ---------------------- Rate Limiting ---------------------- */
+// DISABLED FOR PERSONAL USE
+/*
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
 
-// // Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
-// const authLimiter = rateLimit({
-//     windowMs: 15 * 60 * 1000,
-//     max: 20,
-//     message: 'Too many authentication attempts, please try again later.',
-//     standardHeaders: true,
-//     legacyHeaders: false,
-// });
+// Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    message: 'Too many authentication attempts, please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+});
+*/
+
 
 /* ---------------------- Proxy Configuration ---------------------- */
 // Enable trust proxy for accurate client IP detection behind Render's proxy
@@ -514,7 +517,7 @@ app.get('/api/v1/auth/whoami', /* authLimiter, */ validateApiKey, (req, res) => 
 });
 
 /* ---------------------- Core Progress API ---------------------- */
-// Apply rate limiting to all API routes
+// Rate limiting DISABLED for personal use
 // app.use('/api/v1/', apiLimiter);
 
 app.post('/api/v1/progress',
@@ -533,6 +536,9 @@ app.post('/api/v1/progress',
         const user_id = req.user.id;
         const novel_id = normalizeNovelId(novel_url);
         const novel_title = extractNovelTitle(novel_url);
+
+        // Extract base novel URL (remove chapter part) for storage
+        const baseNovelUrl = novel_url.replace(/\/c*chapter-?\d+.*$/, '');
 
         // 🔹 FIXED: Use current_chapter_num from userscript if available, fallback to URL parsing
         const chapterInfo = req.body.current_chapter_num ?
@@ -572,13 +578,13 @@ app.post('/api/v1/progress',
       `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
                 // 🔹 Upsert novel with latest chapter info
-                // Simplified: Use GREATEST to only update if new chapter is higher
+                // Store base URL (without chapter) and only set it if currently NULL
                 await client.query(`
         INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
         VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
         ON CONFLICT (id) DO UPDATE SET
             title = EXCLUDED.title,
-            primary_url = EXCLUDED.primary_url,
+            primary_url = COALESCE(novels.primary_url, EXCLUDED.primary_url),
             latest_chapter_num = GREATEST(
                 COALESCE(novels.latest_chapter_num, 0),
                 COALESCE(EXCLUDED.latest_chapter_num::integer, 0)
@@ -593,7 +599,7 @@ app.post('/api/v1/progress',
                 THEN CURRENT_TIMESTAMP 
                 ELSE novels.chapters_updated_at 
             END
-        `, [novel_id, novel_title, novel_url, latestChapterNum, latestChapterTitle]);
+        `, [novel_id, novel_title, baseNovelUrl, latestChapterNum, latestChapterTitle]);
                 // Ensure user novel metadata exists
                 await client.query(`
         INSERT INTO user_novel_meta (user_id, novel_id, started_at)
