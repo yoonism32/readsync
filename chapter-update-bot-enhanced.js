@@ -14,6 +14,31 @@ const RETAIN_ERRORS = 50; // Number of errors to retain when limit exceeded
 const FETCH_TIMEOUT_MS = 10000; // 10 seconds timeout for HTTP requests
 const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60; // Max wait time for graceful shutdown
 
+/* ==================== GLOBAL SCRAPE THROTTLE ==================== */
+let lastNovelbinRequestAt = 0;
+let novelbinBlockedUntil = 0;
+
+const MIN_GLOBAL_GAP_MS = 60_000;      // 60 seconds between ANY NovelBin requests
+const COOLDOWN_403_MS = 6 * 60 * 60 * 1000; // 6 hours hard block on 403
+const COOLDOWN_429_MS = 30 * 60 * 1000;     // 30 min cooldown on 429
+
+async function waitForGlobalScrapeSlot() {
+    const now = Date.now();
+
+    if (now < novelbinBlockedUntil) {
+        const waitLeft = Math.ceil((novelbinBlockedUntil - now) / 1000);
+        throw new Error(`NovelBin globally blocked for ${waitLeft}s`);
+    }
+
+    const gap = now - lastNovelbinRequestAt;
+    if (gap < MIN_GLOBAL_GAP_MS) {
+        await sleep(MIN_GLOBAL_GAP_MS - gap);
+    }
+
+    lastNovelbinRequestAt = Date.now();
+}
+
+
 /* ==================== Database Setup ==================== */
 const pool = createPool({
     connectionString: process.env.DATABASE_URL,
@@ -63,6 +88,8 @@ function parseTimeAgo(raw) {
 
 /* ==================== Scraping Logic ==================== */
 async function fetchNovelMainPage(novelUrl) {
+    await waitForGlobalScrapeSlot();   // ✅ GLOBAL HARD THROTTLE
+
     try {
         // Extract base novel URL (remove chapter part)
         const baseUrl = novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
@@ -95,10 +122,18 @@ async function fetchNovelMainPage(novelUrl) {
         clearTimeout(timeoutId);
 
         if (!response.ok) {
-            // Special handling for rate limiting
-            if (response.status === 429) {
-                throw new Error(`Rate limited by server (429) - please wait before retrying`);
+            // ✅ HARD BLOCK ON 403
+            if (response.status === 403) {
+                novelbinBlockedUntil = Date.now() + COOLDOWN_403_MS;
+                throw new Error(`HTTP 403 — NovelBin hard-blocked for 6 hours`);
             }
+
+            // ✅ RATE-LIMIT BACKOFF ON 429
+            if (response.status === 429) {
+                novelbinBlockedUntil = Date.now() + COOLDOWN_429_MS;
+                throw new Error(`HTTP 429 — Cooling down for 30 minutes`);
+            }
+
             throw new Error(`HTTP ${response.status}`);
         }
 
@@ -463,8 +498,7 @@ async function updateNovelChapters() {
                 global.botStatus.novelsUpdated++;
             }
 
-            // Be nice to servers
-            await sleep(REQUEST_DELAY_MS);
+            // Delay handled by global throttle (60s minimum between any requests)
         }
 
         const cycleDuration = Date.now() - cycleStartTime;
