@@ -1219,6 +1219,29 @@ app.post('/api/v1/admin/bot/trigger', validateApiKey, async (req, res) => {
     }
 });
 
+// Single-novel diagnostic run 
+app.post('/api/v1/admin/novels/single-run', validateApiKey, async (req, res) => {
+    const { novelId } = req.body;
+
+    if (!novelId) {
+        return res.status(400).json({ error: 'novelId required' });
+    }
+
+    try {
+        if (global.runSingleNovelOnly) {
+            const result = await global.runSingleNovelOnly(novelId);
+            res.json(result);
+        } else {
+            res.status(503).json({
+                error: 'Single-novel mode not available',
+                message: 'Bot module not loaded with diagnostic mode'
+            });
+        }
+    } catch (error) {
+        handleDbError(res, error, 'Single novel run');
+    }
+});
+
 // ==================== FORCE UPDATE ALL ====================
 app.post('/admin/force-refresh-all', async (req, res) => {
     try {

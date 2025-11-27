@@ -589,6 +589,46 @@
                     </button>
                 </div>
 
+                <div class="panel"
+                    style="margin-top: 20px; border: 3px solid #f39c12; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);">
+                    <h2>🧪 Single Novel Diagnostic Mode</h2>
+                    <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <p style="margin: 0; color: #856404;">
+                            <strong>⚠️ Auto bot is DISABLED.</strong> Test one novel at a time to diagnose NovelBin
+                            blocks.
+                        </p>
+                    </div>
+
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <select id="singleNovelSelect" style="
+                            flex: 1;
+                            min-width: 300px;
+                            padding: 10px;
+                            font-size: 14px;
+                            border: 2px solid #6366f1;
+                            border-radius: 8px;
+                            background: white;
+                        ">
+                            <option>Loading novels...</option>
+                        </select>
+
+                        <button id="singleRunBtn" class="btn btn-success" style="padding: 10px 20px;">
+                            🔬 Run Single Novel
+                        </button>
+                    </div>
+
+                    <div id="singleRunStatus" style="
+                        margin-top: 15px;
+                        padding: 15px;
+                        background: white;
+                        border-radius: 8px;
+                        font-family: 'Courier New', monospace;
+                        font-size: 13px;
+                        white-space: pre-wrap;
+                        display: none;
+                    "></div>
+                </div>
+
                 <!-- Progress Bar -->
                 <div class="update-progress" id="updateProgress">
                     <div class="progress-bar">
@@ -942,6 +982,32 @@
 
         // Expose for inline handlers
         window.updateNovel = updateNovel;
+
+        async function loadNovelsForDropdown() {
+            try {
+                const novels = await getJSON('novels');
+
+                const sel = document.getElementById('singleNovelSelect');
+                sel.innerHTML = '';
+
+                if (novels.length === 0) {
+                    sel.innerHTML = '<option>No novels found</option>';
+                    return;
+                }
+
+                novels.forEach(n => {
+                    const opt = document.createElement('option');
+                    opt.value = n.novel_id;
+                    opt.textContent = `${n.title || 'Untitled'} (Ch.${n.latest_chapter_num || '?'})`;
+                    sel.appendChild(opt);
+                });
+
+                console.log(`✅ Loaded ${novels.length} novels for dropdown`);
+            } catch (err) {
+                console.error('Failed to load novels:', err);
+                document.getElementById('singleNovelSelect').innerHTML = '<option>Error loading novels</option>';
+            }
+        }
     </script>
 </body>
 

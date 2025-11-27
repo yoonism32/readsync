@@ -19,7 +19,7 @@ Thumbs.db
 *.swp
 *.swo
 *~
-# Other
+#   Other
 *.csv
 package-lock.json
 

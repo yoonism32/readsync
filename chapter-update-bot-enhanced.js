@@ -1,8 +1,8 @@
 const { createPool } = require('./db-utils');
 
 /* ==================== Configuration ==================== */
-const CHECK_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
-const BATCH_SIZE = 5; // Check 5 novels at a time
+const CHECK_INTERVAL_MS = 120 * 60 * 1000; // 120 minutes / 2 hours
+const BATCH_SIZE = 3; // Check 3 novels at a time
 const REQUEST_DELAY_MS = 10000; // 10s delay between requests (increased to avoid 429)
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
 
@@ -21,6 +21,8 @@ let novelbinBlockedUntil = 0;
 const MIN_GLOBAL_GAP_MS = 60_000;      // 60 seconds between ANY NovelBin requests
 const COOLDOWN_403_MS = 6 * 60 * 60 * 1000; // 6 hours hard block on 403
 const COOLDOWN_429_MS = 30 * 60 * 1000;     // 30 min cooldown on 429
+
+let singleRunLock = false;
 
 async function waitForGlobalScrapeSlot() {
     const now = Date.now();
@@ -336,6 +338,65 @@ async function createNotificationsForNovelUpdate(novelId, oldChapter, newChapter
     }
 
     console.log(`   📬 Created notifications for ${usersResult.rows.length} users`);
+}
+
+/* ==================== SINGLE NOVEL ISOLATION MODE ==================== */
+async function runSingleNovelOnly(novelId) {
+    if (singleRunLock) {
+        return { error: 'Single-novel run already in progress' };
+    }
+
+    singleRunLock = true;
+    console.log(`🧪 SINGLE-NOVEL MODE: Running ${novelId}`);
+
+    try {
+        const result = await pool.query(
+            'SELECT id, primary_url, latest_chapter_num FROM novels WHERE id = $1',
+            [novelId]
+        );
+
+        if (result.rows.length === 0) {
+            return { error: 'Novel not found' };
+        }
+
+        const novel = result.rows[0];
+
+        if (!novel.primary_url) {
+            return { error: 'Novel has no URL' };
+        }
+
+        const html = await fetchNovelMainPage(novel.primary_url);
+        const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
+
+        if (!novelInfo.chapter) {
+            return { error: 'Failed to parse chapter' };
+        }
+
+        const updated = await updateNovelChapterInfo(
+            novel.id,
+            novelInfo.chapter.num,
+            novelInfo.chapter.title,
+            novelInfo.genres.join(', ') || null,
+            novelInfo.author,
+            novelInfo.site_latest_chapter_time_raw,
+            novelInfo.site_latest_chapter_time
+        );
+
+        console.log(`✅ SINGLE-NOVEL SUCCESS: ${novel.id} → Ch.${updated.latest_chapter_num}`);
+
+        return {
+            success: true,
+            previous: novel.latest_chapter_num,
+            current: updated.latest_chapter_num,
+            title: updated.latest_chapter_title
+        };
+
+    } catch (err) {
+        console.error(`❌ SINGLE-NOVEL FAILED:`, err.message);
+        return { error: err.message };
+    } finally {
+        singleRunLock = false;
+    }
 }
 
 /* ==================== Bot Main Loop ==================== */
@@ -682,12 +743,13 @@ async function startBot() {
     // Make functions available globally
     global.updateNovelChapters = safeUpdateCycle;
     global.triggerManualUpdate = triggerManualUpdate;
+    global.runSingleNovelOnly = runSingleNovelOnly;
 
-    // Run immediately on start
-    await safeUpdateCycle();
+    // // Run immediately on start
+    // await safeUpdateCycle();
 
-    // Then run on interval
-    setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
+    // // Then run on interval
+    // setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
 
     log('success', 'Bot is running! Press Ctrl+C to stop.');
 }
@@ -723,7 +785,8 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 module.exports = {
     startBot,
     updateNovelChapters,
-    triggerManualUpdate
+    triggerManualUpdate,
+    runSingleNovelOnly
 };
 
 // Run if executed directly
