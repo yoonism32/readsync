@@ -589,42 +589,48 @@
                     </button>
                 </div>
 
-                <div class="panel"
-                    style="margin-top: 20px; border: 3px solid #f39c12; background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);">
-                    <h2>🧪 Single Novel Diagnostic Mode</h2>
-                    <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
-                        <p style="margin: 0; color: #856404;">
-                            <strong>⚠️ Auto bot is DISABLED.</strong> Test one novel at a time to diagnose NovelBin
-                            blocks.
+                <div class="panel" style="border: 2px solid var(--warning); background: var(--bg-card);">
+                    <h2 style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+                        🧪 Single Novel Diagnostic Mode
+                    </h2>
+
+                    <div
+                        style="background: #6366f1; border: 1px solid var(--warning); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                        <p style="margin: 0; color: var(--warning); font-weight: 500;">
+                            ⚠️ Auto bot is DISABLED. Test one novel at a time to diagnose NovelBin blocks.
                         </p>
                     </div>
 
-                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
                         <select id="singleNovelSelect" style="
                             flex: 1;
                             min-width: 300px;
-                            padding: 10px;
+                            padding: 12px;
                             font-size: 14px;
-                            border: 2px solid #6366f1;
+                            border: 1px solid var(--border);
                             border-radius: 8px;
-                            background: white;
+                            background: var(--bg-hover);
+                            color: var(--text-primary);
+                            cursor: pointer;
                         ">
                             <option>Loading novels...</option>
                         </select>
 
-                        <button id="singleRunBtn" class="btn btn-success" style="padding: 10px 20px;">
+                        <button id="singleRunBtn" class="btn btn-success" style="padding: 12px 20px;">
                             🔬 Run Single Novel
                         </button>
                     </div>
 
                     <div id="singleRunStatus" style="
-                        margin-top: 15px;
-                        padding: 15px;
-                        background: white;
+                        margin-top: 16px;
+                        padding: 16px;
+                        background: var(--bg-hover);
+                        border: 1px solid var(--border);
                         border-radius: 8px;
                         font-family: 'Courier New', monospace;
                         font-size: 13px;
                         white-space: pre-wrap;
+                        color: var(--text-primary);
                         display: none;
                     "></div>
                 </div>
@@ -983,6 +989,9 @@
         // Expose for inline handlers
         window.updateNovel = updateNovel;
 
+        // ==================== SINGLE-NOVEL DIAGNOSTIC MODE ====================
+
+        // Load novels for dropdown
         async function loadNovelsForDropdown() {
             try {
                 const novels = await getJSON('novels');
@@ -1008,6 +1017,75 @@
                 document.getElementById('singleNovelSelect').innerHTML = '<option>Error loading novels</option>';
             }
         }
+
+        // Run single novel button handler
+        document.getElementById('singleRunBtn').addEventListener('click', async () => {
+            const novelId = document.getElementById('singleNovelSelect').value;
+            const status = document.getElementById('singleRunStatus');
+            const btn = document.getElementById('singleRunBtn');
+
+            if (!novelId || novelId.includes('Loading') || novelId.includes('Error') || novelId.includes('No novels')) {
+                toast('⚠️ Please select a valid novel', 'warning');
+                return;
+            }
+
+            status.style.display = 'block';
+            status.textContent = '🔄 Running single-novel fetch...\n\nPlease wait 60+ seconds due to rate limiting.';
+            status.style.background = '#e3f2fd';
+            status.style.border = '2px solid #2196f3';
+
+            btn.disabled = true;
+            btn.textContent = '⏳ Running...';
+
+            try {
+                const res = await fetch(`${API_BASE}admin/novels/single-run?user_key=${API_KEY}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ novelId })
+                });
+
+                const data = await res.json();
+
+                if (data.success) {
+                    status.style.background = '#d4edda';
+                    status.style.border = '2px solid #28a745';
+                    status.textContent = `✅ SUCCESS!\n\n` +
+                        `Novel: ${novelId}\n` +
+                        `Previous Chapter: ${data.previous || 'None'}\n` +
+                        `Current Chapter: ${data.current}\n` +
+                        `Title: ${data.title}\n\n` +
+                        `Result: ${data.current > (data.previous || 0) ? '🆕 NEW CHAPTER FOUND!' : 'No change'}`;
+
+                    toast('✅ Single-novel fetch successful!', 'success');
+
+                    setTimeout(() => {
+                        loadData();
+                        loadNovelsForDropdown();
+                    }, 2000);
+                } else {
+                    status.style.background = '#f8d7da';
+                    status.style.border = '2px solid #dc3545';
+                    status.textContent = `❌ FAILED\n\nError: ${data.error}\n\n` +
+                        `Common causes:\n` +
+                        `- 403: NovelBin Cloudflare block (wait 6 hours)\n` +
+                        `- 429: Rate limit (wait 30 minutes)\n` +
+                        `- No URL: Novel has no primary_url set`;
+
+                    toast('❌ Single-novel fetch failed', 'error');
+                }
+            } catch (err) {
+                status.style.background = '#f8d7da';
+                status.style.border = '2px solid #dc3545';
+                status.textContent = `❌ REQUEST FAILED\n\n${err.message}`;
+                toast('❌ Network error', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🔬 Run Single Novel';
+            }
+        });
+
+        // Load dropdown on page load
+        loadNovelsForDropdown();
     </script>
 </body>
 
