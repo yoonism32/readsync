@@ -1029,6 +1029,13 @@
                 return;
             }
 
+            // Get API key from localStorage
+            const userKey = localStorage.getItem('userKey');
+            if (!userKey) {
+                toast('❌ Not authenticated. Please sign in first.', 'error');
+                return;
+            }
+
             status.style.display = 'block';
             status.textContent = '🔄 Running single-novel fetch...\n\nPlease wait 60+ seconds due to rate limiting.';
             status.style.background = 'rgba(59, 130, 246, 0.1)';
@@ -1038,11 +1045,13 @@
             btn.textContent = '⏳ Running...';
 
             try {
-                const data = await fetch('/api/v1/admin/novels/single-run?user_key=' + localStorage.getItem('userKey'), {
+                const res = await fetch(`/api/v1/admin/novels/single-run?user_key=${encodeURIComponent(userKey)}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ novelId })
-                }).then(r => r.json());
+                });
+
+                const data = await res.json();
 
                 if (data.success) {
                     status.style.background = 'rgba(16, 185, 129, 0.1)';
