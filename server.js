@@ -1301,10 +1301,15 @@ function parseTimeAgo(str) {
 
     const now = new Date();
 
+    // Handle "just now"
     if (/just now|a few (seconds|secs) ago/i.test(str)) {
         return now;
     }
 
+    // Handle "a/an" as 1 (e.g., "a year ago", "an hour ago")
+    str = str.replace(/\ban?\s+/i, '1 ');
+
+    // Match: "X seconds/minutes/hours/days/weeks/months/years ago"
     let match = str.match(/(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i);
     if (!match) return null;
 
