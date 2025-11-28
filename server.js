@@ -1293,6 +1293,99 @@ app.get('/api/v1/admin/bot/progress', validateApiKey, async (req, res) => {
     }
 });
 
+// Auto-update endpoint for Tampermonkey userscript
+// Receives chapter info when user visits NovelBin pages
+app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
+    try {
+        const { user_key } = req.query;
+        const { novel_id, chapter_num, chapter_title, genres, author, update_time_raw } = req.body;
+
+        // Verify API key
+        if (user_key !== 'demo-api-key-12345') {
+            return res.status(401).json({ error: 'Invalid API key' });
+        }
+
+        // Validate required fields
+        if (!novel_id || !chapter_num) {
+            return res.status(400).json({
+                error: 'Missing required fields',
+                required: ['novel_id', 'chapter_num']
+            });
+        }
+
+        console.log(`📥 Auto-update received: ${novel_id} → Ch.${chapter_num}`);
+
+        // Check if novel exists first
+        const checkResult = await pool.query(
+            'SELECT id, latest_chapter_num FROM novels WHERE id = $1',
+            [novel_id]
+        );
+
+        if (checkResult.rows.length === 0) {
+            // Novel not in user's list - this is normal, not an error
+            console.log(`ℹ️  Novel ${novel_id} not in database (user hasn't added it)`);
+            return res.status(404).json({
+                error: 'Novel not in your list',
+                novel_id: novel_id
+            });
+        }
+
+        const currentChapter = checkResult.rows[0].latest_chapter_num;
+
+        // Update novel in database
+        const result = await pool.query(`
+            UPDATE novels 
+            SET latest_chapter_num = $2,
+                latest_chapter_title = $3,
+                chapters_updated_at = CURRENT_TIMESTAMP,
+                genre = COALESCE($4, genre),
+                author = COALESCE($5, author),
+                site_latest_chapter_time_raw = $6
+            WHERE id = $1
+            RETURNING *
+        `, [
+            novel_id,
+            chapter_num,
+            chapter_title || null,
+            genres || null,
+            author || null,
+            update_time_raw || null
+        ]);
+
+        const updated = result.rows[0];
+
+        // Log if this is a new chapter
+        if (currentChapter && chapter_num > currentChapter) {
+            console.log(`🆕 New chapter detected! ${novel_id}: Ch.${currentChapter} → Ch.${chapter_num}`);
+        } else if (currentChapter === chapter_num) {
+            console.log(`✅ Chapter confirmed (no change): ${novel_id} Ch.${chapter_num}`);
+        } else {
+            console.log(`✅ Chapter updated: ${novel_id} → Ch.${chapter_num}`);
+        }
+
+        res.json({
+            success: true,
+            novel_id: updated.id,
+            previous_chapter: currentChapter,
+            current_chapter: updated.latest_chapter_num,
+            is_new_chapter: currentChapter && chapter_num > currentChapter,
+            updated_fields: {
+                chapter: !!chapter_title,
+                genres: !!genres,
+                author: !!author,
+                time: !!update_time_raw
+            }
+        });
+
+    } catch (error) {
+        console.error('❌ Auto-update error:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
 /* ---------------------- Bookmarks API ---------------------- */
 app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;

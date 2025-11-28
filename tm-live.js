@@ -402,6 +402,198 @@
         return isMobile ? `Mobile-${browser}` : `Desktop-${browser}`;
     }
 
+    /* ========= Auto-Update Novel Info to Server ========= */
+    async function autoUpdateNovelInfo() {
+        try {
+            // Only run on novel main pages (not chapter pages)
+            if (location.pathname.match(/chapter-?\d+/i)) {
+                log('Skipping auto-update on chapter page');
+                return;
+            }
+
+            const novelId = normalizeNovelId(location.href);
+            if (!novelId) {
+                log('No novel ID found for auto-update');
+                return;
+            }
+
+            log('🔄 Auto-updating novel info for:', novelId);
+
+            // Extract latest chapter info from page
+            const latestChapterInfo = extractLatestChapterInfo();
+
+            if (!latestChapterInfo.latestChapterNum) {
+                log('⚠️ No chapter info found to update');
+                return;
+            }
+
+            // Get additional info from page
+            const genres = extractGenres();
+            const author = extractAuthor();
+            const updateTime = extractUpdateTime();
+
+            const payload = {
+                novel_id: novelId,
+                chapter_num: latestChapterInfo.latestChapterNum,
+                chapter_title: latestChapterInfo.latestChapterTitle,
+                genres: genres,
+                author: author,
+                update_time_raw: updateTime
+            };
+
+            log('📤 Sending novel info:', payload);
+
+            const response = await fetch(`${READSYNC_API_BASE}/admin/novels/auto-update?user_key=${READSYNC_API_KEY}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                log('✅ Novel info auto-updated successfully!', result);
+                showAutoUpdateNotification('✅ Chapter info updated!', 'success');
+            } else {
+                const error = await response.text();
+                log('❌ Auto-update failed:', response.status, error);
+                if (response.status !== 404) { // Don't show error for novels not in your list
+                    showAutoUpdateNotification('⚠️ Update failed', 'error');
+                }
+            }
+        } catch (error) {
+            console.warn(`[${LOG_TAG}] Auto-update error:`, error);
+            // Silent fail - don't annoy user
+        }
+    }
+
+    /* ========= Helper: Extract genres from page ========= */
+    function extractGenres() {
+        try {
+            // Try meta tag first
+            const metaGenre = document.querySelector('meta[property="og:novel:genre"]');
+            if (metaGenre) {
+                return metaGenre.getAttribute('content');
+            }
+
+            // Try looking for genre labels
+            const genreElements = document.querySelectorAll('[class*="genre"], [class*="tag"], .categories');
+            if (genreElements.length > 0) {
+                const genres = Array.from(genreElements)
+                    .map(el => el.textContent.trim())
+                    .filter(text => text.length > 0 && text.length < 50)
+                    .slice(0, 10) // Max 10 genres
+                    .join(', ');
+                if (genres) return genres;
+            }
+
+            return null;
+        } catch (error) {
+            log('Error extracting genres:', error);
+            return null;
+        }
+    }
+
+    /* ========= Helper: Extract author from page ========= */
+    function extractAuthor() {
+        try {
+            // Try meta tag first
+            const metaAuthor = document.querySelector('meta[property="og:novel:author"]');
+            if (metaAuthor) {
+                return metaAuthor.getAttribute('content');
+            }
+
+            // Try looking for author label
+            const authorSelectors = [
+                '[class*="author"]',
+                '.by-line',
+                '[itemprop="author"]'
+            ];
+
+            for (const selector of authorSelectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    const text = element.textContent.trim();
+                    // Clean up "Author: Name" to just "Name"
+                    const cleaned = text.replace(/^Author:\s*/i, '').trim();
+                    if (cleaned.length > 0 && cleaned.length < 100) {
+                        return cleaned;
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            log('Error extracting author:', error);
+            return null;
+        }
+    }
+
+    /* ========= Helper: Extract update time from page ========= */
+    function extractUpdateTime() {
+        try {
+            // Look for time indicators
+            const timeSelectors = [
+                '.item-time',
+                '[class*="update"]',
+                '[class*="time"]',
+                'time'
+            ];
+
+            for (const selector of timeSelectors) {
+                const element = document.querySelector(selector);
+                if (element) {
+                    const text = element.textContent.trim();
+                    // Check if it looks like a time string
+                    if (text.match(/ago|hour|day|minute|week|month|year|\d{4}/i)) {
+                        return text;
+                    }
+                }
+            }
+
+            return null;
+        } catch (error) {
+            log('Error extracting update time:', error);
+            return null;
+        }
+    }
+
+    /* ========= Show notification for auto-update ========= */
+    function showAutoUpdateNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.textContent = message;
+        notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 12px 20px;
+        background: ${type === 'success' ? '#10b981' : '#ef4444'};
+        color: white;
+        border-radius: 8px;
+        z-index: 100001;
+        font-family: system-ui, sans-serif;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        animation: slideInRight 0.3s ease;
+    `;
+
+        const style = document.createElement('style');
+        style.textContent = `
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    `;
+        document.head.appendChild(style);
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
     /* ========= ReadSync API Functions ========= */
     async function syncProgress(percent) {
         log('syncProgress invoked', { percent });
@@ -1047,4 +1239,13 @@
             case 72: if (e.shiftKey) toggleHelp(); break;
         }
     };
+
+    /* ========= Trigger auto-update on page load ========= */
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(autoUpdateNovelInfo, 2000);
+        });
+    } else {
+        setTimeout(autoUpdateNovelInfo, 2000);
+    }
 })();
