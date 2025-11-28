@@ -719,7 +719,15 @@
                         <tr>
                             <th class="col-cover">Cover</th>
                             <th class="col-title">Title</th>
-                            <th class="col-progress">Progress</th>
+                            <th class="col-progress">
+                                <span class="sortable" data-sort="progress">
+                                    Progress
+                                    <span class="sort-arrows">
+                                        <span class="sort-arrow" data-arrow="progress-desc">▲</span>
+                                        <span class="sort-arrow" data-arrow="progress-asc">▼</span>
+                                    </span>
+                                </span>
+                            </th>
                             <th class="col-continue">Continue</th>
                             <th class="col-status">Status</th>
                             <th class="col-time">
@@ -770,9 +778,16 @@
             setApiKey('demo-api-key-12345');
         }
 
+        // ============ SORT CONFIGURATION ============
+        // 🔧 Change this to set default sort on page load
+        // Options: 'updated_at' | 'read_at' | 'started_at' | 'progress'
+        const DEFAULT_SORT_FIELD = 'updated_at';
+        const DEFAULT_SORT_ORDER = 'desc'; // 'asc' | 'desc'
+        // ============================================
+
         let allNovels = [];
-        let sortField = 'updated_at'; // read_at | updated_at | started_at
-        let sortOrder = 'desc';       // 'asc' | 'desc'
+        let sortField = DEFAULT_SORT_FIELD;
+        let sortOrder = DEFAULT_SORT_ORDER;
         let searchTerm = '';
 
         // Functions now imported from shared.js:
@@ -834,6 +849,21 @@
                 return toMs(novel.site_latest_chapter_time || novel.chapters_updated_at);
             } else if (field === 'started_at') {
                 return toMs(novel.started_at);
+            } else if (field === 'progress') {
+                // Progress sort: percentage first, then total chapters as tiebreaker
+                const currentCh = global ? Number(global.chapter_num) || 0 : 0;
+                const totalCh = Number(novel.latest_chapter_num) || 0;
+
+                if (totalCh === 0) return 0; // No progress data
+
+                const percentage = (currentCh / totalCh) * 100;
+
+                // Create a composite key: percentage * 1000000 + totalCh
+                // This ensures percentage is primary, totalCh is tiebreaker
+                // Example: 100% with 1136 total = 100000000 + 1136 = 100001136
+                // Example: 100% with 774 total  = 100000000 + 774  = 100000774
+                // Example: 81.4% with 393 total = 81400000 + 393   = 81400393
+                return (percentage * 1000000) + totalCh;
             }
             return 0;
         }
