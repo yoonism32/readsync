@@ -1160,12 +1160,13 @@
 
         // ============ SMART AUTO-REFRESH SYSTEM ============
         const REFRESH_INTERVAL_HOURS = 6;
-        const TAB_OPEN_DELAY = 5000; // 5 seconds between tabs
+        const BATCH_SIZE = 2; // 🔧 ADJUST THIS: 1 = sequential, 2-3 = parallel batches, 4+ = risky with Cloudflare
+        const TAB_OPEN_DELAY = 5000; // 5 seconds between batches
         const TAB_WAIT_FOR_UPDATE = 3000; // 3 seconds to wait for auto-update
         const MAX_WAIT_PER_NOVEL = 10000; // 10 seconds max per novel
 
         let isRefreshing = false;
-        let lastRefreshTime = localStorage.getItem('lastNovelRefresh');
+        let lastRefreshTime = null;
 
         function initSmartRefresh() {
             const btn = document.getElementById('refreshAllBtn');
@@ -1173,12 +1174,45 @@
                 btn.addEventListener('click', startSmartRefresh);
             }
 
-            updateTimerDisplay();
-            setInterval(updateTimerDisplay, 60000); // Update every minute
+            // Load last refresh time from database
+            loadLastRefreshTime();
+
+            // Update timer every minute
+            setInterval(updateTimerDisplay, 60000);
 
             // Check if notification permission needed
             if ('Notification' in window && Notification.permission === 'default') {
                 Notification.requestPermission();
+            }
+        }
+
+        async function loadLastRefreshTime() {
+            try {
+                const data = await getJSON('settings/last-refresh');
+                if (data && data.last_refresh) {
+                    lastRefreshTime = data.last_refresh;
+                    console.log('📅 Loaded last refresh time:', new Date(parseInt(lastRefreshTime)).toISOString());
+                } else {
+                    lastRefreshTime = null;
+                    console.log('📅 No previous refresh time found');
+                }
+                updateTimerDisplay();
+            } catch (error) {
+                console.error('Failed to load last refresh time:', error);
+                lastRefreshTime = null;
+                updateTimerDisplay();
+            }
+        }
+
+        async function saveLastRefreshTime(timestamp) {
+            try {
+                await getJSON('settings/last-refresh', {
+                    method: 'POST',
+                    body: { timestamp: timestamp.toString() }
+                });
+                console.log('💾 Saved last refresh time to database');
+            } catch (error) {
+                console.error('Failed to save last refresh time:', error);
             }
         }
 
@@ -1242,32 +1276,50 @@
             let completed = 0;
             let failed = 0;
 
-            console.log(`🚀 Starting smart refresh for ${novels.length} novels...`);
+            console.log(`🚀 Starting smart refresh for ${novels.length} novels (batch size: ${BATCH_SIZE})...`);
 
-            for (let i = 0; i < novels.length; i++) {
-                const novel = novels[i];
-                const title = novel.title || novel.novel_id;
+            // Process novels in batches
+            for (let batchStart = 0; batchStart < novels.length; batchStart += BATCH_SIZE) {
+                const batch = novels.slice(batchStart, batchStart + BATCH_SIZE);
+                const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+                const totalBatches = Math.ceil(novels.length / BATCH_SIZE);
 
-                // Update UI
-                countEl.textContent = `${i + 1}/${novels.length}`;
-                updateRefreshStatus(`Refreshing: ${title}...`);
+                console.log(`📦 Batch ${batchNum}/${totalBatches}: Processing ${batch.length} novel(s)...`);
 
-                try {
-                    const success = await refreshSingleNovel(novel.primary_url, title);
-                    if (success) {
-                        completed++;
-                        console.log(`✅ ${i + 1}/${novels.length}: ${title}`);
-                    } else {
-                        failed++;
-                        console.warn(`⚠️ ${i + 1}/${novels.length}: ${title} (failed)`);
-                    }
-                } catch (error) {
-                    console.error(`❌ ${i + 1}/${novels.length}: ${title}`, error);
-                    failed++;
-                }
+                // Update UI with batch progress
+                const batchEnd = Math.min(batchStart + BATCH_SIZE, novels.length);
+                countEl.textContent = `${batchEnd}/${novels.length}`;
 
-                // Wait before next novel (Cloudflare protection)
-                if (i < novels.length - 1) {
+                // Process all novels in this batch simultaneously
+                const batchPromises = batch.map((novel, indexInBatch) => {
+                    const globalIndex = batchStart + indexInBatch;
+                    const title = novel.title || novel.novel_id;
+
+                    updateRefreshStatus(`Batch ${batchNum}/${totalBatches}: ${batch.map(n => n.title || n.novel_id).join(', ')}...`);
+
+                    return refreshSingleNovel(novel.primary_url, title, globalIndex + 1, novels.length)
+                        .then(success => {
+                            if (success) {
+                                completed++;
+                                console.log(`✅ ${globalIndex + 1}/${novels.length}: ${title}`);
+                            } else {
+                                failed++;
+                                console.warn(`⚠️ ${globalIndex + 1}/${novels.length}: ${title} (failed)`);
+                            }
+                        })
+                        .catch(error => {
+                            console.error(`❌ ${globalIndex + 1}/${novels.length}: ${title}`, error);
+                            failed++;
+                        });
+                });
+
+                // Wait for entire batch to complete
+                await Promise.all(batchPromises);
+                console.log(`✅ Batch ${batchNum}/${totalBatches} complete`);
+
+                // Wait before starting next batch (Cloudflare protection)
+                if (batchEnd < novels.length) {
+                    console.log(`⏳ Waiting ${TAB_OPEN_DELAY / 1000}s before next batch...`);
                     await sleep(TAB_OPEN_DELAY);
                 }
             }
@@ -1278,9 +1330,9 @@
             countEl.textContent = '';
             updateRefreshStatus(`✅ Complete! Updated: ${completed}, Failed: ${failed}`);
 
-            // Save timestamp
+            // Save timestamp to database
             lastRefreshTime = Date.now().toString();
-            localStorage.setItem('lastNovelRefresh', lastRefreshTime);
+            await saveLastRefreshTime(lastRefreshTime);
             updateTimerDisplay();
 
             // Reload the list to show updated chapters

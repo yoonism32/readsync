@@ -1427,6 +1427,61 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
     }
 });
 
+/* ---------------------- Settings API ---------------------- */
+app.get('/api/vi/settings/last-refresh', validateApiKey, async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT value, updated_at 
+            FROM user_settings 
+            WHERE user_id = $1 AND key = 'last_novel_refresh'
+        `, [req.user.id]);
+
+        if (result.rows.length === 0) {
+            return res.json({
+                last_refresh: null,
+                updated_at: null
+            });
+        }
+
+        res.json({
+            last_refresh: result.rows[0].value,
+            updated_at: result.rows[0].updated_at
+        });
+    } catch (error) {
+        console.error('Failed to get last refresh time:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Save last refresh time
+app.post('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
+    try {
+        const { timestamp } = req.body;
+
+        if (!timestamp) {
+            return res.status(400).json({ error: 'Missing timestamp' });
+        }
+
+        // Upsert the setting
+        await pool.query(`
+            INSERT INTO user_settings (user_id, key, value, updated_at)
+            VALUES ($1, 'last_novel_refresh', $2, CURRENT_TIMESTAMP)
+            ON CONFLICT (user_id, key) 
+            DO UPDATE SET value = $2, updated_at = CURRENT_TIMESTAMP
+        `, [req.user.id, timestamp]);
+
+        console.log(`💾 Saved last refresh time for ${req.user.id}: ${new Date(parseInt(timestamp)).toISOString()}`);
+
+        res.json({
+            success: true,
+            last_refresh: timestamp
+        });
+    } catch (error) {
+        console.error('Failed to save last refresh time:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 /* ---------------------- Bookmarks API ---------------------- */
 app.get('/api/v1/bookmarks/:novelId', validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
