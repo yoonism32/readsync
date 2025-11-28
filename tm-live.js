@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.9.8
+// @version      4.9.9
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
@@ -19,6 +19,14 @@
 // @match        https://www.novelbin.net/b/*/*chapter*
 // @match        https://novelbin.org/b/*/*chapter*
 // @match        https://www.novelbin.org/b/*/*chapter*
+// @match        https://novelbin.com/b/*
+// @match        https://www.novelbin.com/b/*
+// @match        https://novelbin.me/b/*
+// @match        https://www.novelbin.me/b/*
+// @match        https://novelbin.net/b/*
+// @match        https://www.novelbin.net/b/*
+// @match        https://novelbin.org/b/*
+// @match        https://www.novelbin.org/b/*
 // @run-at       document-end
 // @grant        none
 // ==/UserScript==
