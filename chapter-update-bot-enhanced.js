@@ -1,6 +1,10 @@
 const { createPool } = require('./db-utils');
-const puppeteerCore = require('puppeteer-core');
+const puppeteer = require('puppeteer-extra');
+const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const chromium = require('@sparticuz/chromium');
+
+// Add stealth plugin to evade detection
+puppeteer.use(StealthPlugin());
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between full cycles
@@ -35,14 +39,14 @@ async function getBrowser() {
     // Launch new browser
     browserLaunchInProgress = true;
     try {
-        console.log('🚀 Launching Puppeteer browser with Chromium...');
-        browserInstance = await puppeteerCore.launch({
+        console.log('🚀 Launching Puppeteer browser with Chromium + Stealth...');
+        browserInstance = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
         });
-        console.log('✅ Browser launched successfully');
+        console.log('✅ Browser launched successfully (stealth mode enabled)');
         return browserInstance;
     } catch (error) {
         console.error('❌ Failed to launch browser:', error);
