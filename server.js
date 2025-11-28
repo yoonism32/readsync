@@ -57,7 +57,7 @@ const apiLimiter = rateLimit({
     legacyHeaders: false,
 });
 
-// Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
+//Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
