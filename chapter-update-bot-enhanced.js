@@ -1,26 +1,84 @@
 const { createPool } = require('./db-utils');
+const puppeteer = require('puppeteer');
 
 /* ==================== Configuration ==================== */
-const CHECK_INTERVAL_MS = 120 * 60 * 1000; // 120 minutes / 2 hours
-const BATCH_SIZE = 3; // Check 3 novels at a time
-const REQUEST_DELAY_MS = 10000; // 10s delay between requests (increased to avoid 429)
+const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between full cycles
+const BATCH_SIZE = 5; // Check 5 novels at a time
+const BATCH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes between batches
 const STALE_THRESHOLD_HOURS = 24; // Update if not checked in 24 hours
 
 // Error management constants
-const MAX_ERRORS = 100; // Maximum errors to keep in array
-const RETAIN_ERRORS = 50; // Number of errors to retain when limit exceeded
+const MAX_ERRORS = 100;
+const RETAIN_ERRORS = 50;
 
 // Timeout constants
-const FETCH_TIMEOUT_MS = 10000; // 10 seconds timeout for HTTP requests
-const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60; // Max wait time for graceful shutdown
+const BROWSER_TIMEOUT_MS = 30000; // 30 seconds timeout for browser operations
+const CLOUDFLARE_WAIT_MS = 5000; // 5 seconds wait for Cloudflare challenge
+const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60;
+
+/* ==================== PUPPETEER BROWSER MANAGEMENT ==================== */
+let browserInstance = null;
+let browserLaunchInProgress = false;
+
+async function getBrowser() {
+    // If already launching, wait for it
+    while (browserLaunchInProgress) {
+        await sleep(100);
+    }
+
+    // Return existing instance if available
+    if (browserInstance && browserInstance.isConnected()) {
+        return browserInstance;
+    }
+
+    // Launch new browser
+    browserLaunchInProgress = true;
+    try {
+        console.log('🚀 Launching Puppeteer browser...');
+        browserInstance = await puppeteer.launch({
+            headless: 'new',
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-accelerated-2d-canvas',
+                '--no-first-run',
+                '--no-zygote',
+                '--disable-gpu',
+                '--disable-web-security',
+                '--disable-features=IsolateOrigins,site-per-process'
+            ]
+        });
+        console.log('✅ Browser launched successfully');
+        return browserInstance;
+    } catch (error) {
+        console.error('❌ Failed to launch browser:', error);
+        browserInstance = null;
+        throw error;
+    } finally {
+        browserLaunchInProgress = false;
+    }
+}
+
+async function closeBrowser() {
+    if (browserInstance) {
+        try {
+            await browserInstance.close();
+            console.log('🔒 Browser closed');
+        } catch (error) {
+            console.error('Error closing browser:', error);
+        }
+        browserInstance = null;
+    }
+}
 
 /* ==================== GLOBAL SCRAPE THROTTLE ==================== */
 let lastNovelbinRequestAt = 0;
 let novelbinBlockedUntil = 0;
 
-const MIN_GLOBAL_GAP_MS = 120_000;      // 60 seconds between ANY NovelBin requests
+const MIN_GLOBAL_GAP_MS = 10_000; // 10 seconds between requests
 const COOLDOWN_403_MS = 6 * 60 * 60 * 1000; // 6 hours hard block on 403
-const COOLDOWN_429_MS = 30 * 60 * 1000;     // 30 min cooldown on 429
+const COOLDOWN_429_MS = 30 * 60 * 1000; // 30 min cooldown on 429
 
 let singleRunLock = false;
 
@@ -34,12 +92,13 @@ async function waitForGlobalScrapeSlot() {
 
     const gap = now - lastNovelbinRequestAt;
     if (gap < MIN_GLOBAL_GAP_MS) {
-        await sleep(MIN_GLOBAL_GAP_MS - gap);
+        const waitTime = MIN_GLOBAL_GAP_MS - gap;
+        console.log(`⏳ Waiting ${Math.ceil(waitTime / 1000)}s before next request...`);
+        await sleep(waitTime);
     }
 
     lastNovelbinRequestAt = Date.now();
 }
-
 
 /* ==================== Database Setup ==================== */
 const pool = createPool({
@@ -49,109 +108,77 @@ const pool = createPool({
     connectionTimeoutMillis: 10000,
 });
 
-// Global status tracking
-global.botStatus = {
-    running: false,
-    lastRun: null,
-    lastRunSuccess: false,
-    novelsUpdated: 0,
-    novelsChecked: 0,
-    nextRun: null,
-    errors: [],
-    cycleStartTime: null,
-    cycleDuration: null
-};
-
-// Race condition protection: prevent concurrent execution
-let isRunning = false;
-
-// == 'Time-ago- timestamp parser (e.g., "3 days ago") ==
-function parseTimeAgo(raw) {
-    if (!raw) return null;
-
-    const m = raw.match(/(?:(\d+)|a)\s*(second|minute|hour|day|month|year)s?\s*ago/i);
-    if (!m) return null;
-
-    const val = m[1] ? parseInt(m[1], 10) : 1;
-    const unit = m[2].toLowerCase();
-
-    const ms = {
-        second: 1000,
-        minute: 60000,
-        hour: 3600000,
-        day: 86400000,
-        month: 2592000000,
-        year: 31536000000,
-    }[unit];
-
-    return new Date(Date.now() - val * ms);
+/* ==================== Helper Functions ==================== */
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-
-/* ==================== Scraping Logic ==================== */
+/* ==================== Scraping Logic with Puppeteer ==================== */
 async function fetchNovelMainPage(novelUrl) {
-    await waitForGlobalScrapeSlot();   // ✅ GLOBAL HARD THROTTLE
+    await waitForGlobalScrapeSlot();
 
+    let page = null;
     try {
         // Extract base novel URL (remove chapter part)
         const baseUrl = novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
 
-        // Use AbortController for timeout (Node.js fetch doesn't support timeout option)
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        // Get browser instance
+        const browser = await getBrowser();
 
-        const response = await fetch(baseUrl, {
-            signal: controller.signal,
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.9',
-                'Accept-Encoding': 'gzip, deflate, br',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Sec-Ch-Ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
-                'Sec-Ch-Ua-Mobile': '?0',
-                'Sec-Ch-Ua-Platform': '"Windows"',
-                'Sec-Fetch-Dest': 'document',
-                'Sec-Fetch-Mode': 'navigate',
-                'Sec-Fetch-Site': 'none',
-                'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'Connection': 'keep-alive',
-            }
+        // Create new page
+        page = await browser.newPage();
+
+        // Set realistic viewport
+        await page.setViewport({ width: 1920, height: 1080 });
+
+        // Set user agent
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+        console.log(`🌐 Navigating to: ${baseUrl}`);
+
+        // Navigate to page with timeout
+        await page.goto(baseUrl, {
+            waitUntil: 'networkidle0',
+            timeout: BROWSER_TIMEOUT_MS
         });
 
-        clearTimeout(timeoutId);
+        // Wait for Cloudflare challenge to complete
+        console.log('⏳ Waiting for Cloudflare challenge...');
+        await page.waitForTimeout(CLOUDFLARE_WAIT_MS);
 
-        if (!response.ok) {
-            // ✅ HARD BLOCK ON 403
-            if (response.status === 403) {
-                novelbinBlockedUntil = Date.now() + COOLDOWN_403_MS;
-                throw new Error(`HTTP 403 — NovelBin hard-blocked for 6 hours`);
-            }
+        // Get HTML content
+        const html = await page.content();
 
-            // ✅ RATE-LIMIT BACKOFF ON 429
-            if (response.status === 429) {
-                novelbinBlockedUntil = Date.now() + COOLDOWN_429_MS;
-                throw new Error(`HTTP 429 — Cooling down for 30 minutes`);
-            }
-
-            throw new Error(`HTTP ${response.status}`);
-        }
-
-        const html = await response.text();
+        console.log('✅ Page fetched successfully');
         return html;
+
     } catch (error) {
-        // Error details will be logged by caller with context
-        if (error.name === 'AbortError') {
-            // Timeout - caller will handle logging
+        console.error('❌ Browser fetch failed:', error.message);
+
+        // Handle specific error codes
+        if (error.message.includes('403')) {
+            console.error('🚫 Got 403 - setting cooldown');
+            novelbinBlockedUntil = Date.now() + COOLDOWN_403_MS;
         } else if (error.message.includes('429')) {
-            // Rate limit - propagate this specific error
-            console.error('⚠️ Rate limited by novel website:', error.message);
-        } else {
-            // Other fetch errors - caller will handle logging
+            console.error('⏸️  Got 429 - setting cooldown');
+            novelbinBlockedUntil = Date.now() + COOLDOWN_429_MS;
         }
-        throw error; // Propagate error instead of returning null
+
+        // If browser crashed, clear the instance
+        if (error.message.includes('Target closed') || error.message.includes('Session closed')) {
+            browserInstance = null;
+        }
+
+        throw error;
+    } finally {
+        // Always close the page (not the browser)
+        if (page) {
+            try {
+                await page.close();
+            } catch (e) {
+                console.error('Error closing page:', e.message);
+            }
+        }
     }
 }
 
@@ -229,85 +256,65 @@ function parseNovelInfoFromHTML(html, novelUrl) {
             result.site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 
         } else {
-            const metaUpdate = html.match(
+            const metaUpdateTime = html.match(
                 /<meta[^>]+property=["']og:novel:update_time["'][^>]+content=["']([^"']+)["']/i
             );
-            if (metaUpdate) {
-                result.site_latest_chapter_time_raw = metaUpdate[1];
-                const parsed = new Date(metaUpdate[1]);
-                result.site_latest_chapter_time = isNaN(parsed.getTime()) ? null : parsed.toISOString();
+            if (metaUpdateTime) {
+                result.site_latest_chapter_time_raw = metaUpdateTime[1].trim();
+                const parsedDate = new Date(result.site_latest_chapter_time_raw);
+                result.site_latest_chapter_time = !isNaN(parsedDate) ? parsedDate.toISOString() : null;
             }
         }
 
-        if (!result.chapter) {
-            // Logging will be handled by caller with more context
-        } else {
-            // Log successful parse - this is useful for debugging
-            // Note: Full logging with context happens in caller
-        }
-
         return result;
-    } catch (error) {
-        console.error('Parse error:', error);
-        return { chapter: null, genres: [], author: null };
+    } catch (err) {
+        console.error('HTML parsing error:', err);
+        return {
+            chapter: null,
+            genres: [],
+            author: null,
+            site_latest_chapter_time_raw: null,
+            site_latest_chapter_time: null
+        };
     }
 }
 
+function parseTimeAgo(str) {
+    if (!str) return null;
+    str = str.toLowerCase().trim();
+
+    const now = new Date();
+
+    if (/just now|a few (seconds|secs) ago/i.test(str)) {
+        return now;
+    }
+
+    let match = str.match(/(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i);
+    if (!match) return null;
+
+    const val = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+
+    const ms = {
+        second: 1000, sec: 1000, minute: 60000, min: 60000,
+        hour: 3600000, day: 86400000, week: 604800000,
+        month: 2592000000, year: 31536000000
+    };
+
+    if (!ms[unit]) return null;
+
+    return new Date(now.getTime() - val * ms[unit]);
+}
+
 /* ==================== Database Operations ==================== */
-async function getNovelsNeedingUpdate() {
-    const query = `
-    SELECT DISTINCT 
-      n.id, 
-      n.primary_url,
-      n.latest_chapter_num,
-      n.chapters_updated_at,
-      COUNT(DISTINCT p.user_id) as active_readers,
-      MAX(p.created_at) as last_read_at
-    FROM novels n
-    JOIN progress_snapshots p ON p.novel_id = n.id
-    WHERE 
-      n.primary_url IS NOT NULL
-      AND (
-        n.chapters_updated_at IS NULL 
-        OR n.chapters_updated_at < NOW() - make_interval(hours => $2)
-      )
-    GROUP BY n.id, n.primary_url, n.latest_chapter_num, n.chapters_updated_at
-    ORDER BY active_readers DESC, n.chapters_updated_at ASC NULLS FIRST
-    LIMIT $1
-  `;
-
-    const result = await pool.query(query, [BATCH_SIZE, STALE_THRESHOLD_HOURS]);
-    return result.rows;
-}
-
-async function updateNovelChapterInfo(novelId, chapterNum, chapterTitle, genre, author, siteTimeRaw, siteTime) {
-    const query = `
-        UPDATE novels 
-        SET 
-            latest_chapter_num = $2,
-            latest_chapter_title = $3,
-            genre = COALESCE($4, genre),
-            author = COALESCE($5, author),
-            site_latest_chapter_time_raw = $6,
-            site_latest_chapter_time = $7,
-            chapters_updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING id, latest_chapter_num, latest_chapter_title, genre, author;
-    `;
-
-    const result = await pool.query(query, [novelId, chapterNum, chapterTitle, genre, author, siteTimeRaw, siteTime]);
-    return result.rows[0];
-}
-// Create notifications table if it doesn't exist
 async function initNotifications() {
     await pool.query(`
-        CREATE TABLE IF NOT EXISTS novel_notifications (
-            id BIGSERIAL PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS notifications (
+            id SERIAL PRIMARY KEY,
             user_id TEXT NOT NULL,
             novel_id TEXT NOT NULL,
-            previous_chapter INTEGER,
-            new_chapter INTEGER,
-            chapter_title TEXT,
+            type TEXT NOT NULL,
+            message TEXT NOT NULL,
             read BOOLEAN DEFAULT FALSE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
@@ -316,31 +323,47 @@ async function initNotifications() {
     `);
 
     await pool.query(`
-        CREATE INDEX IF NOT EXISTS idx_notifications_user 
-        ON novel_notifications (user_id, read, created_at DESC)
+        CREATE INDEX IF NOT EXISTS idx_notifications_user_unread 
+        ON notifications (user_id, read, created_at DESC)
     `);
 }
 
-async function createNotificationsForNovelUpdate(novelId, oldChapter, newChapter, chapterTitle) {
-    // Find all users who have read this novel
-    const usersResult = await pool.query(`
-        SELECT DISTINCT user_id 
-        FROM progress_snapshots 
-        WHERE novel_id = $1
-    `, [novelId]);
+async function getNovelsNeedingUpdate() {
+    const staleHoursAgo = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString();
 
-    for (const { user_id } of usersResult.rows) {
-        await pool.query(`
-            INSERT INTO novel_notifications 
-                (user_id, novel_id, previous_chapter, new_chapter, chapter_title)
-            VALUES ($1, $2, $3, $4, $5)
-        `, [user_id, novelId, oldChapter, newChapter, chapterTitle]);
-    }
+    const result = await pool.query(`
+        SELECT DISTINCT n.id, n.primary_url, n.latest_chapter_num, n.chapters_updated_at,
+               (SELECT MAX(updated_at) FROM progress_snapshots WHERE novel_id = n.id) as last_read_at,
+               (SELECT COUNT(DISTINCT device_id) FROM progress_snapshots WHERE novel_id = n.id) as active_readers
+        FROM novels n
+        WHERE n.primary_url IS NOT NULL
+          AND (n.chapters_updated_at IS NULL OR n.chapters_updated_at < $1)
+        ORDER BY 
+          (SELECT COUNT(DISTINCT device_id) FROM progress_snapshots WHERE novel_id = n.id) DESC,
+          n.chapters_updated_at ASC NULLS FIRST
+    `, [staleHoursAgo]);
 
-    console.log(`   📬 Created notifications for ${usersResult.rows.length} users`);
+    return result.rows;
 }
 
-/* ==================== SINGLE NOVEL ISOLATION MODE ==================== */
+async function updateNovelChapterInfo(novelId, chapterNum, chapterTitle, genres, author, timeRaw, timeISO) {
+    const result = await pool.query(`
+        UPDATE novels 
+        SET latest_chapter_num = $2,
+            latest_chapter_title = $3,
+            chapters_updated_at = CURRENT_TIMESTAMP,
+            genre = COALESCE($4, genre),
+            author = COALESCE($5, author),
+            site_latest_chapter_time_raw = $6,
+            site_latest_chapter_time = $7
+        WHERE id = $1
+        RETURNING *
+    `, [novelId, chapterNum, chapterTitle, genres, author, timeRaw, timeISO]);
+
+    return result.rows[0];
+}
+
+/* ==================== Single Novel Test Function ==================== */
 async function runSingleNovelOnly(novelId) {
     if (singleRunLock) {
         return { error: 'Single-novel run already in progress' };
@@ -400,7 +423,6 @@ async function runSingleNovelOnly(novelId) {
 }
 
 /* ==================== Bot Main Loop ==================== */
-// Structured logging helper
 function log(level, message, context = {}) {
     const timestamp = new Date().toISOString();
     const logEntry = {
@@ -418,23 +440,42 @@ function log(level, message, context = {}) {
     }[level] || '📝';
 
     console.log(`${prefix} [${timestamp}] ${message}`, Object.keys(context).length > 0 ? context : '');
-    return logEntry;
+
+    if (global.botStatus && Array.isArray(global.botStatus.errors)) {
+        if (level === 'error' || level === 'warn') {
+            addError(logEntry);
+        }
+    }
 }
 
-// Helper function to limit error array size
 function addError(error) {
+    if (!global.botStatus) return;
+
     global.botStatus.errors.push({
         ...error,
         timestamp: new Date().toISOString()
     });
-    // Keep only last RETAIN_ERRORS errors if array exceeds MAX_ERRORS
+
     if (global.botStatus.errors.length > MAX_ERRORS) {
         global.botStatus.errors = global.botStatus.errors.slice(-RETAIN_ERRORS);
     }
 }
 
+let isRunning = false;
+
+global.botStatus = {
+    running: false,
+    lastRun: null,
+    lastRunSuccess: false,
+    novelsUpdated: 0,
+    novelsChecked: 0,
+    nextRun: null,
+    errors: [],
+    cycleStartTime: null,
+    cycleDuration: null
+};
+
 async function updateNovelChapters() {
-    // Race condition protection: prevent concurrent execution
     if (isRunning) {
         log('warn', 'Update cycle already in progress, skipping...');
         return;
@@ -466,246 +507,131 @@ async function updateNovelChapters() {
 
         log('info', `Found ${novels.length} novels needing updates`, { cycleId, count: novels.length });
 
-        for (const novel of novels) {
-            global.botStatus.novelsChecked++;
+        // Process in batches
+        for (let i = 0; i < novels.length; i += BATCH_SIZE) {
+            const batch = novels.slice(i, i + BATCH_SIZE);
+            const batchNum = Math.floor(i / BATCH_SIZE) + 1;
+            const totalBatches = Math.ceil(novels.length / BATCH_SIZE);
 
-            log('info', `Processing novel`, {
+            log('info', `Processing batch ${batchNum}/${totalBatches}`, {
                 cycleId,
-                novelId: novel.id,
-                currentChapter: novel.latest_chapter_num || '?',
-                activeReaders: novel.active_readers,
-                lastCheck: novel.chapters_updated_at || 'Never',
-                lastRead: novel.last_read_at || 'Never'
+                batchSize: batch.length,
+                progress: `${i + batch.length}/${novels.length}`
             });
 
-            // Fetch and parse
-            const html = await fetchNovelMainPage(novel.primary_url);
-            if (!html) {
-                log('warn', 'Skipping novel (fetch failed)', { cycleId, novelId: novel.id });
-                addError({ novel: novel.id, error: 'Fetch failed', type: 'network', cycleId });
-                await sleep(REQUEST_DELAY_MS);
-                continue;
-            }
+            for (const novel of batch) {
+                global.botStatus.novelsChecked++;
 
-            const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
-            if (!novelInfo.chapter) {
-                log('warn', 'Skipping novel (parse failed)', { cycleId, novelId: novel.id });
-                addError({ novel: novel.id, error: 'Parse failed', type: 'parse', cycleId });
-                await sleep(REQUEST_DELAY_MS);
-                continue;
-            }
-
-            // Log successful parse with details
-            log('info', 'Successfully parsed novel', {
-                cycleId,
-                novelId: novel.id,
-                chapter: novelInfo.chapter.num,
-                title: novelInfo.chapter.title,
-                genresCount: novelInfo.genres.length,
-                hasAuthor: !!novelInfo.author,
-                timeRaw: novelInfo.site_latest_chapter_time_raw
-            });
-
-            // Check if this is actually new
-            if (novel.latest_chapter_num && novelInfo.chapter.num <= novel.latest_chapter_num) {
-                log('info', `No new chapters (still at Ch.${novelInfo.chapter.num})`, { cycleId, novelId: novel.id });
-
-                // Update timestamp + metadata even if chapter didn't advance
-                await pool.query(`
-                UPDATE novels SET 
-                    chapters_updated_at = CURRENT_TIMESTAMP,
-                    genre = COALESCE($2, genre),            
-                    author = COALESCE($3, author),
-                    site_latest_chapter_time_raw = $4,
-                    site_latest_chapter_time = $5
-                WHERE id = $1
-            `, [
-                    novel.id,
-                    novelInfo.genres.join(', ') || null,
-                    novelInfo.author,
-                    novelInfo.site_latest_chapter_time_raw,
-                    novelInfo.site_latest_chapter_time
-                ]);
-
-            } else {
-                // New chapter found!
-                const updated = await updateNovelChapterInfo(
-                    novel.id,
-                    novelInfo.chapter.num,
-                    novelInfo.chapter.title,
-                    novelInfo.genres.join(', ') || null,
-                    novelInfo.author,
-                    novelInfo.site_latest_chapter_time_raw,
-                    novelInfo.site_latest_chapter_time
-                );
-
-                log('success', `Updated novel`, {
+                log('info', `Processing novel`, {
                     cycleId,
                     novelId: novel.id,
-                    previousChapter: novel.latest_chapter_num || '?',
-                    newChapter: updated.latest_chapter_num,
-                    title: updated.latest_chapter_title,
-                    genres: novelInfo.genres.length > 0 ? novelInfo.genres.join(', ') : null
+                    currentChapter: novel.latest_chapter_num || '?',
+                    activeReaders: novel.active_readers,
+                    lastCheck: novel.chapters_updated_at || 'Never',
+                    lastRead: novel.last_read_at || 'Never'
                 });
 
-                // Create notifications for users
-                await createNotificationsForNovelUpdate(
-                    novel.id,
-                    novel.latest_chapter_num,
-                    updated.latest_chapter_num,
-                    updated.latest_chapter_title
-                );
+                try {
+                    const html = await fetchNovelMainPage(novel.primary_url);
 
-                global.botStatus.novelsUpdated++;
+                    const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
+                    if (!novelInfo.chapter) {
+                        log('warn', 'Skipping novel (parse failed)', { cycleId, novelId: novel.id });
+                        addError({ novel: novel.id, error: 'Parse failed', type: 'parse', cycleId });
+                        continue;
+                    }
+
+                    log('info', 'Successfully parsed novel', {
+                        cycleId,
+                        novelId: novel.id,
+                        chapter: novelInfo.chapter.num,
+                        title: novelInfo.chapter.title,
+                        genresCount: novelInfo.genres.length,
+                        hasAuthor: !!novelInfo.author,
+                        timeRaw: novelInfo.site_latest_chapter_time_raw
+                    });
+
+                    if (novel.latest_chapter_num && novelInfo.chapter.num <= novel.latest_chapter_num) {
+                        log('info', `No new chapters (still at Ch.${novelInfo.chapter.num})`, { cycleId, novelId: novel.id });
+
+                        await pool.query(`
+                            UPDATE novels SET 
+                                chapters_updated_at = CURRENT_TIMESTAMP,
+                                genre = COALESCE($2, genre),            
+                                author = COALESCE($3, author),
+                                site_latest_chapter_time_raw = $4,
+                                site_latest_chapter_time = $5
+                            WHERE id = $1
+                        `, [
+                            novel.id,
+                            novelInfo.genres.join(', ') || null,
+                            novelInfo.author,
+                            novelInfo.site_latest_chapter_time_raw,
+                            novelInfo.site_latest_chapter_time
+                        ]);
+
+                    } else {
+                        const updated = await updateNovelChapterInfo(
+                            novel.id,
+                            novelInfo.chapter.num,
+                            novelInfo.chapter.title,
+                            novelInfo.genres.join(', ') || null,
+                            novelInfo.author,
+                            novelInfo.site_latest_chapter_time_raw,
+                            novelInfo.site_latest_chapter_time
+                        );
+
+                        log('success', `Updated novel`, {
+                            cycleId,
+                            novelId: novel.id,
+                            previousChapter: novel.latest_chapter_num || '?',
+                            newChapter: updated.latest_chapter_num,
+                            title: updated.latest_chapter_title,
+                            genres: novelInfo.genres.length > 0 ? novelInfo.genres.join(', ') : null
+                        });
+
+                        global.botStatus.novelsUpdated++;
+                    }
+                } catch (error) {
+                    log('error', 'Novel processing failed', {
+                        cycleId,
+                        novelId: novel.id,
+                        error: error.message
+                    });
+                    addError({
+                        novel: novel.id,
+                        error: error.message,
+                        type: 'fetch',
+                        cycleId
+                    });
+                }
             }
 
-            // Delay handled by global throttle (60s minimum between any requests)
+            // Wait between batches (except for the last batch)
+            if (i + BATCH_SIZE < novels.length) {
+                const waitMinutes = BATCH_INTERVAL_MS / 60000;
+                log('info', `Waiting ${waitMinutes} minutes before next batch...`, { cycleId });
+                await sleep(BATCH_INTERVAL_MS);
+            }
         }
 
         const cycleDuration = Date.now() - cycleStartTime;
-        global.botStatus.cycleDuration = cycleDuration;
-
-        log('success', 'Update cycle complete!', {
-            cycleId,
-            duration: `${(cycleDuration / 1000).toFixed(1)}s`,
-            novelsChecked: global.botStatus.novelsChecked,
-            novelsUpdated: global.botStatus.novelsUpdated
-        });
-
+        global.botStatus.cycleDuration = `${Math.floor(cycleDuration / 1000)}s`;
         global.botStatus.lastRunSuccess = true;
-
-    } catch (error) {
-        const cycleDuration = Date.now() - cycleStartTime;
-        global.botStatus.cycleDuration = cycleDuration;
-
-        log('error', 'Error in update cycle', {
-            cycleId,
-            error: error.message,
-            stack: error.stack,
-            duration: `${(cycleDuration / 1000).toFixed(1)}s`
-        });
-
-        global.botStatus.lastRunSuccess = false;
-        addError({
-            error: error.message,
-            stack: error.stack,
-            type: 'database',
-            cycleId
-        });
-    } finally {
-        global.botStatus.running = false;
         global.botStatus.nextRun = new Date(Date.now() + CHECK_INTERVAL_MS).toISOString();
-        isRunning = false;
-    }
-}
 
-async function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+        log('success', 'Update cycle completed', {
+            cycleId,
+            duration: global.botStatus.cycleDuration,
+            checked: global.botStatus.novelsChecked,
+            updated: global.botStatus.novelsUpdated
+        });
 
-/* ==================== Manual Trigger Function ==================== */
-async function triggerManualUpdate(novelId) {
-    try {
-        const result = await pool.query(
-            'SELECT id, primary_url, latest_chapter_num FROM novels WHERE id = $1',
-            [novelId]
-        );
-
-        if (result.rows.length === 0) {
-            return { error: 'Novel not found' };
-        }
-
-        const novel = result.rows[0];
-
-        // Validate primary_url exists
-        if (!novel.primary_url) {
-            console.error(`❌ Novel ${novel.id} has no primary_url set`);
-            return { error: 'Novel has no URL - cannot fetch updates' };
-        }
-
-        console.log(`🔍 Manual update for: ${novel.id}`);
-        console.log(`   URL: ${novel.primary_url}`);
-
-        try {
-            const html = await fetchNovelMainPage(novel.primary_url);
-
-            if (!html) {
-                console.error(`❌ No HTML returned for ${novel.primary_url}`);
-                return { error: 'Failed to fetch novel page - site may be blocking requests' };
-            }
-
-            console.log(`✓ Fetched HTML (${html.length} bytes)`);
-
-            const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
-
-            if (!novelInfo.chapter) {
-                console.error(`❌ Failed to parse chapter from HTML`);
-                return { error: 'Failed to parse chapter info - page structure may have changed' };
-            }
-
-            console.log(`✓ Parsed chapter: ${novelInfo.chapter.num} - ${novelInfo.chapter.title}`);
-
-            const updated = await updateNovelChapterInfo(
-                novel.id,
-                novelInfo.chapter.num,
-                novelInfo.chapter.title,
-                novelInfo.genres.join(', ') || null,
-                novelInfo.author,
-                novelInfo.site_latest_chapter_time_raw,
-                novelInfo.site_latest_chapter_time
-            );
-
-
-            // Create notifications if new chapter
-            if (novel.latest_chapter_num && novelInfo.chapter.num > novel.latest_chapter_num) {
-                await createNotificationsForNovelUpdate(
-                    novelId,
-                    novel.latest_chapter_num,
-                    updated.latest_chapter_num,
-                    updated.latest_chapter_title
-                );
-            }
-
-            return {
-                success: true,
-                previous: novel.latest_chapter_num,
-                current: updated.latest_chapter_num,
-                title: updated.latest_chapter_title,
-                genres: novelInfo.genres,
-                author: updated.author,
-                isNew: !novel.latest_chapter_num || novelInfo.chapter.num > novel.latest_chapter_num
-            };
-        } catch (fetchError) {
-            // Log detailed error info
-            console.error(`❌ Fetch error for ${novel.id}:`, fetchError.message);
-            console.error(`   Error name:`, fetchError.name);
-            console.error(`   Full error:`, fetchError);
-            console.error(`   Stack:`, fetchError.stack);
-            // Handle rate limiting and fetch errors specifically
-            if (fetchError.message.includes('429')) {
-                return { error: 'Rate limited - please wait a few minutes before trying again' };
-            }
-            if (fetchError.message.includes('403')) {
-                return { error: 'Access forbidden - site is blocking the bot' };
-            }
-            if (fetchError.message.includes('timeout') || fetchError.name === 'AbortError') {
-                return { error: 'Request timed out - site may be slow or blocking requests' };
-            }
-            // Return the ACTUAL error message without modification
-            return { error: fetchError.message };
-        }
+        // Close browser after cycle completes to save memory
+        await closeBrowser();
 
     } catch (error) {
-        return { error: error.message };
-    }
-}
-
-/* ==================== Startup ==================== */
-async function safeUpdateCycle() {
-    try {
-        await updateNovelChapters();
-    } catch (error) {
-        log('error', 'BOT CYCLE CRASHED', {
+        log('error', 'Update cycle failed', {
             error: error.message,
             stack: error.stack
         });
@@ -715,24 +641,46 @@ async function safeUpdateCycle() {
             stack: error.stack,
             type: 'fatal'
         });
-        // Don't let it kill the server - just log and continue
+    } finally {
+        isRunning = false;
+        global.botStatus.running = false;
+    }
+}
+
+async function triggerManualUpdate() {
+    log('info', 'Manual update triggered');
+    setImmediate(() => updateNovelChapters());
+}
+
+async function safeUpdateCycle() {
+    try {
+        await updateNovelChapters();
+    } catch (error) {
+        log('error', 'Critical error in update cycle', {
+            error: error.message,
+            stack: error.stack
+        });
+        global.botStatus.lastRunSuccess = false;
+        addError({
+            error: error.message,
+            stack: error.stack,
+            type: 'fatal'
+        });
     }
 }
 
 async function startBot() {
-    log('info', 'ReadSync Chapter Update Bot Starting...', {
+    log('info', 'ReadSync Chapter Update Bot Starting (WITH PUPPETEER)...', {
         checkInterval: `${CHECK_INTERVAL_MS / 1000 / 60} minutes`,
         batchSize: BATCH_SIZE,
-        requestDelay: `${REQUEST_DELAY_MS / 1000}s`,
+        batchInterval: `${BATCH_INTERVAL_MS / 1000 / 60} minutes`,
         staleThreshold: `${STALE_THRESHOLD_HOURS} hours`
     });
 
-    // Test database connection
     try {
         await pool.query('SELECT 1');
         log('success', 'Database connected');
 
-        // Initialize notifications table
         await initNotifications();
         log('success', 'Notifications system initialized');
     } catch (error) {
@@ -745,43 +693,47 @@ async function startBot() {
     global.triggerManualUpdate = triggerManualUpdate;
     global.runSingleNovelOnly = runSingleNovelOnly;
 
-    // // Run immediately on start
+    // ✅ AUTO-BOT DISABLED - Uncomment these lines to enable automatic updates
     // await safeUpdateCycle();
-
-    // // Then run on interval
     // setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
 
-    log('success', 'Bot is running! Press Ctrl+C to stop.');
+    log('success', 'Bot is running! Use diagnostic mode or enable auto-updates.');
 }
 
-// Graceful shutdown
 async function gracefulShutdown(signal) {
     log('warn', `Received ${signal}, shutting down bot gracefully...`);
 
-    // Wait for current cycle to finish if running
     if (isRunning) {
-        log('info', 'Waiting for current cycle to complete...');
-        let waitCount = 0;
-        while (isRunning && waitCount < GRACEFUL_SHUTDOWN_WAIT_SECONDS) {
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            waitCount++;
+        log('info', `Waiting up to ${GRACEFUL_SHUTDOWN_WAIT_SECONDS}s for current cycle to finish...`);
+
+        const deadline = Date.now() + (GRACEFUL_SHUTDOWN_WAIT_SECONDS * 1000);
+        while (isRunning && Date.now() < deadline) {
+            await sleep(1000);
+        }
+
+        if (isRunning) {
+            log('warn', 'Forcing shutdown - cycle incomplete');
         }
     }
 
+    // Close browser
+    await closeBrowser();
+
+    // Close database
     try {
         await pool.end();
-        log('success', 'Database pool closed, bot shutdown complete');
-        process.exit(0);
+        log('success', 'Database connection closed');
     } catch (error) {
-        log('error', 'Error during shutdown', { error: error.message });
-        process.exit(1);
+        log('error', 'Error closing database', { error: error.message });
     }
+
+    log('success', 'Bot shutdown complete');
+    process.exit(0);
 }
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Export for use as module
 module.exports = {
     startBot,
     updateNovelChapters,
@@ -789,7 +741,6 @@ module.exports = {
     runSingleNovelOnly
 };
 
-// Run if executed directly
 if (require.main === module) {
     startBot().catch(err => {
         console.error('Fatal bot error:', err);
