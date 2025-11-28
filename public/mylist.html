@@ -558,6 +558,68 @@
             font-weight: 600;
         }
 
+        .refresh-panel {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin: 16px 0;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.98);
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .btn-refresh {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-refresh:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+        }
+
+        .btn-refresh:disabled {
+            background: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .refresh-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+
+        .refresh-status {
+            flex: 1;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .refresh-timer {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .refresh-timer span {
+            white-space: nowrap;
+        }
+
         @media (max-width: 768px) {
             header h1 {
                 font-size: 1.5rem;
@@ -628,6 +690,18 @@
             <div class="legend">
                 <span><span class="legend-arrow">▲</span> newer / more recent</span>
                 <span><span class="legend-arrow">▼</span> older / less recent</span>
+            </div>
+        </div>
+
+        <div class="refresh-panel">
+            <button id="refreshAllBtn" class="btn-refresh">
+                🔄 Refresh All Novels
+                <span class="refresh-count"></span>
+            </button>
+            <div class="refresh-status"></div>
+            <div class="refresh-timer">
+                <span id="lastRefresh">Never refreshed</span>
+                <span id="nextRefresh"></span>
             </div>
         </div>
 
