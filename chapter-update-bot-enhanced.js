@@ -130,20 +130,60 @@ async function fetchNovelMainPage(novelUrl) {
         console.log(`🌐 Navigating to: ${baseUrl}`);
 
         // Navigate to page with timeout
-        // Use 'domcontentloaded' instead of 'networkidle0' for faster, more reliable loading
         await page.goto(baseUrl, {
             waitUntil: 'domcontentloaded',
             timeout: BROWSER_TIMEOUT_MS
         });
 
-        // Wait for Cloudflare challenge to complete
-        console.log('⏳ Waiting for Cloudflare challenge...');
-        await page.waitForTimeout(CLOUDFLARE_WAIT_MS);
+        // Real-time monitoring during Cloudflare challenge
+        console.log('⏳ Watching page load in real-time...');
+        const startTime = Date.now();
+        const checkInterval = 2000; // Check every 2 seconds
+        const maxWaitTime = CLOUDFLARE_WAIT_MS + 5000; // 8s + 5s buffer
 
-        // Get HTML content
+        let foundContent = false;
+
+        while ((Date.now() - startTime) < maxWaitTime && !foundContent) {
+            await page.waitForTimeout(checkInterval);
+
+            const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+
+            // Check what's on the page
+            const pageTitle = await page.title();
+            const hasCloudflare = await page.evaluate(() => {
+                return document.body.innerHTML.includes('Just a moment') ||
+                    document.body.innerHTML.includes('challenge-platform');
+            });
+
+            const contentChecks = await page.evaluate(() => {
+                return {
+                    hasLChapter: !!document.querySelector('.l-chapter'),
+                    hasMeta: !!document.querySelector('meta[property*="novel"]'),
+                    hasNovelTitle: !!document.querySelector('.novel-title, .book-title, h1'),
+                    bodySize: document.body.innerHTML.length,
+                    visibleText: document.body.textContent.trim().substring(0, 100).replace(/\s+/g, ' ')
+                };
+            });
+
+            console.log(`   [${elapsed}s] 👁️  Title: "${pageTitle}"`);
+            console.log(`   [${elapsed}s] 📊 Cloudflare=${hasCloudflare ? '❌ YES' : '✅ NO'} | ` +
+                `l-chapter=${contentChecks.hasLChapter ? '✅' : '❌'} | ` +
+                `meta=${contentChecks.hasMeta ? '✅' : '❌'} | ` +
+                `size=${(contentChecks.bodySize / 1024).toFixed(0)}KB`
+            );
+            console.log(`   [${elapsed}s] 📝 Preview: "${contentChecks.visibleText}..."`);
+
+            // If we found the content, stop waiting
+            if (!hasCloudflare && (contentChecks.hasLChapter || contentChecks.hasMeta)) {
+                console.log(`   [${elapsed}s] ✅ Novel content detected! Stopping early.`);
+                foundContent = true;
+                break;
+            }
+        }
+
+        // Get final HTML
         const html = await page.content();
-
-        console.log('✅ Page fetched successfully');
+        console.log('✅ Page fetch complete, parsing...');
         return html;
 
     } catch (error) {
