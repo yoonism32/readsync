@@ -604,6 +604,12 @@
 
     /* ========= ReadSync API Functions ========= */
     async function syncProgress(percent) {
+        // Skip progress sync on main pages (only sync on actual chapter pages)
+        if (!location.pathname.match(/chapter-?\d+/i)) {
+            log('Skipping progress sync on main page');
+            return;
+        }
+
         log('syncProgress invoked', { percent });
         const chapterInfo = parseChapterEnhanced(location.pathname);
         log('parseChapterEnhanced result (syncProgress)', chapterInfo);

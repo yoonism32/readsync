@@ -1293,6 +1293,35 @@ app.get('/api/v1/admin/bot/progress', validateApiKey, async (req, res) => {
     }
 });
 
+
+// Helper function to parse "X hours ago" into a timestamp (copied from bot)
+function parseTimeAgo(str) {
+    if (!str) return null;
+    str = str.toLowerCase().trim();
+
+    const now = new Date();
+
+    if (/just now|a few (seconds|secs) ago/i.test(str)) {
+        return now;
+    }
+
+    let match = str.match(/(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i);
+    if (!match) return null;
+
+    const val = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+
+    const ms = {
+        second: 1000, sec: 1000, minute: 60000, min: 60000,
+        hour: 3600000, day: 86400000, week: 604800000,
+        month: 2592000000, year: 31536000000
+    };
+
+    if (!ms[unit]) return null;
+
+    return new Date(now.getTime() - val * ms[unit]);
+}
+
 // Auto-update endpoint for Tampermonkey userscript
 // Receives chapter info when user visits NovelBin pages
 app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
@@ -1322,8 +1351,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
         );
 
         if (checkResult.rows.length === 0) {
-            // Novel not in user's list - this is normal, not an error
-            console.log(`ℹ️  Novel ${novel_id} not in database (user hasn't added it)`);
+            console.log(`ℹ️  Novel ${novel_id} not in database`);
             return res.status(404).json({
                 error: 'Novel not in your list',
                 novel_id: novel_id
@@ -1332,15 +1360,21 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
         const currentChapter = checkResult.rows[0].latest_chapter_num;
 
-        // Update novel in database
+        // Parse the update time - EXACT SAME LOGIC AS BOT (lines 292-294)
+        const parsed = parseTimeAgo(update_time_raw);
+        const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
+
+        console.log(`⏰ Time: "${update_time_raw}" → ${site_latest_chapter_time}`);
+
+        // Update WITHOUT touching chapters_updated_at (that's for reading, not metadata)
         const result = await pool.query(`
             UPDATE novels 
             SET latest_chapter_num = $2,
                 latest_chapter_title = $3,
-                chapters_updated_at = CURRENT_TIMESTAMP,
                 genre = COALESCE($4, genre),
                 author = COALESCE($5, author),
-                site_latest_chapter_time_raw = $6
+                site_latest_chapter_time_raw = $6,
+                site_latest_chapter_time = $7
             WHERE id = $1
             RETURNING *
         `, [
@@ -1349,18 +1383,19 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
             chapter_title || null,
             genres || null,
             author || null,
-            update_time_raw || null
+            update_time_raw || null,
+            site_latest_chapter_time
         ]);
 
         const updated = result.rows[0];
 
         // Log if this is a new chapter
         if (currentChapter && chapter_num > currentChapter) {
-            console.log(`🆕 New chapter detected! ${novel_id}: Ch.${currentChapter} → Ch.${chapter_num}`);
+            console.log(`🆕 New chapter! ${novel_id}: Ch.${currentChapter} → Ch.${chapter_num}`);
         } else if (currentChapter === chapter_num) {
-            console.log(`✅ Chapter confirmed (no change): ${novel_id} Ch.${chapter_num}`);
+            console.log(`✅ Confirmed: ${novel_id} Ch.${chapter_num}`);
         } else {
-            console.log(`✅ Chapter updated: ${novel_id} → Ch.${chapter_num}`);
+            console.log(`✅ Updated: ${novel_id} → Ch.${chapter_num}`);
         }
 
         res.json({
@@ -1369,6 +1404,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
             previous_chapter: currentChapter,
             current_chapter: updated.latest_chapter_num,
             is_new_chapter: currentChapter && chapter_num > currentChapter,
+            site_update_time: site_latest_chapter_time,
             updated_fields: {
                 chapter: !!chapter_title,
                 genres: !!genres,
