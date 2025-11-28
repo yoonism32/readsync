@@ -1,5 +1,6 @@
 const { createPool } = require('./db-utils');
-const puppeteer = require('puppeteer');
+const puppeteerCore = require('puppeteer-core');
+const chromium = require('@sparticuz/chromium');
 
 /* ==================== Configuration ==================== */
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours between full cycles
@@ -34,20 +35,12 @@ async function getBrowser() {
     // Launch new browser
     browserLaunchInProgress = true;
     try {
-        console.log('🚀 Launching Puppeteer browser...');
-        browserInstance = await puppeteer.launch({
-            headless: 'new',
-            args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-accelerated-2d-canvas',
-                '--no-first-run',
-                '--no-zygote',
-                '--disable-gpu',
-                '--disable-web-security',
-                '--disable-features=IsolateOrigins,site-per-process'
-            ]
+        console.log('🚀 Launching Puppeteer browser with Chromium...');
+        browserInstance = await puppeteerCore.launch({
+            args: chromium.args,
+            defaultViewport: chromium.defaultViewport,
+            executablePath: await chromium.executablePath(),
+            headless: chromium.headless,
         });
         console.log('✅ Browser launched successfully');
         return browserInstance;
@@ -124,18 +117,14 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Get browser instance
         const browser = await getBrowser();
-
         // Create new page
         page = await browser.newPage();
-
         // Set realistic viewport
         await page.setViewport({ width: 1920, height: 1080 });
-
         // Set user agent
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
         console.log(`🌐 Navigating to: ${baseUrl}`);
-
         // Navigate to page with timeout
         await page.goto(baseUrl, {
             waitUntil: 'networkidle0',
@@ -148,7 +137,6 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Get HTML content
         const html = await page.content();
-
         console.log('✅ Page fetched successfully');
         return html;
 
@@ -670,7 +658,7 @@ async function safeUpdateCycle() {
 }
 
 async function startBot() {
-    log('info', 'ReadSync Chapter Update Bot Starting (WITH PUPPETEER)...', {
+    log('info', 'ReadSync Chapter Update Bot Starting (PUPPETEER-CORE + CHROMIUM)...', {
         checkInterval: `${CHECK_INTERVAL_MS / 1000 / 60} minutes`,
         batchSize: BATCH_SIZE,
         batchInterval: `${BATCH_INTERVAL_MS / 1000 / 60} minutes`,
