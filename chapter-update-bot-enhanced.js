@@ -13,8 +13,8 @@ const MAX_ERRORS = 100;
 const RETAIN_ERRORS = 50;
 
 // Timeout constants
-const BROWSER_TIMEOUT_MS = 30000; // 30 seconds timeout for browser operations
-const CLOUDFLARE_WAIT_MS = 5000; // 5 seconds wait for Cloudflare challenge
+const BROWSER_TIMEOUT_MS = 60000; // 60 seconds timeout for browser operations
+const CLOUDFLARE_WAIT_MS = 8000; // 8 seconds wait for Cloudflare challenge
 const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60;
 
 /* ==================== PUPPETEER BROWSER MANAGEMENT ==================== */
@@ -117,17 +117,22 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Get browser instance
         const browser = await getBrowser();
+
         // Create new page
         page = await browser.newPage();
+
         // Set realistic viewport
         await page.setViewport({ width: 1920, height: 1080 });
+
         // Set user agent
         await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
 
         console.log(`🌐 Navigating to: ${baseUrl}`);
+
         // Navigate to page with timeout
+        // Use 'domcontentloaded' instead of 'networkidle0' for faster, more reliable loading
         await page.goto(baseUrl, {
-            waitUntil: 'networkidle0',
+            waitUntil: 'domcontentloaded',
             timeout: BROWSER_TIMEOUT_MS
         });
 
@@ -137,6 +142,7 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Get HTML content
         const html = await page.content();
+
         console.log('✅ Page fetched successfully');
         return html;
 
