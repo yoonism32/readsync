@@ -18,7 +18,7 @@ const GRACEFUL_SHUTDOWN_WAIT_SECONDS = 60; // Max wait time for graceful shutdow
 let lastNovelbinRequestAt = 0;
 let novelbinBlockedUntil = 0;
 
-const MIN_GLOBAL_GAP_MS = 60_000;      // 60 seconds between ANY NovelBin requests
+const MIN_GLOBAL_GAP_MS = 120_000;      // 60 seconds between ANY NovelBin requests
 const COOLDOWN_403_MS = 6 * 60 * 60 * 1000; // 6 hours hard block on 403
 const COOLDOWN_429_MS = 30 * 60 * 1000;     // 30 min cooldown on 429
 
