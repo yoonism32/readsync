@@ -1079,7 +1079,196 @@
                 console.log('🔄 Auto-refreshing novel list for latest chapters...');
                 loadMyList();
             }, 3 * 60 * 1000); // 3 minutes
+
+            // Initialize smart refresh system
+            initSmartRefresh();
         });
+
+        // ============ SMART AUTO-REFRESH SYSTEM ============
+        const REFRESH_INTERVAL_HOURS = 6;
+        const TAB_OPEN_DELAY = 5000; // 5 seconds between tabs
+        const TAB_WAIT_FOR_UPDATE = 3000; // 3 seconds to wait for auto-update
+        const MAX_WAIT_PER_NOVEL = 10000; // 10 seconds max per novel
+
+        let isRefreshing = false;
+        let lastRefreshTime = localStorage.getItem('lastNovelRefresh');
+
+        function initSmartRefresh() {
+            const btn = document.getElementById('refreshAllBtn');
+            if (btn) {
+                btn.addEventListener('click', startSmartRefresh);
+            }
+
+            updateTimerDisplay();
+            setInterval(updateTimerDisplay, 60000); // Update every minute
+
+            // Check if notification permission needed
+            if ('Notification' in window && Notification.permission === 'default') {
+                Notification.requestPermission();
+            }
+        }
+
+        function updateTimerDisplay() {
+            const lastEl = document.getElementById('lastRefresh');
+            const nextEl = document.getElementById('nextRefresh');
+
+            if (!lastRefreshTime) {
+                lastEl.textContent = 'Never refreshed';
+                nextEl.textContent = '';
+                return;
+            }
+
+            const lastTime = new Date(parseInt(lastRefreshTime));
+            const now = new Date();
+            const elapsed = now - lastTime;
+            const nextRefresh = lastTime.getTime() + (REFRESH_INTERVAL_HOURS * 60 * 60 * 1000);
+            const remaining = nextRefresh - now;
+
+            // Format elapsed
+            const hours = Math.floor(elapsed / (1000 * 60 * 60));
+            const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+            lastEl.textContent = `Last: ${hours}h ${minutes}m ago`;
+
+            // Format remaining
+            if (remaining > 0) {
+                const remHours = Math.floor(remaining / (1000 * 60 * 60));
+                const remMinutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                nextEl.textContent = `Next: ${remHours}h ${remMinutes}m`;
+                nextEl.style.color = 'var(--text-secondary)';
+            } else {
+                nextEl.textContent = '🔔 Time to refresh!';
+                nextEl.style.color = '#10b981';
+                nextEl.style.fontWeight = '600';
+
+                // Show notification
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('ReadSync - Time to Refresh!', {
+                        body: `It's been ${hours}h since last refresh. Click to update your novels!`,
+                        icon: '/favicon.ico',
+                        tag: 'readsync-refresh'
+                    });
+                }
+            }
+        }
+
+        async function startSmartRefresh() {
+            if (isRefreshing) return;
+
+            const novels = allNovels.filter(n => n.primary_url); // Only novels with URLs
+            if (novels.length === 0) {
+                updateRefreshStatus('No novels to refresh');
+                return;
+            }
+
+            isRefreshing = true;
+            const btn = document.getElementById('refreshAllBtn');
+            const countEl = btn.querySelector('.refresh-count');
+            btn.disabled = true;
+
+            let completed = 0;
+            let failed = 0;
+
+            console.log(`🚀 Starting smart refresh for ${novels.length} novels...`);
+
+            for (let i = 0; i < novels.length; i++) {
+                const novel = novels[i];
+                const title = novel.title || novel.novel_id;
+
+                // Update UI
+                countEl.textContent = `${i + 1}/${novels.length}`;
+                updateRefreshStatus(`Refreshing: ${title}...`);
+
+                try {
+                    const success = await refreshSingleNovel(novel.primary_url, title);
+                    if (success) {
+                        completed++;
+                        console.log(`✅ ${i + 1}/${novels.length}: ${title}`);
+                    } else {
+                        failed++;
+                        console.warn(`⚠️ ${i + 1}/${novels.length}: ${title} (failed)`);
+                    }
+                } catch (error) {
+                    console.error(`❌ ${i + 1}/${novels.length}: ${title}`, error);
+                    failed++;
+                }
+
+                // Wait before next novel (Cloudflare protection)
+                if (i < novels.length - 1) {
+                    await sleep(TAB_OPEN_DELAY);
+                }
+            }
+
+            // Done!
+            isRefreshing = false;
+            btn.disabled = false;
+            countEl.textContent = '';
+            updateRefreshStatus(`✅ Complete! Updated: ${completed}, Failed: ${failed}`);
+
+            // Save timestamp
+            lastRefreshTime = Date.now().toString();
+            localStorage.setItem('lastNovelRefresh', lastRefreshTime);
+            updateTimerDisplay();
+
+            // Reload the list to show updated chapters
+            console.log('📊 Reloading novel list...');
+            await loadMyList();
+
+            // Clear status after 10 seconds
+            setTimeout(() => {
+                updateRefreshStatus('');
+            }, 10000);
+        }
+
+        function refreshSingleNovel(url, title) {
+            return new Promise((resolve) => {
+                console.log(`📖 Opening: ${title}`);
+
+                // Open tab
+                const newTab = window.open(url, '_blank');
+
+                if (!newTab) {
+                    console.error(`❌ Popup blocked for: ${title}`);
+                    resolve(false);
+                    return;
+                }
+
+                // Wait for auto-update to run (tm-live waits 2s, then runs auto-update)
+                // Total: 2s (tm-live delay) + 1s (execution) = 3s
+                setTimeout(() => {
+                    console.log(`✅ Update completed for: ${title}`);
+
+                    // Close tab
+                    try {
+                        newTab.close();
+                        console.log(`🗑️ Closed tab for: ${title}`);
+                    } catch (e) {
+                        console.warn('Could not close tab:', e);
+                    }
+
+                    resolve(true);
+                }, TAB_WAIT_FOR_UPDATE);
+
+                // Max wait timeout
+                setTimeout(() => {
+                    console.warn(`⏱️ Timeout for: ${title}`);
+                    try {
+                        newTab.close();
+                    } catch (e) { }
+                    resolve(false);
+                }, MAX_WAIT_PER_NOVEL);
+            });
+        }
+
+        function updateRefreshStatus(message) {
+            const statusEl = document.querySelector('.refresh-status');
+            if (statusEl) {
+                statusEl.textContent = message;
+            }
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
     </script>
 </body>
 
