@@ -1428,7 +1428,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 });
 
 /* ---------------------- Settings API ---------------------- */
-app.get('/api/vi/settings/last-refresh', validateApiKey, async (req, res) => {
+app.get('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT value, updated_at 
