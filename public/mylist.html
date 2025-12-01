@@ -688,8 +688,8 @@
                 <input id="searchInput" type="search" placeholder="Search title…" autocomplete="off">
             </div>
             <div class="legend">
-                <span><span class="legend-arrow">▲</span> descending</span>
-                <span><span class="legend-arrow">▼</span> ascending</span>
+                <span><span class="legend-arrow">▲</span> newer / more recent</span>
+                <span><span class="legend-arrow">▼</span> older / less recent</span>
             </div>
         </div>
 
@@ -1189,10 +1189,10 @@
         });
 
         // ============ SMART AUTO-REFRESH SYSTEM ============
-        const REFRESH_INTERVAL_HOURS = 12;
+        const REFRESH_INTERVAL_HOURS = 12; // 🔧 ADJUST THIS: hours between recommended refreshes
         const BATCH_SIZE = 2; // 🔧 ADJUST THIS: 1 = sequential, 2-3 = parallel batches, 4+ = risky with Cloudflare
         const TAB_OPEN_DELAY = 5000; // 5 seconds between batches
-        const TAB_WAIT_FOR_UPDATE = 3000; // 3 seconds to wait for auto-update
+        const TAB_WAIT_FOR_UPDATE = 6000; // 6 seconds to wait for auto-update
         const MAX_WAIT_PER_NOVEL = 10000; // 10 seconds max per novel
 
         let isRefreshing = false;
@@ -1388,30 +1388,63 @@
                     return;
                 }
 
-                // Wait for auto-update to run (tm-live waits 2s, then runs auto-update)
-                // Total: 2s (tm-live delay) + 1s (execution) = 3s
-                setTimeout(() => {
-                    console.log(`✅ Update completed for: ${title}`);
+                let checkCount = 0;
+                const maxChecks = 30; // Check for 30 seconds max
+                let resolved = false;
 
-                    // Close tab
+                // Periodically check if tab is still loading or stuck
+                const checkInterval = setInterval(() => {
+                    checkCount++;
+
                     try {
-                        newTab.close();
-                        console.log(`🗑️ Closed tab for: ${title}`);
+                        // Try to access tab - if Cloudflare challenge, this will fail
+                        // If tab closed itself or finished loading, this will also fail
+                        if (newTab.closed) {
+                            console.log(`✅ Tab self-closed for: ${title} (update complete)`);
+                            clearInterval(checkInterval);
+                            if (!resolved) {
+                                resolved = true;
+                                resolve(true);
+                            }
+                            return;
+                        }
+
+                        // After minimum wait time, try to close
+                        if (checkCount >= 3) { // 3 seconds minimum
+                            console.log(`🗑️ Attempting to close tab for: ${title}`);
+                            newTab.close();
+
+                            // Check if it actually closed
+                            setTimeout(() => {
+                                if (newTab.closed) {
+                                    console.log(`✅ Successfully closed tab for: ${title}`);
+                                    clearInterval(checkInterval);
+                                    if (!resolved) {
+                                        resolved = true;
+                                        resolve(true);
+                                    }
+                                } else {
+                                    console.warn(`⚠️ Tab stuck (Cloudflare?) for: ${title}`);
+                                }
+                            }, 100);
+                        }
+
+                        // Timeout after max checks
+                        if (checkCount >= maxChecks) {
+                            console.warn(`⏱️ Timeout for: ${title} - giving up`);
+                            clearInterval(checkInterval);
+                            try {
+                                newTab.close();
+                            } catch (e) { }
+                            if (!resolved) {
+                                resolved = true;
+                                resolve(false);
+                            }
+                        }
                     } catch (e) {
-                        console.warn('Could not close tab:', e);
+                        // Cross-origin error expected - continue checking
                     }
-
-                    resolve(true);
-                }, TAB_WAIT_FOR_UPDATE);
-
-                // Max wait timeout
-                setTimeout(() => {
-                    console.warn(`⏱️ Timeout for: ${title}`);
-                    try {
-                        newTab.close();
-                    } catch (e) { }
-                    resolve(false);
-                }, MAX_WAIT_PER_NOVEL);
+                }, 1000); // Check every second
             });
         }
 
