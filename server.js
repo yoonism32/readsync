@@ -36,7 +36,62 @@ const io = new Server(httpServer, {
     }
 });
 
-const PORT = process.env.PORT || 3000;
+/* ---------------------- Configuration Constants ---------------------- */
+// Server configuration
+const DEFAULT_PORT = 3000;
+const PORT = process.env.PORT || DEFAULT_PORT;
+
+// Database connection pool configuration
+const DEFAULT_PG_POOL_MAX = 20;
+const DEFAULT_PG_IDLE_TIMEOUT_MS = 30000; // 30 seconds
+const DEFAULT_PG_CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
+
+// Request body size limits
+const JSON_BODY_LIMIT = '10mb';
+
+// Pagination limits
+const DEFAULT_PAGE_LIMIT = 50;
+const MIN_PAGE_LIMIT = 1;
+const MAX_PAGE_LIMIT = 200;
+
+// String length constraints
+const MAX_NOVEL_ID_LENGTH = 200;
+const MAX_DEVICE_ID_LENGTH = 200;
+const MAX_DEVICE_LABEL_LENGTH = 200;
+const MAX_NOTE_TEXT_LENGTH = 5000;
+
+// Percentage constraints
+const MIN_PERCENT = 0;
+const MAX_PERCENT = 100;
+
+// Progress tracking thresholds
+const CHAPTER_RESTART_THRESHOLD_PERCENT = 1; // Consider <1% as restart
+const SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT = 10; // Progress >10% is significant
+const DEVICE_BEHIND_THRESHOLD_PERCENT = 20; // Device >20% behind is considered stale
+
+// Time-based constants (in milliseconds)
+const MS_PER_SECOND = 1000;
+const MS_PER_MINUTE = 60000;
+const MS_PER_HOUR = 3600000;
+const MS_PER_DAY = 86400000;
+
+// Analytics defaults
+const DEFAULT_ANALYTICS_DAYS = 30;
+const MIN_ANALYTICS_HOURS = 1;
+const MAX_ANALYTICS_HOURS = 168; // 7 days
+const DEFAULT_ANALYTICS_HOURS = 24;
+
+// HTTP status codes (for clarity and self-documentation)
+const HTTP_OK = 200;
+const HTTP_CREATED = 201;
+const HTTP_BAD_REQUEST = 400;
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_NOT_FOUND = 404;
+const HTTP_CONFLICT = 409;
+const HTTP_INTERNAL_ERROR = 500;
+
+// Radix for parseInt operations
+const DECIMAL_RADIX = 10;
 
 // Export database utilities before requiring bot (to avoid circular dependency)
 // These will be available when bot requires this file
@@ -82,7 +137,7 @@ app.use(cors({
 }));
 
 /* ---------------------- Middleware ---------------------- */
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.static('public'));
 
 // Request logging middleware
@@ -110,9 +165,9 @@ if (!raw) {
 
 const pool = createPool({
     connectionString: raw,
-    max: process.env.PG_POOL_MAX || 20,
-    idleTimeoutMillis: process.env.PG_IDLE_TIMEOUT || 30000,
-    connectionTimeoutMillis: process.env.PG_CONN_TIMEOUT || 10000,
+    max: process.env.PG_POOL_MAX || DEFAULT_PG_POOL_MAX,
+    idleTimeoutMillis: process.env.PG_IDLE_TIMEOUT || DEFAULT_PG_IDLE_TIMEOUT_MS,
+    connectionTimeoutMillis: process.env.PG_CONN_TIMEOUT || DEFAULT_PG_CONNECTION_TIMEOUT_MS,
 });
 
 /* ---------------------- Error Handling Utilities ---------------------- */
@@ -121,12 +176,12 @@ const handleDbError = (res, error, operation) => {
 
     // Common PostgreSQL error codes
     switch (error.code) {
-        case '23503': return res.status(400).json({ error: 'Referenced record not found' });
-        case '23505': return res.status(409).json({ error: 'Duplicate entry' });
-        case '23514': return res.status(400).json({ error: 'Check constraint violation' });
-        case '42P01': return res.status(500).json({ error: 'Table does not exist' });
+        case '23503': return res.status(HTTP_BAD_REQUEST).json({ error: 'Referenced record not found' });
+        case '23505': return res.status(HTTP_CONFLICT).json({ error: 'Duplicate entry' });
+        case '23514': return res.status(HTTP_BAD_REQUEST).json({ error: 'Check constraint violation' });
+        case '42P01': return res.status(HTTP_INTERNAL_ERROR).json({ error: 'Table does not exist' });
         default:
-            return res.status(500).json({
+            return res.status(HTTP_INTERNAL_ERROR).json({
                 error: 'Database error',
                 detail: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
             });
@@ -153,7 +208,7 @@ const withTransaction = async (callback) => {
 const handleValidationErrors = (req, res, next) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({
+        return res.status(HTTP_BAD_REQUEST).json({
             error: 'Validation failed',
             errors: errors.array()
         });
@@ -164,13 +219,13 @@ const handleValidationErrors = (req, res, next) => {
 const validateApiKey = async (req, res, next) => {
     const user_key = req.body?.user_key || req.query?.user_key;
     if (!user_key) {
-        return res.status(401).json({ error: 'API key required' });
+        return res.status(HTTP_UNAUTHORIZED).json({ error: 'API key required' });
     }
 
     try {
         const result = await pool.query('SELECT id, display_name FROM users WHERE api_key = $1', [user_key]);
         if (result.rows.length === 0) {
-            return res.status(401).json({ error: 'Invalid API key' });
+            return res.status(HTTP_UNAUTHORIZED).json({ error: 'Invalid API key' });
         }
 
         req.user = result.rows[0];
@@ -182,14 +237,14 @@ const validateApiKey = async (req, res, next) => {
 
 const validateNovelId = (req, res, next) => {
     const { novelId } = req.params;
-    if (!novelId || typeof novelId !== 'string' || novelId.length > 200) {
-        return res.status(400).json({ error: 'Invalid novel ID format' });
+    if (!novelId || typeof novelId !== 'string' || novelId.length > MAX_NOVEL_ID_LENGTH) {
+        return res.status(HTTP_BAD_REQUEST).json({ error: 'Invalid novel ID format' });
     }
     next();
 };
 
 const validatePagination = (req, res, next) => {
-    const limit = Math.max(1, Math.min(200, Number(req.query.limit || 50)));
+    const limit = Math.max(MIN_PAGE_LIMIT, Math.min(MAX_PAGE_LIMIT, Number(req.query.limit || DEFAULT_PAGE_LIMIT)));
     const offset = Math.max(0, Number(req.query.offset || 0));
     req.pagination = { limit, offset };
     next();
@@ -438,10 +493,15 @@ function extractNovelTitle(url) {
     return match[1].replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
 }
 
+/**
+ * Extracts chapter information from a novel URL
+ * @param {string} url - The chapter URL to parse
+ * @returns {{token: string, num: number}|null} Chapter token and number, or null if invalid
+ */
 function parseChapterFromUrl(url) {
     const m = url.match(/\/(c*chapter)-(\d+)(?:-\d+)?/i);
     if (!m) return null;
-    return { token: m[1], num: parseInt(m[2], 10) };
+    return { token: m[1], num: parseInt(m[2], DECIMAL_RADIX) };
 }
 
 async function getLatestStates(client, userId, novelId) {
@@ -506,8 +566,8 @@ async function getLatestStates(client, userId, novelId) {
             // If device is in a *much earlier* chapter → drop
             if (devChapter < globalChapter) continue;
 
-            // Same chapter but very far behind (e.g. 45% vs 100%) → drop
-            if (devChapter === globalChapter && devPercent < globalPercent - 20) continue;
+            // Same chapter but very far behind → drop
+            if (devChapter === globalChapter && devPercent < globalPercent - DEVICE_BEHIND_THRESHOLD_PERCENT) continue;
 
             // Otherwise keep
             cleaned[id] = d;
@@ -545,7 +605,7 @@ app.get('/health', async (req, res) => {
 app.get('/healthz', async (req, res) => {
     try {
         await pool.query('SELECT 1');
-        res.status(200).json({ ok: true });
+        res.status(HTTP_OK).json({ ok: true });
     } catch (error) {
         res.status(503).json({ ok: false, error: error.message });
     }
@@ -566,10 +626,10 @@ app.get('/api/v1/auth/whoami', /* authLimiter, */ validateApiKey, (req, res) => 
 
 app.post('/api/v1/progress',
     [
-        body('device_id').isString().isLength({ min: 1, max: 200 }).withMessage('device_id must be a string between 1-200 characters'),
-        body('device_label').isString().isLength({ min: 1, max: 200 }).withMessage('device_label must be a string between 1-200 characters'),
+        body('device_id').isString().isLength({ min: 1, max: MAX_DEVICE_ID_LENGTH }).withMessage(`device_id must be a string between 1-${MAX_DEVICE_ID_LENGTH} characters`),
+        body('device_label').isString().isLength({ min: 1, max: MAX_DEVICE_LABEL_LENGTH }).withMessage(`device_label must be a string between 1-${MAX_DEVICE_LABEL_LENGTH} characters`),
         body('novel_url').isURL().withMessage('novel_url must be a valid URL'),
-        body('percent').isFloat({ min: 0, max: 100 }).withMessage('percent must be a number between 0 and 100'),
+        body('percent').isFloat({ min: MIN_PERCENT, max: MAX_PERCENT }).withMessage(`percent must be a number between ${MIN_PERCENT} and ${MAX_PERCENT}`),
         body('seconds_on_page').optional().isInt({ min: 0 }).withMessage('seconds_on_page must be a non-negative integer'),
         handleValidationErrors
     ],
@@ -598,10 +658,10 @@ app.post('/api/v1/progress',
         });
 
         if (!novel_id || !chapterInfo) {
-            return res.status(400).json({ error: 'Invalid novel URL format or missing chapter info' });
+            return res.status(HTTP_BAD_REQUEST).json({ error: 'Invalid novel URL format or missing chapter info' });
         }
 
-        const percentValue = Math.max(0, Math.min(100, Number(percent)));
+        const percentValue = Math.max(MIN_PERCENT, Math.min(MAX_PERCENT, Number(percent)));
         const latestChapterNum = req.body.latest_chapter_num != null ? Number(req.body.latest_chapter_num) : null;
         const latestChapterTitle = req.body.latest_chapter_title || null;
 
@@ -671,8 +731,10 @@ app.post('/api/v1/progress',
                     if (chapterInfo.num < prev.chapter_num) {
                         shouldUpdate = false;
                     }
-                    // Ignore noise at chapter start if previously made progress
-                    if (percentValue <= 1 && parseFloat(prev.percent) > 10 && prev.chapter_num === chapterInfo.num) {
+                    // Ignore noise at chapter start if previously made significant progress
+                    if (percentValue <= CHAPTER_RESTART_THRESHOLD_PERCENT &&
+                        parseFloat(prev.percent) > SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT &&
+                        prev.chapter_num === chapterInfo.num) {
                         shouldUpdate = false;
                     }
                 }
@@ -718,7 +780,7 @@ app.get('/api/v1/progress', validateApiKey, async (req, res) => {
     const { novel_id } = req.query;
 
     if (!novel_id) {
-        return res.status(400).json({ error: 'novel_id parameter required' });
+        return res.status(HTTP_BAD_REQUEST).json({ error: 'novel_id parameter required' });
     }
 
     try {
@@ -738,7 +800,7 @@ app.get('/api/v1/compare', validateApiKey, async (req, res) => {
     const { novel_id, device_id } = req.query;
 
     if (!novel_id || !device_id) {
-        return res.status(400).json({ error: 'novel_id and device_id parameters required' });
+        return res.status(HTTP_BAD_REQUEST).json({ error: 'novel_id and device_id parameters required' });
     }
 
     try {
@@ -906,8 +968,8 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
                         // If device is in a *much earlier* chapter → drop
                         if (devChapter < globalChapter) continue;
 
-                        // Same chapter but very far behind (e.g. 45% vs 100%) → drop
-                        if (devChapter === globalChapter && devPercent < globalPercent - 20) continue;
+                        // Same chapter but very far behind → drop
+                        if (devChapter === globalChapter && devPercent < globalPercent - DEVICE_BEHIND_THRESHOLD_PERCENT) continue;
 
                         // Otherwise keep
                         cleaned[id] = d;
@@ -951,7 +1013,7 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
 // 🔴 FIXED status endpoint
 app.put('/api/v1/novels/:novelId/status',
     [
-        param('novelId').isString().isLength({ min: 1, max: 200 }).withMessage('Invalid novel ID format'),
+        param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage('Invalid novel ID format'),
         body('status').isIn(['reading', 'completed', 'on-hold', 'dropped', 'removed']).withMessage('Invalid status'),
         handleValidationErrors
     ],
@@ -1168,8 +1230,8 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
 
 // Get novels that need chapter updates
 app.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
-    const { hours = 24 } = req.query;
-    const hoursValue = Math.max(1, Math.min(168, parseInt(hours, 10) || 24)); // Clamp between 1 and 168 hours
+    const { hours = DEFAULT_ANALYTICS_HOURS } = req.query;
+    const hoursValue = Math.max(MIN_ANALYTICS_HOURS, Math.min(MAX_ANALYTICS_HOURS, parseInt(hours, DECIMAL_RADIX) || DEFAULT_ANALYTICS_HOURS));
 
     try {
         const result = await pool.query(`
@@ -1265,7 +1327,7 @@ app.post('/api/v1/admin/novels/single-run', validateApiKey, async (req, res) => 
     const { novelId } = req.body;
 
     if (!novelId) {
-        return res.status(400).json({ error: 'novelId required' });
+        return res.status(HTTP_BAD_REQUEST).json({ error: 'novelId required' });
     }
 
     try {
@@ -1296,7 +1358,7 @@ app.post('/admin/force-refresh-all', async (req, res) => {
         return res.json({ success: true, message: "Global refresh started." });
     } catch (err) {
         console.error("Force refresh failed:", err);
-        return res.status(500).json({ error: err.message });
+        return res.status(HTTP_INTERNAL_ERROR).json({ error: err.message });
     }
 });
 
@@ -1354,13 +1416,20 @@ function parseTimeAgo(str) {
     let match = str.match(/(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i);
     if (!match) return null;
 
-    const val = parseInt(match[1], 10);
+    const val = parseInt(match[1], DECIMAL_RADIX);
     const unit = match[2].toLowerCase();
 
+    // Time unit conversions in milliseconds
     const ms = {
-        second: 1000, sec: 1000, minute: 60000, min: 60000,
-        hour: 3600000, day: 86400000, week: 604800000,
-        month: 2592000000, year: 31536000000
+        second: MS_PER_SECOND,
+        sec: MS_PER_SECOND,
+        minute: MS_PER_MINUTE,
+        min: MS_PER_MINUTE,
+        hour: MS_PER_HOUR,
+        day: MS_PER_DAY,
+        week: MS_PER_DAY * 7,
+        month: MS_PER_DAY * 30,  // Approximate
+        year: MS_PER_DAY * 365   // Approximate
     };
 
     if (!ms[unit]) return null;
@@ -1377,12 +1446,12 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
         // Verify API key
         if (user_key !== 'demo-api-key-12345') {
-            return res.status(401).json({ error: 'Invalid API key' });
+            return res.status(HTTP_UNAUTHORIZED).json({ error: 'Invalid API key' });
         }
 
         // Validate required fields
         if (!novel_id || !chapter_num) {
-            return res.status(400).json({
+            return res.status(HTTP_BAD_REQUEST).json({
                 error: 'Missing required fields',
                 required: ['novel_id', 'chapter_num']
             });
@@ -1398,7 +1467,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
         if (checkResult.rows.length === 0) {
             console.log(`ℹ️  Novel ${novel_id} not in database`);
-            return res.status(404).json({
+            return res.status(HTTP_NOT_FOUND).json({
                 error: 'Novel not in your list',
                 novel_id: novel_id
             });
@@ -1461,7 +1530,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Auto-update error:', error);
-        res.status(500).json({
+        res.status(HTTP_INTERNAL_ERROR).json({
             error: 'Internal server error',
             message: error.message
         });
@@ -1490,7 +1559,7 @@ app.get('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
         });
     } catch (error) {
         console.error('Failed to get last refresh time:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(HTTP_INTERNAL_ERROR).json({ error: 'Internal server error' });
     }
 });
 
@@ -1500,7 +1569,7 @@ app.post('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
         const { timestamp } = req.body;
 
         if (!timestamp) {
-            return res.status(400).json({ error: 'Missing timestamp' });
+            return res.status(HTTP_BAD_REQUEST).json({ error: 'Missing timestamp' });
         }
 
         // Upsert the setting
@@ -1519,7 +1588,7 @@ app.post('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
         });
     } catch (error) {
         console.error('Failed to save last refresh time:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.status(HTTP_INTERNAL_ERROR).json({ error: 'Internal server error' });
     }
 });
 
@@ -1576,19 +1645,19 @@ app.get('/api/v1/bookmarks', validateApiKey, validatePagination, async (req, res
 
 app.post('/api/v1/bookmarks',
     [
-        body('novel_id').isString().isLength({ min: 1, max: 200 }).withMessage('novel_id must be a string between 1-200 characters'),
+        body('novel_id').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage(`novel_id must be a string between 1-${MAX_NOVEL_ID_LENGTH} characters`),
         body('chapter_url').isURL().withMessage('chapter_url must be a valid URL'),
-        body('percent').isFloat({ min: 0, max: 100 }).withMessage('percent must be a number between 0 and 100'),
+        body('percent').isFloat({ min: MIN_PERCENT, max: MAX_PERCENT }).withMessage(`percent must be a number between ${MIN_PERCENT} and ${MAX_PERCENT}`),
         body('bookmark_type').optional().isIn(['position', 'highlight', 'note', 'favorite']).withMessage('Invalid bookmark_type'),
         body('title').optional().isString().isLength({ max: 500 }).withMessage('title must be a string up to 500 characters'),
-        body('note').optional().isString().isLength({ max: 5000 }).withMessage('note must be a string up to 5000 characters'),
+        body('note').optional().isString().isLength({ max: MAX_NOTE_TEXT_LENGTH }).withMessage(`note must be a string up to ${MAX_NOTE_TEXT_LENGTH} characters`),
         handleValidationErrors
     ],
     validateApiKey,
     async (req, res) => {
         const { novel_id, chapter_url, percent, bookmark_type = 'position', title, note } = req.body;
 
-        const percentValue = Math.max(0, Math.min(100, Number(percent)));
+        const percentValue = Math.max(MIN_PERCENT, Math.min(MAX_PERCENT, Number(percent)));
 
         try {
             const result = await withTransaction(async (client) => {
@@ -1609,14 +1678,14 @@ app.post('/api/v1/bookmarks',
                 return insertResult.rows[0];
             });
 
-            res.status(201).json({
+            res.status(HTTP_CREATED).json({
                 success: true,
                 id: result.id,
                 created_at: result.created_at
             });
         } catch (error) {
             if (error.code === '23505') {
-                return res.status(409).json({ error: 'Bookmark already exists at this position' });
+                return res.status(HTTP_CONFLICT).json({ error: 'Bookmark already exists at this position' });
             }
             handleDbError(res, error, 'Create bookmark');
         }
@@ -1628,7 +1697,7 @@ app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
 
     const validTypes = ['position', 'highlight', 'note', 'favorite'];
     if (bookmark_type && !validTypes.includes(bookmark_type)) {
-        return res.status(400).json({
+        return res.status(HTTP_BAD_REQUEST).json({
             error: 'Invalid bookmark_type',
             allowed: validTypes
         });
@@ -1641,7 +1710,7 @@ app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
 
         if (percent != null) {
             updates.push(`percent = $${++paramIndex}`);
-            params.push(Math.max(0, Math.min(100, Number(percent))));
+            params.push(Math.max(MIN_PERCENT, Math.min(MAX_PERCENT, Number(percent))));
         }
         if (bookmark_type) {
             updates.push(`bookmark_type = $${++paramIndex}`);
@@ -1670,7 +1739,7 @@ app.put('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => {
     `, params);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Bookmark not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Bookmark not found' });
         }
 
         res.json({ success: true });
@@ -1690,7 +1759,7 @@ app.delete('/api/v1/bookmarks/:bookmarkId', validateApiKey, async (req, res) => 
     `, [req.user.id, Number(bookmarkId)]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Bookmark not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Bookmark not found' });
         }
 
         res.json({ success: true });
@@ -1781,14 +1850,14 @@ app.post('/api/v1/sessions', validateApiKey, async (req, res) => {
     const { novel_id, device_id, session_type = 'manual', start_time, start_percent } = req.body;
 
     if (!novel_id || !device_id) {
-        return res.status(400).json({
+        return res.status(HTTP_BAD_REQUEST).json({
             error: 'Missing required fields: novel_id, device_id'
         });
     }
 
     const validTypes = ['auto', 'manual', 'imported'];
     if (!validTypes.includes(session_type)) {
-        return res.status(400).json({
+        return res.status(HTTP_BAD_REQUEST).json({
             error: 'Invalid session_type',
             allowed: validTypes
         });
@@ -1808,7 +1877,7 @@ app.post('/api/v1/sessions', validateApiKey, async (req, res) => {
             start_percent != null ? Number(start_percent) : null
         ]);
 
-        res.status(201).json({
+        res.status(HTTP_CREATED).json({
             success: true,
             id: result.rows[0].id,
             start_time: result.rows[0].start_time
@@ -1829,14 +1898,14 @@ app.put('/api/v1/sessions/:sessionId/end', validateApiKey, async (req, res) => {
     `, [Number(sessionId), req.user.id]);
 
         if (sessionResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Active session not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Active session not found' });
         }
 
         const startTime = new Date(sessionResult.rows[0].start_time);
         const endTime = end_time ? new Date(end_time) : new Date();
         const calculatedDuration = time_spent_seconds != null ?
             Number(time_spent_seconds) :
-            Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / 1000));
+            Math.max(0, Math.floor((endTime.getTime() - startTime.getTime()) / MS_PER_SECOND));
 
         await pool.query(`
       UPDATE reading_sessions
@@ -1914,7 +1983,7 @@ app.put('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
     `, params);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Device not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Device not found' });
         }
 
         res.json({ success: true });
@@ -1935,7 +2004,7 @@ app.delete('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
     `, [req.user.id, deviceId]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Device not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Device not found' });
         }
 
         res.json({ success: true, deactivated: true });
@@ -2047,9 +2116,9 @@ app.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
 
 
 app.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
-    const { from, to, days = 30 } = req.query;
+    const { from, to, days = DEFAULT_ANALYTICS_DAYS } = req.query;
 
-    const fromDate = from ? new Date(from) : new Date(Date.now() - (Number(days) * 24 * 60 * 60 * 1000));
+    const fromDate = from ? new Date(from) : new Date(Date.now() - (Number(days) * MS_PER_DAY));
     const toDate = to ? new Date(to) : new Date();
 
     try {
@@ -2141,7 +2210,7 @@ app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async 
             ]);
 
             if (novelInfo.rows.length === 0) {
-                return res.status(404).json({ error: 'Novel not found' });
+                return res.status(HTTP_NOT_FOUND).json({ error: 'Novel not found' });
             }
 
             res.json({
@@ -2201,12 +2270,12 @@ app.get('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
 app.post('/api/v1/novels/:novelId/notes',
     validateApiKey,
     validateNovelId,
-    body('note_text').trim().isLength({ min: 1, max: 5000 }).withMessage('Note must be 1-5000 characters'),
+    body('note_text').trim().isLength({ min: 1, max: MAX_NOTE_TEXT_LENGTH }).withMessage(`Note must be 1-${MAX_NOTE_TEXT_LENGTH} characters`),
     body('chapter_num').optional().isInt({ min: 0 }).withMessage('Chapter must be a positive integer'),
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         try {
@@ -2217,7 +2286,7 @@ app.post('/api/v1/novels/:novelId/notes',
                  RETURNING id, note_text, chapter_num, created_at, updated_at`,
                 [req.user.id, req.params.novelId, note_text, chapter_num || null]
             );
-            res.status(201).json(result.rows[0]);
+            res.status(HTTP_CREATED).json(result.rows[0]);
         } catch (error) {
             handleDbError(res, error, 'Create novel note');
         }
@@ -2228,12 +2297,12 @@ app.post('/api/v1/novels/:novelId/notes',
 app.put('/api/v1/notes/:noteId',
     validateApiKey,
     param('noteId').isInt().withMessage('Invalid note ID'),
-    body('note_text').trim().isLength({ min: 1, max: 5000 }).withMessage('Note must be 1-5000 characters'),
+    body('note_text').trim().isLength({ min: 1, max: MAX_NOTE_TEXT_LENGTH }).withMessage(`Note must be 1-${MAX_NOTE_TEXT_LENGTH} characters`),
     body('chapter_num').optional().isInt({ min: 0 }).withMessage('Chapter must be a positive integer'),
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         try {
@@ -2247,7 +2316,7 @@ app.put('/api/v1/notes/:noteId',
             );
 
             if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Note not found' });
+                return res.status(HTTP_NOT_FOUND).json({ error: 'Note not found' });
             }
 
             res.json(result.rows[0]);
@@ -2261,7 +2330,7 @@ app.put('/api/v1/notes/:noteId',
 app.delete('/api/v1/notes/:noteId', validateApiKey, param('noteId').isInt(), async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        return res.status(400).json({ errors: errors.array() });
+        return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
     }
 
     try {
@@ -2271,7 +2340,7 @@ app.delete('/api/v1/notes/:noteId', validateApiKey, param('noteId').isInt(), asy
         );
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ error: 'Note not found' });
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Note not found' });
         }
 
         res.json({ success: true, message: 'Note deleted' });
@@ -2289,7 +2358,7 @@ app.post('/api/v1/novels/bulk-status',
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         try {
@@ -2380,7 +2449,7 @@ app.post('/api/v1/import',
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         const client = await pool.connect();
@@ -2524,7 +2593,7 @@ app.post('/api/v1/novels/:novelId/categories',
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         try {
@@ -2535,7 +2604,7 @@ app.post('/api/v1/novels/:novelId/categories',
                  ON CONFLICT DO NOTHING`,
                 [req.user.id, req.params.novelId, category.toLowerCase()]
             );
-            res.status(201).json({ success: true, category: category.toLowerCase() });
+            res.status(HTTP_CREATED).json({ success: true, category: category.toLowerCase() });
         } catch (error) {
             handleDbError(res, error, 'Add category');
         }
@@ -2550,7 +2619,7 @@ app.delete('/api/v1/novels/:novelId/categories/:category',
     async (req, res) => {
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ errors: errors.array() });
+            return res.status(HTTP_BAD_REQUEST).json({ errors: errors.array() });
         }
 
         try {
@@ -2562,7 +2631,7 @@ app.delete('/api/v1/novels/:novelId/categories/:category',
             );
 
             if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Category not found' });
+                return res.status(HTTP_NOT_FOUND).json({ error: 'Category not found' });
             }
 
             res.json({ success: true, message: 'Category removed' });
@@ -2613,7 +2682,7 @@ app.get('/admin', (req, res) => {
 
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
-    res.status(404).json({
+    res.status(HTTP_NOT_FOUND).json({
         error: 'API endpoint not found',
         path: req.path,
         method: req.method

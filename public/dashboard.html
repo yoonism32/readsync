@@ -468,6 +468,9 @@
 
     <script src="/js/shared.js"></script>
     <script>
+        // Auto-refresh interval (30 seconds)
+        const AUTO_REFRESH_INTERVAL_MS = 30000;
+
         // Get API key from URL param or localStorage
         const urlKey = new URLSearchParams(location.search).get('key');
         if (urlKey) {
@@ -600,7 +603,7 @@
         // - copyResumeLink()
         // - toast()
 
-        // Auto-refresh every 30s, but don't flicker the loading spinner
+        // Auto-refresh periodically, but don't flicker the loading spinner
         let firstLoad = true;
         async function safeLoad() {
             if (firstLoad) {
@@ -610,7 +613,7 @@
                 try { await loadDashboard(); } catch { }
             }
         }
-        setInterval(safeLoad, 30000);
+        setInterval(safeLoad, AUTO_REFRESH_INTERVAL_MS);
         document.addEventListener('DOMContentLoaded', safeLoad);
     </script>
 </body>

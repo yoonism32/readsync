@@ -799,6 +799,25 @@
 
     <script src="/js/shared.js"></script>
     <script>
+        // ============ TIME CONSTANTS ============
+        // Time conversion constants (in milliseconds)
+        const MS_PER_SECOND = 1000;
+        const MS_PER_MINUTE = 60 * MS_PER_SECOND;
+        const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+        const MS_PER_DAY = 24 * MS_PER_HOUR;
+
+        // UI refresh intervals
+        const AUTO_REFRESH_INTERVAL_MS = 3 * MS_PER_MINUTE; // Auto-reload novel list every 3 minutes
+        const TIMER_UPDATE_INTERVAL_MS = MS_PER_MINUTE; // Update refresh timer display every minute
+
+        // Tab management timeouts
+        const TAB_CHECK_INTERVAL_MS = MS_PER_SECOND; // Check tab status every second
+        const TAB_MIN_WAIT_CHECKS = 3; // Minimum 3 checks (3 seconds) before closing tab
+        const TAB_MAX_CHECKS = 30; // Maximum 30 checks (30 seconds timeout)
+        const TAB_CLOSE_VERIFY_DELAY_MS = 100; // Wait 100ms to verify tab actually closed
+        const STATUS_MESSAGE_CLEAR_DELAY_MS = 10 * MS_PER_SECOND; // Clear success message after 10 seconds
+        // ========================================
+
         // Get API key from URL param or localStorage
         const urlKey = new URLSearchParams(location.search).get('key');
         if (urlKey) {
@@ -857,7 +876,7 @@
 
             const now = Date.now();
             const diff = now - date.getTime();
-            const seconds = Math.floor(diff / 1000);
+            const seconds = Math.floor(diff / MS_PER_SECOND);
             const minutes = Math.floor(seconds / 60);
             const hours = Math.floor(minutes / 60);
             const days = Math.floor(hours / 24);
@@ -1229,11 +1248,11 @@
             attachEvents();
             loadMyList();
 
-            // Auto-refresh every 3 minutes to get latest chapter updates
+            // Auto-refresh to get latest chapter updates
             setInterval(() => {
                 console.log('🔄 Auto-refreshing novel list for latest chapters...');
                 loadMyList();
-            }, 3 * 60 * 1000); // 3 minutes
+            }, AUTO_REFRESH_INTERVAL_MS);
 
             // Initialize smart refresh system
             initSmartRefresh();
@@ -1259,8 +1278,8 @@
             // Load last refresh time from database
             loadLastRefreshTime();
 
-            // Update timer every minute
-            setInterval(updateTimerDisplay, 60000);
+            // Update timer display periodically
+            setInterval(updateTimerDisplay, TIMER_UPDATE_INTERVAL_MS);
 
             // Check if notification permission needed
             if ('Notification' in window && Notification.permission === 'default') {
@@ -1311,18 +1330,18 @@
             const lastTime = new Date(parseInt(lastRefreshTime));
             const now = new Date();
             const elapsed = now - lastTime;
-            const nextRefresh = lastTime.getTime() + (REFRESH_INTERVAL_HOURS * 60 * 60 * 1000);
+            const nextRefresh = lastTime.getTime() + (REFRESH_INTERVAL_HOURS * MS_PER_HOUR);
             const remaining = nextRefresh - now;
 
             // Format elapsed
-            const hours = Math.floor(elapsed / (1000 * 60 * 60));
-            const minutes = Math.floor((elapsed % (1000 * 60 * 60)) / (1000 * 60));
+            const hours = Math.floor(elapsed / MS_PER_HOUR);
+            const minutes = Math.floor((elapsed % MS_PER_HOUR) / MS_PER_MINUTE);
             lastEl.textContent = `Last: ${hours}h ${minutes}m ago`;
 
             // Format remaining
             if (remaining > 0) {
-                const remHours = Math.floor(remaining / (1000 * 60 * 60));
-                const remMinutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
+                const remHours = Math.floor(remaining / MS_PER_HOUR);
+                const remMinutes = Math.floor((remaining % MS_PER_HOUR) / MS_PER_MINUTE);
                 nextEl.textContent = `Next: ${remHours}h ${remMinutes}m`;
                 nextEl.style.color = 'var(--text-secondary)';
             } else {
@@ -1421,10 +1440,10 @@
             console.log('📊 Reloading novel list...');
             await loadMyList();
 
-            // Clear status after 10 seconds
+            // Clear status message after delay
             setTimeout(() => {
                 updateRefreshStatus('');
-            }, 10000);
+            }, STATUS_MESSAGE_CLEAR_DELAY_MS);
         }
 
         function refreshSingleNovel(url, title) {
@@ -1441,7 +1460,6 @@
                 }
 
                 let checkCount = 0;
-                const maxChecks = 30; // Check for 30 seconds max
                 let resolved = false;
 
                 // Periodically check if tab is still loading or stuck
@@ -1462,7 +1480,7 @@
                         }
 
                         // After minimum wait time, try to close
-                        if (checkCount >= 3) { // 3 seconds minimum
+                        if (checkCount >= TAB_MIN_WAIT_CHECKS) {
                             console.log(`🗑️ Attempting to close tab for: ${title}`);
                             newTab.close();
 
@@ -1478,11 +1496,11 @@
                                 } else {
                                     console.warn(`⚠️ Tab stuck (Cloudflare?) for: ${title}`);
                                 }
-                            }, 100);
+                            }, TAB_CLOSE_VERIFY_DELAY_MS);
                         }
 
                         // Timeout after max checks
-                        if (checkCount >= maxChecks) {
+                        if (checkCount >= TAB_MAX_CHECKS) {
                             console.warn(`⏱️ Timeout for: ${title} - giving up`);
                             clearInterval(checkInterval);
                             try {
@@ -1496,7 +1514,7 @@
                     } catch (e) {
                         // Cross-origin error expected - continue checking
                     }
-                }, 1000); // Check every second
+                }, TAB_CHECK_INTERVAL_MS);
             });
         }
 

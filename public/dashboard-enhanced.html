@@ -377,6 +377,9 @@
 
     <script src="/js/shared.js"></script>
     <script>
+        // Auto-refresh interval (60 seconds)
+        const AUTO_REFRESH_INTERVAL_MS = 60000;
+
         // Get API key from URL param or localStorage
         const urlKey = new URLSearchParams(location.search).get('key');
         if (urlKey) {
@@ -546,8 +549,8 @@
 
         // formatTimestamp() now imported from shared.js
 
-        // Auto-refresh every 60s
-        setInterval(loadDashboard, 60000);
+        // Auto-refresh periodically
+        setInterval(loadDashboard, AUTO_REFRESH_INTERVAL_MS);
 
         // Load on start
         loadDashboard();
