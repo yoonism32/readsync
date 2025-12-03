@@ -2332,9 +2332,12 @@ app.get('/api/v1/export', validateApiKey, async (req, res) => {
             [req.user.id]
         );
 
-        // Get all progress
+        // Get only the most recent progress snapshot for each novel
         const progress = await pool.query(
-            `SELECT * FROM progress_snapshots WHERE user_id = $1 ORDER BY created_at DESC`,
+            `SELECT DISTINCT ON (novel_id) *
+             FROM progress_snapshots
+             WHERE user_id = $1
+             ORDER BY novel_id, created_at DESC`,
             [req.user.id]
         );
 
@@ -2387,16 +2390,46 @@ app.post('/api/v1/import',
             const { data } = req.body;
             let imported = { novels: 0, progress: 0, bookmarks: 0, notes: 0, categories: 0 };
 
-            // Import novels (skip if already exists)
+            // Import novels with metadata (skip if already exists)
             if (data.novels && Array.isArray(data.novels)) {
                 for (const novel of data.novels) {
+                    // Insert novel
                     await client.query(
                         `INSERT INTO novels (id, title, primary_url, author, genre, description)
                          VALUES ($1, $2, $3, $4, $5, $6)
                          ON CONFLICT (id) DO NOTHING`,
                         [novel.id, novel.title, novel.primary_url, novel.author, novel.genre, novel.description]
                     );
+
+                    // Insert user_novel_meta if metadata exists
+                    if (novel.status || novel.favorite || novel.rating || novel.notes || novel.started_at || novel.completed_at) {
+                        await client.query(
+                            `INSERT INTO user_novel_meta (user_id, novel_id, status, favorite, rating, notes, started_at, completed_at)
+                             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                             ON CONFLICT (user_id, novel_id) DO UPDATE SET
+                                status = EXCLUDED.status,
+                                favorite = EXCLUDED.favorite,
+                                rating = EXCLUDED.rating,
+                                notes = EXCLUDED.notes,
+                                started_at = EXCLUDED.started_at,
+                                completed_at = EXCLUDED.completed_at`,
+                            [req.user.id, novel.id, novel.status, novel.favorite, novel.rating, novel.notes, novel.started_at, novel.completed_at]
+                        );
+                    }
+
                     imported.novels++;
+                }
+            }
+
+            // Import progress snapshots
+            if (data.progress && Array.isArray(data.progress)) {
+                for (const snapshot of data.progress) {
+                    await client.query(
+                        `INSERT INTO progress_snapshots (user_id, novel_id, chapter_url, percent, words_read, time_spent)
+                         VALUES ($1, $2, $3, $4, $5, $6)`,
+                        [req.user.id, snapshot.novel_id, snapshot.chapter_url, snapshot.percent, snapshot.words_read || 0, snapshot.time_spent || 0]
+                    );
+                    imported.progress++;
                 }
             }
 
