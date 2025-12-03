@@ -327,6 +327,45 @@ async function initDatabase() {
       )
     `);
 
+        // Novel notes
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS novel_notes (
+        id BIGSERIAL PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
+        note_text TEXT NOT NULL,
+        chapter_num INTEGER,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+      )
+    `);
+
+        // User settings
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS user_settings (
+        user_id TEXT PRIMARY KEY,
+        last_refresh_timestamp BIGINT,
+        sort_preference JSONB,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+      )
+    `);
+
+        // Novel categories/tags
+        await client.query(`
+      CREATE TABLE IF NOT EXISTS novel_categories (
+        user_id TEXT NOT NULL,
+        novel_id TEXT NOT NULL,
+        category TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, novel_id, category),
+        FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+      )
+    `);
+
         // Now create indexes AFTER all tables exist with their columns
         console.log('Creating performance indexes...');
 
@@ -339,6 +378,8 @@ async function initDatabase() {
             'CREATE INDEX IF NOT EXISTS idx_sessions_novel ON reading_sessions (novel_id, start_time DESC)',
             'CREATE INDEX IF NOT EXISTS idx_devices_user_active ON devices (user_id, active, last_seen DESC)',
             'CREATE INDEX IF NOT EXISTS idx_user_novel_meta_status ON user_novel_meta (user_id, status, updated_at DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_novel_notes_user_novel ON novel_notes (user_id, novel_id, created_at DESC)',
+            'CREATE INDEX IF NOT EXISTS idx_novel_categories_user ON novel_categories (user_id, category)',
         ];
 
         for (const indexQuery of indexes) {
@@ -2139,6 +2180,365 @@ app.get('/api/v1/debug/last', validateApiKey, async (req, res) => {
     }
 });
 
+/* ---------------------- Novel Notes Routes ---------------------- */
+// Get notes for a novel
+app.get('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT id, note_text, chapter_num, created_at, updated_at
+             FROM novel_notes
+             WHERE user_id = $1 AND novel_id = $2
+             ORDER BY created_at DESC`,
+            [req.user.id, req.params.novelId]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        handleDbError(res, error, 'Get novel notes');
+    }
+});
+
+// Create a note for a novel
+app.post('/api/v1/novels/:novelId/notes',
+    validateApiKey,
+    validateNovelId,
+    body('note_text').trim().isLength({ min: 1, max: 5000 }).withMessage('Note must be 1-5000 characters'),
+    body('chapter_num').optional().isInt({ min: 0 }).withMessage('Chapter must be a positive integer'),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        try {
+            const { note_text, chapter_num } = req.body;
+            const result = await pool.query(
+                `INSERT INTO novel_notes (user_id, novel_id, note_text, chapter_num)
+                 VALUES ($1, $2, $3, $4)
+                 RETURNING id, note_text, chapter_num, created_at, updated_at`,
+                [req.user.id, req.params.novelId, note_text, chapter_num || null]
+            );
+            res.status(201).json(result.rows[0]);
+        } catch (error) {
+            handleDbError(res, error, 'Create novel note');
+        }
+    }
+);
+
+// Update a note
+app.put('/api/v1/notes/:noteId',
+    validateApiKey,
+    param('noteId').isInt().withMessage('Invalid note ID'),
+    body('note_text').trim().isLength({ min: 1, max: 5000 }).withMessage('Note must be 1-5000 characters'),
+    body('chapter_num').optional().isInt({ min: 0 }).withMessage('Chapter must be a positive integer'),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        try {
+            const { note_text, chapter_num } = req.body;
+            const result = await pool.query(
+                `UPDATE novel_notes
+                 SET note_text = $1, chapter_num = $2, updated_at = NOW()
+                 WHERE id = $3 AND user_id = $4
+                 RETURNING id, note_text, chapter_num, created_at, updated_at`,
+                [note_text, chapter_num || null, req.params.noteId, req.user.id]
+            );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Note not found' });
+            }
+
+            res.json(result.rows[0]);
+        } catch (error) {
+            handleDbError(res, error, 'Update note');
+        }
+    }
+);
+
+// Delete a note
+app.delete('/api/v1/notes/:noteId', validateApiKey, param('noteId').isInt(), async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+    }
+
+    try {
+        const result = await pool.query(
+            `DELETE FROM novel_notes WHERE id = $1 AND user_id = $2 RETURNING id`,
+            [req.params.noteId, req.user.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Note not found' });
+        }
+
+        res.json({ success: true, message: 'Note deleted' });
+    } catch (error) {
+        handleDbError(res, error, 'Delete note');
+    }
+});
+
+/* ---------------------- Bulk Operations Routes ---------------------- */
+// Bulk status change
+app.post('/api/v1/novels/bulk-status',
+    validateApiKey,
+    body('novel_ids').isArray({ min: 1 }).withMessage('novel_ids must be a non-empty array'),
+    body('status').isIn(['reading', 'completed', 'on-hold', 'dropped', 'removed']).withMessage('Invalid status'),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        try {
+            const { novel_ids, status } = req.body;
+
+            // Update all novels
+            const result = await pool.query(
+                `UPDATE user_novel_meta
+                 SET status = $1, updated_at = NOW()
+                 WHERE user_id = $2 AND novel_id = ANY($3)
+                 RETURNING novel_id`,
+                [status, req.user.id, novel_ids]
+            );
+
+            res.json({
+                success: true,
+                updated: result.rows.length,
+                novel_ids: result.rows.map(r => r.novel_id)
+            });
+        } catch (error) {
+            handleDbError(res, error, 'Bulk status update');
+        }
+    }
+);
+
+/* ---------------------- Export/Import Routes ---------------------- */
+// Export all user data
+app.get('/api/v1/export', validateApiKey, async (req, res) => {
+    try {
+        // Get all novels with metadata
+        const novels = await pool.query(
+            `SELECT n.*, m.status, m.favorite, m.rating, m.notes, m.started_at, m.completed_at
+             FROM novels n
+             LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
+             WHERE EXISTS (
+                 SELECT 1 FROM progress_snapshots p
+                 WHERE p.novel_id = n.id AND p.user_id = $1
+             )
+             ORDER BY n.title`,
+            [req.user.id]
+        );
+
+        // Get all progress
+        const progress = await pool.query(
+            `SELECT * FROM progress_snapshots WHERE user_id = $1 ORDER BY created_at DESC`,
+            [req.user.id]
+        );
+
+        // Get all bookmarks
+        const bookmarks = await pool.query(
+            `SELECT * FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC`,
+            [req.user.id]
+        );
+
+        // Get all notes
+        const notes = await pool.query(
+            `SELECT * FROM novel_notes WHERE user_id = $1 ORDER BY created_at DESC`,
+            [req.user.id]
+        );
+
+        // Get all categories
+        const categories = await pool.query(
+            `SELECT * FROM novel_categories WHERE user_id = $1 ORDER BY category`,
+            [req.user.id]
+        );
+
+        res.json({
+            export_date: new Date().toISOString(),
+            user_id: req.user.id,
+            novels: novels.rows,
+            progress: progress.rows,
+            bookmarks: bookmarks.rows,
+            notes: notes.rows,
+            categories: categories.rows
+        });
+    } catch (error) {
+        handleDbError(res, error, 'Export data');
+    }
+});
+
+// Import user data
+app.post('/api/v1/import',
+    validateApiKey,
+    body('data').isObject().withMessage('data must be an object'),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+
+            const { data } = req.body;
+            let imported = { novels: 0, progress: 0, bookmarks: 0, notes: 0, categories: 0 };
+
+            // Import novels (skip if already exists)
+            if (data.novels && Array.isArray(data.novels)) {
+                for (const novel of data.novels) {
+                    await client.query(
+                        `INSERT INTO novels (id, title, primary_url, author, genre, description)
+                         VALUES ($1, $2, $3, $4, $5, $6)
+                         ON CONFLICT (id) DO NOTHING`,
+                        [novel.id, novel.title, novel.primary_url, novel.author, novel.genre, novel.description]
+                    );
+                    imported.novels++;
+                }
+            }
+
+            // Import bookmarks
+            if (data.bookmarks && Array.isArray(data.bookmarks)) {
+                for (const bookmark of data.bookmarks) {
+                    await client.query(
+                        `INSERT INTO bookmarks (user_id, novel_id, chapter_url, percent, bookmark_type, title, note)
+                         VALUES ($1, $2, $3, $4, $5, $6, $7)
+                         ON CONFLICT DO NOTHING`,
+                        [req.user.id, bookmark.novel_id, bookmark.chapter_url, bookmark.percent,
+                         bookmark.bookmark_type, bookmark.title, bookmark.note]
+                    );
+                    imported.bookmarks++;
+                }
+            }
+
+            // Import notes
+            if (data.notes && Array.isArray(data.notes)) {
+                for (const note of data.notes) {
+                    await client.query(
+                        `INSERT INTO novel_notes (user_id, novel_id, note_text, chapter_num)
+                         VALUES ($1, $2, $3, $4)`,
+                        [req.user.id, note.novel_id, note.note_text, note.chapter_num]
+                    );
+                    imported.notes++;
+                }
+            }
+
+            // Import categories
+            if (data.categories && Array.isArray(data.categories)) {
+                for (const cat of data.categories) {
+                    await client.query(
+                        `INSERT INTO novel_categories (user_id, novel_id, category)
+                         VALUES ($1, $2, $3)
+                         ON CONFLICT DO NOTHING`,
+                        [req.user.id, cat.novel_id, cat.category]
+                    );
+                    imported.categories++;
+                }
+            }
+
+            await client.query('COMMIT');
+            res.json({ success: true, imported });
+        } catch (error) {
+            await client.query('ROLLBACK');
+            handleDbError(res, error, 'Import data');
+        } finally {
+            client.release();
+        }
+    }
+);
+
+/* ---------------------- Categories/Tags Routes ---------------------- */
+// Get all categories for user
+app.get('/api/v1/categories', validateApiKey, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT category, COUNT(*) as count
+             FROM novel_categories
+             WHERE user_id = $1
+             GROUP BY category
+             ORDER BY category`,
+            [req.user.id]
+        );
+        res.json(result.rows);
+    } catch (error) {
+        handleDbError(res, error, 'Get categories');
+    }
+});
+
+// Get categories for a specific novel
+app.get('/api/v1/novels/:novelId/categories', validateApiKey, validateNovelId, async (req, res) => {
+    try {
+        const result = await pool.query(
+            `SELECT category FROM novel_categories
+             WHERE user_id = $1 AND novel_id = $2
+             ORDER BY category`,
+            [req.user.id, req.params.novelId]
+        );
+        res.json(result.rows.map(r => r.category));
+    } catch (error) {
+        handleDbError(res, error, 'Get novel categories');
+    }
+});
+
+// Add category to novel
+app.post('/api/v1/novels/:novelId/categories',
+    validateApiKey,
+    validateNovelId,
+    body('category').trim().isLength({ min: 1, max: 50 }).withMessage('Category must be 1-50 characters'),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        try {
+            const { category } = req.body;
+            await pool.query(
+                `INSERT INTO novel_categories (user_id, novel_id, category)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT DO NOTHING`,
+                [req.user.id, req.params.novelId, category.toLowerCase()]
+            );
+            res.status(201).json({ success: true, category: category.toLowerCase() });
+        } catch (error) {
+            handleDbError(res, error, 'Add category');
+        }
+    }
+);
+
+// Remove category from novel
+app.delete('/api/v1/novels/:novelId/categories/:category',
+    validateApiKey,
+    validateNovelId,
+    param('category').trim().isLength({ min: 1 }),
+    async (req, res) => {
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ errors: errors.array() });
+        }
+
+        try {
+            const result = await pool.query(
+                `DELETE FROM novel_categories
+                 WHERE user_id = $1 AND novel_id = $2 AND category = $3
+                 RETURNING category`,
+                [req.user.id, req.params.novelId, req.params.category.toLowerCase()]
+            );
+
+            if (result.rows.length === 0) {
+                return res.status(404).json({ error: 'Category not found' });
+            }
+
+            res.json({ success: true, message: 'Category removed' });
+        } catch (error) {
+            handleDbError(res, error, 'Remove category');
+        }
+    }
+);
+
 /* ---------------------- Static File Serving ---------------------- */
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
@@ -2147,6 +2547,11 @@ app.get('/', (req, res) => {
 // Serve manage page
 app.get('/manage', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'manage.html'));
+});
+
+// Serve settings page
+app.get('/settings', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'settings.html'));
 });
 
 // Redirect old novels page to MyList (clean integration)

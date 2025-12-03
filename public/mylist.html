@@ -499,6 +499,37 @@
             background: #22c55e;
         }
 
+        .pill-dot.new-chapters {
+            background: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+        }
+
+        .pill-dot.caught-up {
+            background: #3b82f6;
+        }
+
+        .pill-dot.behind {
+            background: #f59e0b;
+        }
+
+        .pill-dot.way-behind {
+            background: #ef4444;
+        }
+
+        .unread-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            margin-left: 6px;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
+        }
+
         .meta-row {
             display: flex;
             align-items: center;
@@ -1046,6 +1077,25 @@
                     return `<option value="${st}" ${sel}>${label}</option>`;
                 }).join('');
 
+                // Calculate unread chapters and dot color
+                const currentCh = global ? Number(global.chapter_num) || 0 : 0;
+                const latestCh = Number(novel.latest_chapter_num) || 0;
+                const unread = Math.max(0, latestCh - currentCh);
+
+                // Smart dot color logic
+                let dotClass = 'pill-dot';
+                if (latestCh === 0) {
+                    dotClass = 'pill-dot'; // no data, default green
+                } else if (unread === 0) {
+                    dotClass = 'pill-dot caught-up'; // blue - caught up
+                } else if (unread <= 10) {
+                    dotClass = 'pill-dot new-chapters'; // green - new chapters (manageable)
+                } else if (unread <= 50) {
+                    dotClass = 'pill-dot behind'; // orange - behind
+                } else {
+                    dotClass = 'pill-dot way-behind'; // red - way behind
+                }
+
                 return `
           <tr data-novel-id="${encodeURIComponent(novel.novel_id)}">
             <td class="col-cover">
@@ -1055,10 +1105,11 @@
               <div class="cell-title-main">
                 <a href="${detailHref}">${titleText}</a>
                 ${fav ? `<span class="${favClass}">★</span>` : ''}
+                ${unread > 0 ? `<span class="unread-badge">+${unread}</span>` : ''}
               </div>
               <div class="cell-sub meta-row">
-                <span><span class="pill-dot"></span></span>
-                ${global ? `<span>Last ch. ${Number(global.chapter_num) || 0}</span>` : `<span>No progress</span>`}
+                <span><span class="${dotClass}"></span></span>
+                ${global ? `<span>Last ch. ${currentCh}</span>` : `<span>No progress</span>`}
               </div>
             </td>
             <td class="col-progress">

@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - ReadSync</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <meta name="theme-color" content="#0f172a">
+    <style>
+        :root {
+            --primary: #6366f1;
+            --bg: #020617;
+            --bg-card: #0f172a;
+            --border: #1e293b;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: radial-gradient(circle at top, #1f2933 0, #020617 55%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background: rgba(15, 23, 42, 0.98);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 24px;
+            margin-bottom: 16px;
+        }
+
+        .card h2 {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+            color: var(--text-primary);
+        }
+
+        .card p {
+            color: var(--text-secondary);
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(34, 197, 94, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .info-box {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .success-box {
+            background: rgba(34, 197, 94, 0.1);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: #22c55e;
+        }
+
+        .error-box {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            font-size: 0.85rem;
+            color: #ef4444;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .file-input-label {
+            display: inline-flex;
+            align-items: center;
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #6366f1, #4f46e5);
+            color: white;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 16px;
+            margin-top: 12px;
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 999px;
+            margin-top: 4px;
+        }
+
+        .legend-dot.green {
+            background: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+        }
+
+        .legend-dot.blue {
+            background: #3b82f6;
+        }
+
+        .legend-dot.orange {
+            background: #f59e0b;
+        }
+
+        .legend-dot.red {
+            background: #ef4444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>⚙️ Settings</h1>
+            <p class="subtitle">Manage your ReadSync preferences and data</p>
+        </header>
+
+        <!-- Export/Import Section -->
+        <div class="card">
+            <h2>📦 Backup & Restore</h2>
+            <p>Export your reading data to a JSON file for backup, or import from a previous backup.</p>
+
+            <div class="button-group">
+                <button class="btn btn-success" onclick="exportData()">📥 Export Data</button>
+                <label for="fileInput" class="file-input-label">📤 Import Data</label>
+                <input type="file" id="fileInput" accept=".json" onchange="importData(event)">
+            </div>
+
+            <div class="info-box">
+                <strong>What gets exported:</strong> All novels, progress history, bookmarks, notes, and categories.
+            </div>
+
+            <div id="exportStatus"></div>
+        </div>
+
+        <!-- Color Legend -->
+        <div class="card">
+            <h2>🎨 MyList Color Legend</h2>
+            <p>Understand what the colored dots mean on your reading list:</p>
+
+            <div class="legend-grid">
+                <div class="legend-dot green"></div>
+                <div><strong>Green (Glowing)</strong> — New chapters available (1-10 unread)</div>
+
+                <div class="legend-dot blue"></div>
+                <div><strong>Blue</strong> — Caught up! No new chapters</div>
+
+                <div class="legend-dot orange"></div>
+                <div><strong>Orange</strong> — Behind (11-50 unread chapters)</div>
+
+                <div class="legend-dot red"></div>
+                <div><strong>Red</strong> — Way behind (50+ unread chapters)</div>
+            </div>
+
+            <div class="info-box" style="margin-top: 16px;">
+                <strong>Unread Badge:</strong> The green <code>+X</code> badge next to novel titles shows exactly how many new chapters are available since your last read.
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="card">
+            <h2>🔗 Quick Links</h2>
+            <div class="button-group">
+                <a href="/mylist" class="btn btn-primary">📚 My Library</a>
+                <a href="/dashboard" class="btn btn-primary">📊 Dashboard</a>
+                <a href="/admin" class="btn btn-primary">🤖 Bot Admin</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/shared.js"></script>
+    <script>
+        // Get API key
+        const urlKey = new URLSearchParams(location.search).get('key');
+        if (urlKey) {
+            setApiKey(urlKey);
+        }
+        if (!hasApiKey()) {
+            setApiKey('demo-api-key-12345');
+        }
+
+        async function exportData() {
+            const statusEl = document.getElementById('exportStatus');
+            statusEl.innerHTML = '<div class="info-box">Exporting data...</div>';
+
+            try {
+                const data = await getJSON('export');
+
+                // Create blob and download
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `readsync-backup-${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                statusEl.innerHTML = '<div class="success-box">✅ Export successful! File downloaded.</div>';
+                setTimeout(() => { statusEl.innerHTML = ''; }, 5000);
+            } catch (error) {
+                console.error('Export failed:', error);
+                statusEl.innerHTML = `<div class="error-box">❌ Export failed: ${error.message}</div>`;
+            }
+        }
+
+        async function importData(event) {
+            const statusEl = document.getElementById('exportStatus');
+            const file = event.target.files[0];
+
+            if (!file) return;
+
+            statusEl.innerHTML = '<div class="info-box">Importing data...</div>';
+
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+
+                // Send to server
+                const result = await getJSON('import', {
+                    method: 'POST',
+                    body: { data }
+                });
+
+                statusEl.innerHTML = `<div class="success-box">
+                    ✅ Import successful!<br>
+                    Novels: ${result.imported.novels || 0},
+                    Bookmarks: ${result.imported.bookmarks || 0},
+                    Notes: ${result.imported.notes || 0},
+                    Categories: ${result.imported.categories || 0}
+                </div>`;
+
+                setTimeout(() => { statusEl.innerHTML = ''; }, 8000);
+            } catch (error) {
+                console.error('Import failed:', error);
+                statusEl.innerHTML = `<div class="error-box">❌ Import failed: ${error.message}</div>`;
+            }
+
+            // Reset file input
+            event.target.value = '';
+        }
+    </script>
+</body>
+</html>
