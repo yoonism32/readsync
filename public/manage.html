@@ -12,9 +12,30 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
     <link rel="manifest" href="/site.webmanifest">
-    <meta name="theme-color" content="#667eea" />
+    <meta name="theme-color" content="#0f172a" />
 
     <style>
+        :root {
+            --primary: #6366f1;
+            --primary-soft: rgba(99, 102, 241, 0.14);
+            --primary-strong: rgba(99, 102, 241, 0.4);
+            --bg: #020617;
+            --bg-elevated: #020617;
+            --bg-card: #0f172a;
+            --bg-row: #020617;
+            --bg-row-alt: #020617;
+            --bg-hover: #1e293b;
+            --border-subtle: #1e293b;
+            --border-strong: #334155;
+            --text-primary: #e5e7eb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --cover-fallback: #111827;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -22,10 +43,10 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top, #1f2933 0, #020617 55%);
+            color: var(--text-primary);
             min-height: 100vh;
-            color: #111827;
         }
 
         .container {
@@ -35,19 +56,22 @@
         }
 
         .header {
-            color: #fff;
             text-align: center;
             margin-bottom: 16px;
         }
 
         .header h1 {
             font-size: 2.1rem;
-            font-weight: 800;
+            font-weight: 700;
+            letter-spacing: 0.02em;
             margin-bottom: 6px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .header p {
-            opacity: .9;
+            color: var(--text-secondary);
         }
 
         .auth {
@@ -62,9 +86,9 @@
         .auth input {
             padding: 10px 12px;
             border-radius: 10px;
-            border: 1px solid rgba(255, 255, 255, .35);
-            background: rgba(255, 255, 255, .95);
-            color: #111827;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-primary);
             outline: none;
         }
 
@@ -73,29 +97,28 @@
             border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
-            border: 1px solid rgba(255, 255, 255, .35);
-            background: rgba(255, 255, 255, .95);
-            color: #111827;
+            border: 1px solid var(--border-subtle);
+            background: var(--bg-card);
+            color: var(--text-primary);
         }
 
         .btn-primary {
-            background: #667eea;
-            border-color: #818cf8;
+            background: var(--primary);
+            border-color: var(--primary);
             color: #fff;
         }
 
         .btn-danger {
-            background: #fee2e2;
-            border-color: #fecaca;
-            color: #991b1b;
+            background: var(--danger);
+            border-color: var(--danger);
+            color: #fff;
         }
 
         .panel {
-            background: rgba(255, 255, 255, .96);
+            background: var(--bg-card);
+            border: 1px solid var(--border-subtle);
             border-radius: 16px;
             padding: 16px;
-            box-shadow: 0 8px 28px rgba(0, 0, 0, .12);
-            backdrop-filter: blur(8px);
         }
 
         .panel h2 {
