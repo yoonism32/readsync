@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      4.9.9
-// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT
+// @version      5.0.4
+// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*
@@ -112,48 +112,167 @@
     /* ========= Enhanced Latest Chapter Extraction ========= */
     function extractLatestChapterInfo() {
         try {
+            // Helper: Extract chapter number from various text patterns
+            const extractChapterNum = (text) => {
+                const patterns = [
+                    /Chapter\s+(\d+)/i,
+                    /Ch\.?\s*(\d+)/i,
+                    /Episode\s+(\d+)/i,
+                    /#\s*(\d+)/,                        // "#31" or "# 31"
+                    /^\s*(\d+)\s*[-–—:\.]/,            // "31. Title" or "31 - Title"
+                    /^\s*(\d+)\s+/,                     // "31 Title"
+                    /^\s*#?\s*(\d+)\s*$/
+                ];
+                for (const pattern of patterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        const num = parseInt(match[1], 10);
+                        if (num > 0 && num < 10000) return num;
+                    }
+                }
+                return null;
+            };
+
+            // Helper: Extract chapter number from URL
+            const extractChapterFromUrl = (href) => {
+                // Try standard chapter format first
+                const chapterMatch = href.match(/chapter-?(\d+)/i);
+                if (chapterMatch) return parseInt(chapterMatch[1], 10);
+
+                // Get the last segment of the URL path
+                try {
+                    const url = new URL(href, location.origin);
+                    const lastSegment = url.pathname.split('/').pop() || '';
+
+                    // Try number at start of segment (handles 31-title, 32title, 30next)
+                    const numberAtStartMatch = lastSegment.match(/^(\d+)/);
+                    if (numberAtStartMatch) {
+                        const num = parseInt(numberAtStartMatch[1], 10);
+                        if (num > 0 && num < 10000) return num;
+                    }
+
+                    // Fallback: any number in segment
+                    const anyNumberMatch = lastSegment.match(/(\d+)/);
+                    if (anyNumberMatch) {
+                        const num = parseInt(anyNumberMatch[1], 10);
+                        if (num > 0 && num < 10000) return num;
+                    }
+                } catch (e) {
+                    // If URL parsing fails, try simple regex on href
+                    const simpleMatch = href.match(/\/(\d+)[^\/]*\/?$/);
+                    if (simpleMatch) {
+                        const num = parseInt(simpleMatch[1], 10);
+                        if (num > 0 && num < 10000) return num;
+                    }
+                }
+
+                return null;
+            };
+
             // Look for the specific NovelBin structure: div.l-chapter
             const latestChapterElement = document.querySelector('.l-chapter');
             if (latestChapterElement) {
                 const chapterLink = latestChapterElement.querySelector('.chapter-title');
                 if (chapterLink) {
                     const linkText = chapterLink.textContent.trim();
-                    const match = linkText.match(/Chapter\s+(\d+)\s*:\s*(.+)/i);
-                    if (match) {
-                        log('Found latest chapter via .l-chapter', { num: match[1], title: match[2] });
+                    // Try to extract from text - handle both "Chapter X: Title" and "Chapter X - Title"
+                    const textMatch = linkText.match(/Chapter\s+(\d+)\s*[-:]\s*(.+)/i);
+                    if (textMatch) {
+                        log('Found latest chapter via .l-chapter (text)', { num: textMatch[1], title: textMatch[2] });
                         return {
-                            latestChapterNum: parseInt(match[1], 10),
-                            latestChapterTitle: match[2].trim()
+                            latestChapterNum: parseInt(textMatch[1], 10),
+                            latestChapterTitle: textMatch[2].trim()
                         };
+                    }
+                    // Fallback: try number-prefix pattern in text
+                    const numFromText = extractChapterNum(linkText);
+                    if (numFromText) {
+                        log('Found latest chapter via .l-chapter (number pattern)', { num: numFromText, text: linkText });
+                        return {
+                            latestChapterNum: numFromText,
+                            latestChapterTitle: linkText
+                        };
+                    }
+                    // Fallback: try URL
+                    if (chapterLink.href) {
+                        const numFromUrl = extractChapterFromUrl(chapterLink.href);
+                        if (numFromUrl) {
+                            log('Found latest chapter via .l-chapter (URL)', { num: numFromUrl, href: chapterLink.href });
+                            return {
+                                latestChapterNum: numFromUrl,
+                                latestChapterTitle: linkText || null
+                            };
+                        }
                     }
                 }
             }
 
-            // Fallback: check all chapter links on the page
-            const allChapterLinks = document.querySelectorAll('a[href*="chapter"]');
+            // Fallback: check ALL links that could be chapter links (not just ones with "chapter" in href)
+            // Get novel slug to identify chapter links
+            const pathParts = location.pathname.split('/');
+            const novelSlugIndex = pathParts.indexOf('b') + 1;
+            const novelSlug = pathParts[novelSlugIndex] || '';
+
             let maxChapter = 0;
             let maxChapterTitle = null;
 
-            allChapterLinks.forEach(link => {
-                // Handle both chapter-343 and chapter343 formats
+            // Strategy 1: Links with "chapter" in href (original approach)
+            const chapterLinks = document.querySelectorAll('a[href*="chapter"]');
+            chapterLinks.forEach(link => {
                 const hrefMatch = link.href.match(/chapter-?(\d+)/i);
                 if (hrefMatch) {
                     const num = parseInt(hrefMatch[1], 10);
                     if (num > maxChapter) {
                         maxChapter = num;
-                        // Try to extract title from link text
                         const textMatch = link.textContent.match(/Chapter\s+\d+\s*:\s*(.+)/i);
-                        maxChapterTitle = textMatch ? textMatch[1].trim() : null;
+                        maxChapterTitle = textMatch ? textMatch[1].trim() : link.textContent.trim();
                     }
                 }
             });
 
+            // Strategy 2: Links to same novel (catches number-prefix format)
+            if (novelSlug) {
+                const novelLinks = document.querySelectorAll(`a[href*="/b/${novelSlug}/"]`);
+                novelLinks.forEach(link => {
+                    const num = extractChapterFromUrl(link.href);
+                    if (num && num > maxChapter) {
+                        maxChapter = num;
+                        maxChapterTitle = link.textContent.trim() || null;
+                    }
+                });
+            }
+
+            // Strategy 3: Check chapter list containers
+            const chapterListSelectors = ['.chapter-list', '.list-chapter', '[class*="chapter-list"]', '.chapters'];
+            for (const selector of chapterListSelectors) {
+                const container = document.querySelector(selector);
+                if (container) {
+                    const links = container.querySelectorAll('a');
+                    links.forEach(link => {
+                        const num = extractChapterFromUrl(link.href) || extractChapterNum(link.textContent);
+                        if (num && num > maxChapter) {
+                            maxChapter = num;
+                            maxChapterTitle = link.textContent.trim() || null;
+                        }
+                    });
+                }
+            }
+
             // 🌍 ENHANCED: If local detection seems limited, fetch from main page
-            if (maxChapter > 0 && maxChapter < 500) {
+            if (maxChapter === 0 || maxChapter < 500) {
                 log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
 
-                // Get novel main page URL (remove chapter part)
-                const novelMainUrl = location.href.replace(/\/c*chapter-?\d+.*$/, '');
+                // Get novel main page URL (remove chapter part - handle both formats)
+                let novelMainUrl = location.href
+                    .replace(/\/c*chapter-?\d+.*$/, '')  // Standard chapter format
+                    .replace(/\/\d+[-][^/]*$/, '');       // Number-prefix format
+
+                // Ensure we're at the novel page, not still on chapter page
+                if (novelMainUrl === location.href) {
+                    // Try extracting base novel URL differently
+                    const baseMatch = location.href.match(/(https?:\/\/[^/]+\/b\/[^/]+)\//);
+                    if (baseMatch) novelMainUrl = baseMatch[1];
+                }
 
                 // Try async fetch (won't block current execution)
                 fetch(novelMainUrl)
@@ -161,20 +280,24 @@
                     .then(html => {
                         const parser = new DOMParser();
                         const mainPageDoc = parser.parseFromString(html, 'text/html');
-
-                        // Scan chapter links on main page (same logic that worked)
-                        const mainPageLinks = mainPageDoc.querySelectorAll('a[href*="chapter"]');
                         let mainPageMax = maxChapter;
 
-                        mainPageLinks.forEach(link => {
+                        // Check for links with chapter in href
+                        mainPageDoc.querySelectorAll('a[href*="chapter"]').forEach(link => {
                             const match = link.href.match(/chapter-?(\d+)/i);
                             if (match) {
                                 const num = parseInt(match[1], 10);
-                                if (num > mainPageMax) {
-                                    mainPageMax = num;
-                                }
+                                if (num > mainPageMax) mainPageMax = num;
                             }
                         });
+
+                        // Also check for number-prefix format
+                        if (novelSlug) {
+                            mainPageDoc.querySelectorAll(`a[href*="/b/${novelSlug}/"]`).forEach(link => {
+                                const num = extractChapterFromUrl(link.href);
+                                if (num && num > mainPageMax) mainPageMax = num;
+                            });
+                        }
 
                         if (mainPageMax > maxChapter) {
                             log('🎯 Found real chapter count from main page!', {
@@ -182,8 +305,6 @@
                                 now: mainPageMax,
                                 improvement: mainPageMax - maxChapter
                             });
-
-                            // Update for next sync (this is async so won't affect current return)
                             window.realChapterCount = mainPageMax;
                         }
                     })
@@ -216,19 +337,43 @@
     /* ========= ROBUST CURRENT CHAPTER DETECTION (Content-First) ========= */
     function getCurrentChapterFromContent() {
         try {
+            // Helper: Multiple regex patterns for chapter detection (ordered by specificity)
+            const chapterPatterns = [
+                /Chapter\s+(\d+)/i,                    // "Chapter 31" - most common
+                /Ch\.?\s*(\d+)/i,                      // "Ch 31" or "Ch. 31"
+                /Episode\s+(\d+)/i,                    // "Episode 31"
+                /Part\s+(\d+)/i,                       // "Part 31"
+                /#\s*(\d+)/,                           // "#31" or "# 31" anywhere
+                /^\s*(\d+)\s*[-–—:\.]/,               // "31 - Title" or "31. Title" at start (allows space after)
+                /^\s*(\d+)\s+/,                        // "31 Title" - number at start followed by space
+                /^\s*#?\s*(\d+)\s*$/,                  // Just a number like "31" or "#31"
+            ];
+
+            // Helper function to try all patterns
+            const tryPatterns = (text, source) => {
+                for (const pattern of chapterPatterns) {
+                    const match = text.match(pattern);
+                    if (match) {
+                        const chapterNum = parseInt(match[1], 10);
+                        // Sanity check: chapter numbers typically 1-9999
+                        if (chapterNum > 0 && chapterNum < 10000) {
+                            log(`✅ Found current chapter from ${source}`, { text: text.substring(0, 100), chapterNum, pattern: pattern.toString() });
+                            return {
+                                num: chapterNum,
+                                token: 'chapter',
+                                title: text,
+                                source: source
+                            };
+                        }
+                    }
+                }
+                return null;
+            };
+
             // Strategy 1: Page title (most reliable based on your test)
             const title = document.title;
-            const titleMatch = title.match(/Chapter\s+(\d+)/i);
-            if (titleMatch) {
-                const chapterNum = parseInt(titleMatch[1], 10);
-                log('✅ Found current chapter from title', { title, chapterNum });
-                return {
-                    num: chapterNum,
-                    token: 'chapter',
-                    title: title,
-                    source: 'title'
-                };
-            }
+            const titleResult = tryPatterns(title, 'title');
+            if (titleResult) return titleResult;
 
             // Strategy 2: Chapter-related elements (your test showed [class*="title"] works)
             const chapterSelectors = [
@@ -244,18 +389,9 @@
                 const elements = document.querySelectorAll(selector);
                 for (const element of elements) {
                     const text = element.textContent.trim();
-                    if (text.length > 5 && text.length < 200) { // Skip empty or huge text blocks
-                        const match = text.match(/Chapter\s+(\d+)/i);
-                        if (match) {
-                            const chapterNum = parseInt(match[1], 10);
-                            log('✅ Found current chapter from content', { selector, text, chapterNum });
-                            return {
-                                num: chapterNum,
-                                token: 'chapter',
-                                title: text,
-                                source: 'content'
-                            };
-                        }
+                    if (text.length > 1 && text.length < 200) { // Skip empty or huge text blocks
+                        const result = tryPatterns(text, `content(${selector})`);
+                        if (result) return result;
                     }
                 }
             }
@@ -264,33 +400,30 @@
             const h1Elements = document.querySelectorAll('h1');
             for (const h1 of h1Elements) {
                 const text = h1.textContent.trim();
-                const match = text.match(/Chapter\s+(\d+)/i);
-                if (match) {
-                    const chapterNum = parseInt(match[1], 10);
-                    log('✅ Found current chapter from H1', { text, chapterNum });
-                    return {
-                        num: chapterNum,
-                        token: 'chapter',
-                        title: text,
-                        source: 'h1'
-                    };
-                }
+                const result = tryPatterns(text, 'h1');
+                if (result) return result;
             }
 
             // Strategy 4: Breadcrumbs (your test showed this works too)
             const breadcrumbs = document.querySelectorAll('.breadcrumb, [class*="breadcrumb"], .navigation, .nav');
             for (const crumb of breadcrumbs) {
                 const text = crumb.textContent.trim();
-                const match = text.match(/Chapter\s+(\d+)/i);
-                if (match) {
-                    const chapterNum = parseInt(match[1], 10);
-                    log('✅ Found current chapter from breadcrumb', { text, chapterNum });
-                    return {
-                        num: chapterNum,
-                        token: 'chapter',
-                        title: text,
-                        source: 'breadcrumb'
-                    };
+                const result = tryPatterns(text, 'breadcrumb');
+                if (result) return result;
+            }
+
+            // Strategy 5: Look for any element with just a number that could be chapter indicator
+            const headerElements = document.querySelectorAll('h1, h2, h3, .header, [class*="header"]');
+            for (const header of headerElements) {
+                // Check direct text content (not nested)
+                const directText = Array.from(header.childNodes)
+                    .filter(n => n.nodeType === Node.TEXT_NODE)
+                    .map(n => n.textContent.trim())
+                    .join(' ')
+                    .trim();
+                if (directText) {
+                    const result = tryPatterns(directText, 'header-direct');
+                    if (result) return result;
                 }
             }
 
@@ -311,21 +444,56 @@
             return contentChapter;
         }
 
-        // Fallback to original URL parsing (but this is often wrong!)
+        // Fallback to URL parsing with multiple strategies
         log('⚠️ Falling back to URL parsing for chapter detection');
-        const m = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
-        if (!m) {
-            log('❌ parseChapter no match', { pathname });
-            return null;
+
+        // Strategy 1: Standard chapter format (chapter-31, cchapter31, etc.)
+        const standardMatch = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
+        if (standardMatch) {
+            const res = {
+                token: standardMatch[1],
+                num: parseInt(standardMatch[3], 10),
+                source: 'url-standard'
+            };
+            log('🔗 Using chapter from URL (standard format):', res);
+            return res;
         }
 
-        const res = {
-            token: m[1],
-            num: parseInt(m[3], 10),
-            source: 'url'
-        };
-        log('🔗 Using chapter from URL (may be wrong):', res);
-        return res;
+        // Strategy 2: Number-prefix format - number at START of last segment
+        // Matches: /31-title, /32title, /30next (number at beginning, with or without separator)
+        const lastSegment = pathname.split('/').pop() || '';
+        const numberAtStartMatch = lastSegment.match(/^(\d+)/);
+        if (numberAtStartMatch) {
+            const num = parseInt(numberAtStartMatch[1], 10);
+            // Sanity check: must be reasonable chapter number (1-9999)
+            if (num > 0 && num < 10000) {
+                const res = {
+                    token: 'chapter',
+                    num: num,
+                    source: 'url-number-prefix'
+                };
+                log('🔗 Using chapter from URL (number-prefix format):', res);
+                return res;
+            }
+        }
+
+        // Strategy 3: Any number anywhere in the last URL segment (fallback)
+        const anyNumberMatch = lastSegment.match(/(\d+)/);
+        if (anyNumberMatch) {
+            const num = parseInt(anyNumberMatch[1], 10);
+            if (num > 0 && num < 10000) {
+                const res = {
+                    token: 'chapter',
+                    num: num,
+                    source: 'url-any-number'
+                };
+                log('🔗 Using chapter from URL (extracted number):', res);
+                return res;
+            }
+        }
+
+        log('❌ parseChapter no match', { pathname });
+        return null;
     }
 
     /* ========= Stable Device ID Generation ========= */
@@ -414,8 +582,13 @@
     async function autoUpdateNovelInfo() {
         try {
             // Only run on novel main pages (not chapter pages)
-            if (location.pathname.match(/chapter-?\d+/i)) {
-                log('Skipping auto-update on chapter page');
+            // Check for standard chapter format OR number-prefix format
+            const pathname = location.pathname;
+            const lastSegment = pathname.split('/').pop() || '';
+
+            // Skip if: has "chapter" in URL, OR last segment starts with a number (chapter page)
+            if (pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment)) {
+                log('Skipping auto-update on chapter page', { pathname, lastSegment });
                 return;
             }
 
@@ -605,8 +778,13 @@
     /* ========= ReadSync API Functions ========= */
     async function syncProgress(percent) {
         // Skip progress sync on main pages (only sync on actual chapter pages)
-        if (!location.pathname.match(/chapter-?\d+/i)) {
-            log('Skipping progress sync on main page');
+        // A chapter page has either "chapter" in URL OR a number-prefix format
+        const pathname = location.pathname;
+        const lastSegment = pathname.split('/').pop() || '';
+        const isChapterPage = pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment);
+
+        if (!isChapterPage) {
+            log('Skipping progress sync on main page', { pathname, lastSegment });
             return;
         }
 
