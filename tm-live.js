@@ -598,7 +598,21 @@
                 return;
             }
 
-            log('🔄 Auto-updating novel info for:', novelId);
+            // First check if this novel is in the user's reading list
+            // This prevents random novels from being added just by browsing
+            log('🔍 Checking if novel is in reading list:', novelId);
+            const checkResponse = await fetch(`${READSYNC_API_BASE}/novels/${novelId}/device/${READSYNC_DEVICE_ID}?user_key=${READSYNC_API_KEY}`);
+
+            if (!checkResponse.ok) {
+                if (checkResponse.status === 404) {
+                    log('⏭️ Novel not in reading list, skipping auto-update');
+                } else {
+                    log('⚠️ Error checking reading list status:', checkResponse.status);
+                }
+                return;
+            }
+
+            log('✅ Novel is in reading list, proceeding with auto-update:', novelId);
 
             // Extract latest chapter info from page
             const latestChapterInfo = extractLatestChapterInfo();
