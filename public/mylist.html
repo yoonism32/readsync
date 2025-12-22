@@ -812,7 +812,7 @@
 
         // Tab management timeouts
         const TAB_CHECK_INTERVAL_MS = MS_PER_SECOND; // Check tab status every second
-        const TAB_MIN_WAIT_CHECKS = 3; // Minimum 3 checks (3 seconds) before closing tab
+        const TAB_MIN_WAIT_CHECKS = 8; // Minimum 8 seconds - ensures green notification appears
         const TAB_MAX_CHECKS = 30; // Maximum 30 checks (30 seconds timeout)
         const TAB_CLOSE_VERIFY_DELAY_MS = 100; // Wait 100ms to verify tab actually closed
         const STATUS_MESSAGE_CLEAR_DELAY_MS = 10 * MS_PER_SECOND; // Clear success message after 10 seconds
