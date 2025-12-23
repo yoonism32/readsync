@@ -667,58 +667,95 @@ app.post('/api/v1/progress',
 
         try {
             const result = await withTransaction(async (client) => {
-                // Upsert device with type detection - FIXED to prevent duplicates
+                // ✅ NEW: Check if novel already exists in user's reading list
+                const existingNovel = await client.query(`
+                    SELECT id FROM user_novel_meta
+                    WHERE user_id = $1 AND novel_id = $2
+                `, [user_id, novel_id]);
+
+                const novelExistsInList = existingNovel.rows.length > 0;
+
+                // If novel doesn't exist, create it (first time reading)
+                // But only if we have actual progress (not just visiting the page)
+                if (!novelExistsInList) {
+                    // Only create if: 
+                    // 1. Reading an actual chapter (percent > 0 OR seconds > 5)
+                    // 2. OR has made meaningful progress
+                    const hasProgress = percentValue > 0 || seconds_on_page > 5;
+
+                    if (!hasProgress) {
+                        console.log(`ℹ️  Novel ${novel_id} not in list and no progress - skipping`);
+                        return res.status(404).json({
+                            error: 'Novel not in reading list',
+                            message: 'Start reading a chapter to add this novel to your list'
+                        });
+                    }
+
+                    console.log(`📚 Creating new novel entry: ${novel_id} (first read)`);
+                }
+
+                // Upsert device with type detection
                 const deviceType = detectDeviceType(req.get('User-Agent'));
 
                 await client.query(`
-        INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
-        ON CONFLICT (id) DO UPDATE SET
-          device_label = EXCLUDED.device_label,
-          device_type = EXCLUDED.device_type,
-          user_agent = EXCLUDED.user_agent,
-          last_seen = CURRENT_TIMESTAMP,
-          active = TRUE
-      `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
+                    INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
+                    VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
+                    ON CONFLICT (id) DO UPDATE SET
+                      device_label = EXCLUDED.device_label,
+                      device_type = EXCLUDED.device_type,
+                      user_agent = EXCLUDED.user_agent,
+                      last_seen = CURRENT_TIMESTAMP,
+                      active = TRUE
+                `, [device_id, user_id, device_label, deviceType, req.get('User-Agent') || '']);
 
-                // 🔹 Upsert novel with latest chapter info
-                // Store base URL (without chapter) and only set it if currently NULL
+                // Upsert novel with latest chapter info
+                // Only INSERT if novel doesn't exist yet (first read)
+                // Otherwise UPDATE existing novel
+                if (!novelExistsInList) {
+                    // First time - INSERT the novel
+                    await client.query(`
+                        INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
+                        VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
+                    `, [novel_id, novel_title, baseNovelUrl, latestChapterNum, latestChapterTitle]);
+                } else {
+                    // Novel exists - UPDATE it
+                    await client.query(`
+                        UPDATE novels SET
+                            title = $2,
+                            primary_url = COALESCE(primary_url, $3),
+                            latest_chapter_num = GREATEST(
+                                COALESCE(latest_chapter_num, 0),
+                                COALESCE($4::integer, 0)
+                            ),
+                            latest_chapter_title = CASE 
+                                WHEN $4::integer > COALESCE(latest_chapter_num, 0)
+                                THEN $5 
+                                ELSE latest_chapter_title 
+                            END,
+                            chapters_updated_at = CASE 
+                                WHEN $4::integer > COALESCE(latest_chapter_num, 0)
+                                THEN CURRENT_TIMESTAMP 
+                                ELSE chapters_updated_at 
+                            END
+                        WHERE id = $1
+                    `, [novel_id, novel_title, baseNovelUrl, latestChapterNum, latestChapterTitle]);
+                }
+
+                // Create user novel metadata (first time only)
                 await client.query(`
-        INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
-        VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
-        ON CONFLICT (id) DO UPDATE SET
-            title = EXCLUDED.title,
-            primary_url = COALESCE(novels.primary_url, EXCLUDED.primary_url),
-            latest_chapter_num = GREATEST(
-                COALESCE(novels.latest_chapter_num, 0),
-                COALESCE(EXCLUDED.latest_chapter_num::integer, 0)
-            ),
-            latest_chapter_title = CASE 
-                WHEN EXCLUDED.latest_chapter_num::integer > COALESCE(novels.latest_chapter_num, 0)
-                THEN EXCLUDED.latest_chapter_title 
-                ELSE novels.latest_chapter_title 
-            END,
-            chapters_updated_at = CASE 
-                WHEN EXCLUDED.latest_chapter_num::integer > COALESCE(novels.latest_chapter_num, 0)
-                THEN CURRENT_TIMESTAMP 
-                ELSE novels.chapters_updated_at 
-            END
-        `, [novel_id, novel_title, baseNovelUrl, latestChapterNum, latestChapterTitle]);
-                // Ensure user novel metadata exists
-                await client.query(`
-        INSERT INTO user_novel_meta (user_id, novel_id, started_at)
-        VALUES ($1, $2, CURRENT_TIMESTAMP)
-        ON CONFLICT (user_id, novel_id) DO NOTHING
-      `, [user_id, novel_id]);
+                    INSERT INTO user_novel_meta (user_id, novel_id, started_at)
+                    VALUES ($1, $2, CURRENT_TIMESTAMP)
+                    ON CONFLICT (user_id, novel_id) DO NOTHING
+                `, [user_id, novel_id]);
 
                 // Check if we should update (max-progress policy)
                 const lastProgress = await client.query(`
-        SELECT percent, chapter_num, created_at
-        FROM progress_snapshots
-        WHERE user_id = $1 AND device_id = $2 AND novel_id = $3
-        ORDER BY created_at DESC
-        LIMIT 1
-      `, [user_id, device_id, novel_id]);
+                    SELECT percent, chapter_num, created_at
+                    FROM progress_snapshots
+                    WHERE user_id = $1 AND device_id = $2 AND novel_id = $3
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                `, [user_id, device_id, novel_id]);
 
                 let shouldUpdate = true;
                 if (lastProgress.rows.length > 0) {
@@ -741,10 +778,10 @@ app.post('/api/v1/progress',
 
                 if (shouldUpdate) {
                     await client.query(`
-          INSERT INTO progress_snapshots
-            (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page]);
+                        INSERT INTO progress_snapshots
+                            (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page]);
                 }
 
                 return await getLatestStates(client, user_id, novel_id);
@@ -2510,7 +2547,7 @@ app.post('/api/v1/import',
                          VALUES ($1, $2, $3, $4, $5, $6, $7)
                          ON CONFLICT DO NOTHING`,
                         [req.user.id, bookmark.novel_id, bookmark.chapter_url, bookmark.percent,
-                         bookmark.bookmark_type, bookmark.title, bookmark.note]
+                        bookmark.bookmark_type, bookmark.title, bookmark.note]
                     );
                     imported.bookmarks++;
                 }
