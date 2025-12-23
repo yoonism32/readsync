@@ -1398,9 +1398,13 @@
                     const globalIndex = batchStart + indexInBatch;
                     const title = novel.title || novel.novel_id;
 
+                    // Extract novel slug for signal matching (remove "novelbin:" prefix)
+                    const novelSlug = novel.novel_id.replace(/^novelbin:/, '');
+
                     updateRefreshStatus(`Batch ${batchNum}/${totalBatches}: ${batch.map(n => n.title || n.novel_id).join(', ')}...`);
 
-                    return refreshSingleNovel(novel.primary_url, title, globalIndex + 1, novels.length)
+                    // Pass novelSlug instead of (globalIndex + 1, novels.length)
+                    return refreshSingleNovel(novel.primary_url, title, novelSlug)
                         .then(success => {
                             if (success) {
                                 completed++;
@@ -1448,9 +1452,12 @@
             }, STATUS_MESSAGE_CLEAR_DELAY_MS);
         }
 
-        function refreshSingleNovel(url, title) {
+        function refreshSingleNovel(url, title, novelId) {
             return new Promise((resolve) => {
                 console.log(`📖 Opening: ${title}`);
+
+                // Clear any previous update signal
+                localStorage.removeItem('readsync_last_update');
 
                 // Open tab
                 const newTab = window.open(url, '_blank');
@@ -1461,62 +1468,74 @@
                     return;
                 }
 
-                let checkCount = 0;
                 let resolved = false;
+                let updateDetected = false;
+                const startTime = Date.now();
+                const MAX_WAIT_MS = 15000; // 15 seconds max
 
-                // Periodically check if tab is still loading or stuck
-                const checkInterval = setInterval(() => {
-                    checkCount++;
+                // Listen for update signal from the opened tab
+                const storageListener = (e) => {
+                    if (e.key === 'readsync_last_update' && e.newValue) {
+                        try {
+                            const signal = JSON.parse(e.newValue);
+                            // Check if this signal is for the current novel
+                            if (signal.novel_id && signal.novel_id.includes(novelId) && signal.success) {
+                                updateDetected = true;
+                                const elapsed = Date.now() - startTime;
+                                console.log(`✅ Update detected for: ${title} (${elapsed}ms)`);
 
-                    try {
-                        // Try to access tab - if Cloudflare challenge, this will fail
-                        // If tab closed itself or finished loading, this will also fail
-                        if (newTab.closed) {
-                            console.log(`✅ Tab self-closed for: ${title} (update complete)`);
-                            clearInterval(checkInterval);
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(true);
-                            }
-                            return;
-                        }
+                                // Wait a moment for the green notification to show
+                                setTimeout(() => {
+                                    console.log(`🗑️ Closing tab for: ${title}`);
+                                    try {
+                                        newTab.close();
+                                    } catch (e) { }
 
-                        // After minimum wait time, try to close
-                        if (checkCount >= TAB_MIN_WAIT_CHECKS) {
-                            console.log(`🗑️ Attempting to close tab for: ${title}`);
-                            newTab.close();
-
-                            // Check if it actually closed
-                            setTimeout(() => {
-                                if (newTab.closed) {
-                                    console.log(`✅ Successfully closed tab for: ${title}`);
-                                    clearInterval(checkInterval);
+                                    window.removeEventListener('storage', storageListener);
                                     if (!resolved) {
                                         resolved = true;
                                         resolve(true);
                                     }
-                                } else {
-                                    console.warn(`⚠️ Tab stuck (Cloudflare?) for: ${title}`);
-                                }
-                            }, TAB_CLOSE_VERIFY_DELAY_MS);
-                        }
-
-                        // Timeout after max checks
-                        if (checkCount >= TAB_MAX_CHECKS) {
-                            console.warn(`⏱️ Timeout for: ${title} - giving up`);
-                            clearInterval(checkInterval);
-                            try {
-                                newTab.close();
-                            } catch (e) { }
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(false);
+                                }, 1000); // Wait 1 second after update for visual confirmation
                             }
+                        } catch (e) {
+                            console.error('Error parsing update signal:', e);
                         }
-                    } catch (e) {
-                        // Cross-origin error expected - continue checking
                     }
-                }, TAB_CHECK_INTERVAL_MS);
+                };
+
+                window.addEventListener('storage', storageListener);
+
+                // Fallback: Check if tab closed or timeout
+                const fallbackInterval = setInterval(() => {
+                    const elapsed = Date.now() - startTime;
+
+                    // Tab closed itself
+                    if (newTab.closed) {
+                        console.log(`✅ Tab self-closed for: ${title}`);
+                        clearInterval(fallbackInterval);
+                        window.removeEventListener('storage', storageListener);
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(updateDetected); // Return true if we detected update, false otherwise
+                        }
+                        return;
+                    }
+
+                    // Timeout
+                    if (elapsed >= MAX_WAIT_MS) {
+                        console.warn(`⏱️ Timeout for: ${title} - forcing close`);
+                        clearInterval(fallbackInterval);
+                        window.removeEventListener('storage', storageListener);
+                        try {
+                            newTab.close();
+                        } catch (e) { }
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(updateDetected); // Return whether we saw update before timeout
+                        }
+                    }
+                }, 1000);
             });
         }
 

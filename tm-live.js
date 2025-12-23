@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      5.0.4
+// @version      5.0.5
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
@@ -648,6 +648,19 @@
                 const result = await response.json();
                 log('✅ Novel info auto-updated successfully!', result);
                 showAutoUpdateNotification('✅ Chapter info updated!', 'success');
+
+                // Signal to MyList that update is complete
+                try {
+                    const signal = {
+                        novel_id: novelId,
+                        timestamp: Date.now(),
+                        success: true
+                    };
+                    localStorage.setItem('readsync_last_update', JSON.stringify(signal));
+                    log('📡 Sent update completion signal to MyList');
+                } catch (e) {
+                    log('⚠️ Failed to send update signal:', e);
+                }
             } else {
                 const error = await response.text();
                 log('❌ Auto-update failed:', response.status, error);
