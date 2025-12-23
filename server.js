@@ -669,7 +669,7 @@ app.post('/api/v1/progress',
             const result = await withTransaction(async (client) => {
                 // ✅ NEW: Check if novel already exists in user's reading list
                 const existingNovel = await client.query(`
-                    SELECT id FROM user_novel_meta
+                    SELECT novel_id FROM user_novel_meta
                     WHERE user_id = $1 AND novel_id = $2
                 `, [user_id, novel_id]);
 
