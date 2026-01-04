@@ -50,7 +50,7 @@ const DEFAULT_PG_CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
 const JSON_BODY_LIMIT = '10mb';
 
 // Pagination limits
-const DEFAULT_PAGE_LIMIT = 50;
+const DEFAULT_PAGE_LIMIT = 200;
 const MIN_PAGE_LIMIT = 1;
 const MAX_PAGE_LIMIT = 200;
 
