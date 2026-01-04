@@ -703,6 +703,72 @@
                 font-size: 0.82rem;
             }
         }
+
+        /* ============ PAGINATION STYLES ============ */
+        .pagination-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 20px;
+            padding: 16px;
+            background: rgba(15, 23, 42, 0.98);
+            border-radius: 8px;
+            border: 1px solid var(--border-subtle);
+        }
+
+        .pagination-info {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .pagination-buttons {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .page-btn {
+            padding: 8px 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .page-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+        }
+
+        .page-btn:disabled {
+            background: #374151;
+            color: #6b7280;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .page-indicator {
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 500;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        @media (max-width: 768px) {
+            .pagination-controls {
+                flex-direction: column;
+                gap: 12px;
+            }
+
+            .pagination-info {
+                order: -1;
+            }
+        }
     </style>
 </head>
 
@@ -719,8 +785,8 @@
                 <input id="searchInput" type="search" placeholder="Search title…" autocomplete="off">
             </div>
             <div class="legend">
-                <span><span class="legend-arrow">▲</span> descending</span>
                 <span><span class="legend-arrow">▼</span> ascending</span>
+                <span><span class="legend-arrow">▲</span> descending</span>
             </div>
         </div>
 
@@ -834,6 +900,12 @@
         const DEFAULT_SORT_FIELD = 'updated_at';
         const DEFAULT_SORT_ORDER = 'desc'; // 'asc' | 'desc'
         // ============================================
+
+        /* ============ PAGINATION STATE ============ */
+        const ITEMS_PER_PAGE = 50;
+        let currentPage = 1;
+        let totalPages = 1;
+        let paginatedNovels = [];
 
         let allNovels = [];
         let sortField = DEFAULT_SORT_FIELD;
@@ -955,6 +1027,60 @@
             return (t || '').toString().toLowerCase();
         }
 
+        /* ============ PAGINATION FUNCTIONS ============ */
+        function createPaginationControls() {
+            let paginationDiv = document.getElementById('paginationControls');
+
+            if (!paginationDiv) {
+                paginationDiv = document.createElement('div');
+                paginationDiv.id = 'paginationControls';
+                paginationDiv.className = 'pagination-controls';
+
+                const tableWrapper = document.getElementById('tableWrapper');
+                tableWrapper.parentNode.insertBefore(paginationDiv, tableWrapper.nextSibling);
+            }
+
+            const startItem = (currentPage - 1) * ITEMS_PER_PAGE + 1;
+            const endItem = Math.min(currentPage * ITEMS_PER_PAGE, paginatedNovels.length);
+
+            paginationDiv.innerHTML = `
+                <div class="pagination-info">
+                    Showing ${startItem}-${endItem} of ${paginatedNovels.length} novels
+                </div>
+                <div class="pagination-buttons">
+                    <button 
+                        class="page-btn" 
+                        ${currentPage === 1 ? 'disabled' : ''}
+                        onclick="goToPage(${currentPage - 1})"
+                    >
+                        ← Previous
+                    </button>
+                    <div class="page-indicator">
+                        Page ${currentPage} of ${totalPages}
+                    </div>
+                    <button 
+                        class="page-btn" 
+                        ${currentPage === totalPages ? 'disabled' : ''}
+                        onclick="goToPage(${currentPage + 1})"
+                    >
+                        Next →
+                    </button>
+                </div>
+            `;
+        }
+
+        function goToPage(page) {
+            if (page < 1 || page > totalPages) return;
+
+            currentPage = page;
+            renderList();
+
+            document.getElementById('tableWrapper').scrollIntoView({
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+
         function formatProgress(novel, global) {
             const currentCh = global ? Number(global.chapter_num) || 0 : 0;
             const totalCh = Number(novel.latest_chapter_num) || 0;
@@ -1007,6 +1133,14 @@
             // Sort
             const sorted = sortNovels(filtered);
 
+            // Store for pagination
+            paginatedNovels = sorted;
+            totalPages = Math.ceil(paginatedNovels.length / ITEMS_PER_PAGE);
+
+            // Ensure current page is valid
+            if (currentPage > totalPages && totalPages > 0) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
             loading.style.display = 'none';
             wrapper.style.display = 'block';
 
@@ -1024,7 +1158,12 @@
                 return;
             }
 
-            const rows = sorted.map(novel => {
+            // Calculate pagination slice
+            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+            const endIndex = startIndex + ITEMS_PER_PAGE;
+            const pageNovels = sorted.slice(startIndex, endIndex);
+
+            const rows = pageNovels.map(novel => {
                 const global = novel.latest_global || null;
                 const coverUrl = buildCoverUrl(novel.novel_id);
                 const fav = !!novel.favorite;
@@ -1167,6 +1306,9 @@
             }).join('');
 
             body.innerHTML = rows;
+
+            // Create/update pagination controls
+            createPaginationControls();
         }
 
         async function loadMyList() {
@@ -1233,6 +1375,7 @@
         function attachEvents() {
             $('searchInput').addEventListener('input', (e) => {
                 searchTerm = e.target.value || '';
+                currentPage = 1; // Reset to page 1 on search
                 renderList();
             });
 
@@ -1549,6 +1692,19 @@
         function sleep(ms) {
             return new Promise(resolve => setTimeout(resolve, ms));
         }
+
+        /* ============ KEYBOARD NAVIGATION ============ */
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger if user is typing
+            if (document.activeElement.tagName === 'INPUT' ||
+                document.activeElement.tagName === 'SELECT') return;
+
+            if (e.key === 'ArrowLeft' && currentPage > 1) {
+                goToPage(currentPage - 1);
+            } else if (e.key === 'ArrowRight' && currentPage < totalPages) {
+                goToPage(currentPage + 1);
+            }
+        });
     </script>
 </body>
 
