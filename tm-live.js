@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ReadSync ++ NovelBin Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      5.0.5
-// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT
+// @version      5.0.6
+// @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT + PARENT WINDOW COMMUNICATION
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*
@@ -59,7 +59,10 @@
     const SYNC_DEBOUNCE_MS = 500;   // Wait 0.5s before syncing progress (much faster)
     const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
 
-    log('Script start', { path: location.pathname, href: location.href, deviceId: READSYNC_DEVICE_ID, deviceLabel: READSYNC_DEVICE_LABEL });
+    // 🆕 Check if this page was opened by MyList refresh
+    const isRefreshTab = window.opener && window.name && window.name.startsWith('_novel_');
+
+    log('Script start', { path: location.pathname, href: location.href, deviceId: READSYNC_DEVICE_ID, deviceLabel: READSYNC_DEVICE_LABEL, isRefreshTab: isRefreshTab, windowName: window.name });
 
     // === iOS fix: robustly find the real scroll container ===
     function findScrollEl() {
@@ -605,6 +608,24 @@
 
             if (!latestChapterInfo.latestChapterNum) {
                 log('⚠️ No chapter info found to update');
+
+                // 🆕 Notify parent window of failure if this is a refresh tab
+                if (isRefreshTab && window.opener && !window.opener.closed) {
+                    try {
+                        window.opener.postMessage({
+                            type: 'NOVEL_UPDATE_COMPLETE',
+                            novelId: novelId,
+                            success: false,
+                            reason: 'no_chapter_info'
+                        }, window.location.origin);
+                        log('📡 Notified parent of no chapter info');
+
+                        // Close tab after notification
+                        setTimeout(() => window.close(), 500);
+                    } catch (e) {
+                        log('⚠️ Failed to notify parent:', e);
+                    }
+                }
                 return;
             }
 
@@ -635,28 +656,78 @@
                 log('✅ Novel info auto-updated successfully!', result);
                 showAutoUpdateNotification('✅ Chapter info updated!', 'success');
 
-                // Signal to MyList that update is complete
-                try {
-                    const signal = {
-                        novel_id: novelId,
-                        timestamp: Date.now(),
-                        success: true
-                    };
-                    localStorage.setItem('readsync_last_update', JSON.stringify(signal));
-                    log('📡 Sent update completion signal to MyList');
-                } catch (e) {
-                    log('⚠️ Failed to send update signal:', e);
+                // 🆕 Notify parent window of success if this is a refresh tab
+                if (isRefreshTab && window.opener && !window.opener.closed) {
+                    try {
+                        window.opener.postMessage({
+                            type: 'NOVEL_UPDATE_COMPLETE',
+                            novelId: novelId,
+                            success: true,
+                            data: result
+                        }, window.location.origin);
+                        log('📡 Notified parent of success');
+
+                        // Close tab after notification
+                        setTimeout(() => window.close(), 1000);
+                    } catch (e) {
+                        log('⚠️ Failed to notify parent:', e);
+                    }
                 }
             } else {
                 const error = await response.text();
                 log('❌ Auto-update failed:', response.status, error);
+
+                // 🆕 Notify parent window of API failure if this is a refresh tab
+                if (isRefreshTab && window.opener && !window.opener.closed) {
+                    try {
+                        window.opener.postMessage({
+                            type: 'NOVEL_UPDATE_COMPLETE',
+                            novelId: novelId,
+                            success: false,
+                            reason: 'api_error',
+                            status: response.status
+                        }, window.location.origin);
+                        log('📡 Notified parent of API failure');
+
+                        // Close tab after notification
+                        setTimeout(() => window.close(), 500);
+                    } catch (e) {
+                        log('⚠️ Failed to notify parent:', e);
+                    }
+                }
+
                 if (response.status !== 404) { // Don't show error for novels not in your list
                     showAutoUpdateNotification('⚠️ Update failed', 'error');
                 }
             }
         } catch (error) {
             console.warn(`[${LOG_TAG}] Auto-update error:`, error);
-            // Silent fail - don't annoy user
+
+            // 🆕 Notify parent window of exception if this is a refresh tab
+            if (isRefreshTab && window.opener && !window.opener.closed) {
+                try {
+                    // Try to get novelId if we can
+                    let novelId = 'unknown';
+                    try {
+                        const urlMatch = location.href.match(/\/b\/([^\/]+)/);
+                        if (urlMatch) novelId = 'novelbin:' + urlMatch[1].toLowerCase();
+                    } catch { }
+
+                    window.opener.postMessage({
+                        type: 'NOVEL_UPDATE_COMPLETE',
+                        novelId: novelId,
+                        success: false,
+                        reason: 'exception',
+                        error: error.message
+                    }, window.location.origin);
+                    log('📡 Notified parent of exception');
+
+                    // Close tab after notification
+                    setTimeout(() => window.close(), 500);
+                } catch (e) {
+                    log('⚠️ Failed to notify parent:', e);
+                }
+            }
         }
     }
 
