@@ -142,6 +142,19 @@ app.use(cors({
 app.use(express.json({ limit: JSON_BODY_LIMIT }));
 app.use(express.static('public'));
 
+// Session configuration (30-day idle timeout)
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'readsync-secret-change-in-production',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict'
+    }
+}));
+
 // Request logging middleware
 app.use((req, res, next) => {
     const start = Date.now();
@@ -784,7 +797,6 @@ app.get('/api/v1/auth/whoami', /* authLimiter, */ validateApiKey, (req, res) => 
 // app.use('/api/v1/', apiLimiter);
 
 app.post('/api/v1/progress',
-    requireAuthAPI,
     [
         body('device_id').isString().isLength({ min: 1, max: MAX_DEVICE_ID_LENGTH }).withMessage(`device_id must be a string between 1-${MAX_DEVICE_ID_LENGTH} characters`),
         body('device_label').isString().isLength({ min: 1, max: MAX_DEVICE_LABEL_LENGTH }).withMessage(`device_label must be a string between 1-${MAX_DEVICE_LABEL_LENGTH} characters`),
