@@ -14,6 +14,8 @@ process.on('uncaughtException', (error) => {
 });
 
 const express = require('express');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
@@ -971,7 +973,7 @@ app.post('/api/v1/progress',
         }
     });
 
-app.get('/api/v1/progress', requireAuthAPI, validateApiKey, async (req, res) => {
+app.get('/api/v1/progress', validateApiKey, async (req, res) => {
     const { novel_id } = req.query;
 
     if (!novel_id) {
@@ -991,7 +993,7 @@ app.get('/api/v1/progress', requireAuthAPI, validateApiKey, async (req, res) => 
     }
 });
 
-app.get('/api/v1/compare', requireAuthAPI, validateApiKey, async (req, res) => {
+app.get('/api/v1/compare', validateApiKey, async (req, res) => {
     const { novel_id, device_id } = req.query;
 
     if (!novel_id || !device_id) {
