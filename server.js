@@ -150,6 +150,163 @@ app.use((req, res, next) => {
     next();
 });
 
+/* ============ AUTHENTICATION MIDDLEWARE ============ */
+
+/**
+ * Middleware to check if user is authenticated
+ * Redirects to /login if not authenticated
+ */
+function requireAuth(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        // User is authenticated, extend session
+        req.session.touch(); // Resets maxAge
+        return next();
+    }
+
+    // Not authenticated - redirect to login
+    res.redirect('/login');
+}
+
+/**
+ * Middleware to check if user is already authenticated
+ * Redirects to / if already logged in
+ */
+function redirectIfAuthenticated(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        return res.redirect('/');
+    }
+    next();
+}
+
+/**
+ * Middleware for API routes that need authentication
+ * Returns 401 instead of redirecting
+ */
+function requireAuthAPI(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        req.session.touch();
+        return next();
+    }
+
+    res.status(401).json({ error: 'Unauthorized' });
+}
+
+/* ============ AUTHENTICATION ROUTES ============ */
+
+// Rate limiting for login attempts
+const loginAttempts = new Map();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_TIME = 15 * 60 * 1000; // 15 minutes
+
+function checkRateLimit(ip) {
+    const now = Date.now();
+    const attempts = loginAttempts.get(ip);
+
+    if (!attempts) return true;
+
+    const recentAttempts = attempts.filter(time => now - time < LOCKOUT_TIME);
+
+    if (recentAttempts.length >= MAX_LOGIN_ATTEMPTS) {
+        return false;
+    }
+
+    loginAttempts.set(ip, recentAttempts);
+    return true;
+}
+
+function recordAttempt(ip) {
+    const now = Date.now();
+    const attempts = loginAttempts.get(ip) || [];
+    attempts.push(now);
+    loginAttempts.set(ip, attempts);
+}
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+    const { username, password } = req.body;
+
+    const clientIp = req.ip || req.connection.remoteAddress;
+
+    if (!checkRateLimit(clientIp)) {
+        return res.status(429).json({
+            error: 'Too many login attempts. Please try again in 15 minutes.'
+        });
+    }
+
+    if (!username || !password) {
+        recordAttempt(clientIp);
+        return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
+    const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
+
+    if (!ADMIN_PASSWORD_HASH) {
+        console.error('🔴 FATAL: ADMIN_PASSWORD_HASH not set in .env file!');
+        return res.status(500).json({ error: 'Server configuration error' });
+    }
+
+    try {
+        const usernameMatch = username === ADMIN_USERNAME;
+        const passwordMatch = await bcrypt.compare(password, ADMIN_PASSWORD_HASH);
+
+        if (usernameMatch && passwordMatch) {
+            req.session.authenticated = true;
+            req.session.username = username;
+
+            console.log(`✅ Login successful: ${username} from ${clientIp}`);
+            loginAttempts.delete(clientIp);
+
+            return res.json({ success: true });
+        } else {
+            recordAttempt(clientIp);
+            console.log(`⚠️ Login failed: ${username} from ${clientIp}`);
+
+            return res.status(401).json({ error: 'Invalid username or password' });
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        recordAttempt(clientIp);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Logout endpoint
+app.post('/api/auth/logout', (req, res) => {
+    if (req.session) {
+        const username = req.session.username;
+        req.session.destroy((err) => {
+            if (err) {
+                console.error('Logout error:', err);
+                return res.status(500).json({ error: 'Logout failed' });
+            }
+
+            console.log(`👋 Logout successful: ${username}`);
+            res.json({ success: true });
+        });
+    } else {
+        res.json({ success: true });
+    }
+});
+
+// Auth status endpoint
+app.get('/api/auth/status', (req, res) => {
+    if (req.session && req.session.authenticated) {
+        res.json({
+            authenticated: true,
+            username: req.session.username
+        });
+    } else {
+        res.json({ authenticated: false });
+    }
+});
+
+// Login page (public)
+app.get('/login', redirectIfAuthenticated, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+
 /* ---------------------- Database Utilities ---------------------- */
 /**
  * Create a PostgreSQL connection pool with standardized configuration
@@ -625,6 +782,7 @@ app.get('/api/v1/auth/whoami', /* authLimiter, */ validateApiKey, (req, res) => 
 // app.use('/api/v1/', apiLimiter);
 
 app.post('/api/v1/progress',
+    requireAuthAPI,
     [
         body('device_id').isString().isLength({ min: 1, max: MAX_DEVICE_ID_LENGTH }).withMessage(`device_id must be a string between 1-${MAX_DEVICE_ID_LENGTH} characters`),
         body('device_label').isString().isLength({ min: 1, max: MAX_DEVICE_LABEL_LENGTH }).withMessage(`device_label must be a string between 1-${MAX_DEVICE_LABEL_LENGTH} characters`),
@@ -813,7 +971,7 @@ app.post('/api/v1/progress',
         }
     });
 
-app.get('/api/v1/progress', validateApiKey, async (req, res) => {
+app.get('/api/v1/progress', requireAuthAPI, validateApiKey, async (req, res) => {
     const { novel_id } = req.query;
 
     if (!novel_id) {
@@ -833,7 +991,7 @@ app.get('/api/v1/progress', validateApiKey, async (req, res) => {
     }
 });
 
-app.get('/api/v1/compare', validateApiKey, async (req, res) => {
+app.get('/api/v1/compare', requireAuthAPI, validateApiKey, async (req, res) => {
     const { novel_id, device_id } = req.query;
 
     if (!novel_id || !device_id) {
@@ -880,7 +1038,7 @@ app.get('/api/v1/compare', validateApiKey, async (req, res) => {
 });
 
 /* ---------------------- Novel Management ---------------------- */
-app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) => {
+app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, async (req, res) => {
     const { include_removed, status, favorite } = req.query;
     const { limit, offset } = req.pagination;
 
@@ -1048,7 +1206,7 @@ app.get('/api/v1/novels', validateApiKey, validatePagination, async (req, res) =
 });
 
 // 🔴 FIXED status endpoint
-app.put('/api/v1/novels/:novelId/status',
+app.put('/api/v1/novels/:novelId/status', requireAuthAPI,
     [
         param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage('Invalid novel ID format'),
         body('status').isIn(['reading', 'completed', 'on-hold', 'dropped', 'removed']).withMessage('Invalid status'),
@@ -1129,7 +1287,7 @@ app.put('/api/v1/novels/:novelId/status',
         }
     });
 
-app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+app.delete('/api/v1/novels/:novelId', requireAuthAPI, validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
     const { hard = false } = req.body;
 
@@ -1164,7 +1322,7 @@ app.delete('/api/v1/novels/:novelId', validateApiKey, validateNovelId, async (re
 });
 
 /* ---------------------- Additional Novel Endpoints ---------------------- */
-app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
+app.post('/api/v1/novels/:novelId/favorite', requireAuthAPI, validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
 
     try {
@@ -1182,7 +1340,7 @@ app.post('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, as
     }
 });
 
-app.delete('/api/v1/novels/:novelId/favorite', validateApiKey, validateNovelId, async (req, res) => {
+app.delete('/api/v1/novels/:novelId/favorite', requireAuthAPI, validateApiKey, validateNovelId, async (req, res) => {
     const { novelId } = req.params;
 
     try {
@@ -1575,7 +1733,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 });
 
 /* ---------------------- Settings API ---------------------- */
-app.get('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
+app.get('/api/v1/settings/last-refresh', requireAuthAPI, validateApiKey, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT value, updated_at 
@@ -1601,7 +1759,7 @@ app.get('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
 });
 
 // Save last refresh time
-app.post('/api/v1/settings/last-refresh', validateApiKey, async (req, res) => {
+app.post('/api/v1/settings/last-refresh', requireAuthAPI, validateApiKey, async (req, res) => {
     try {
         const { timestamp } = req.body;
 
@@ -2679,41 +2837,41 @@ app.delete('/api/v1/novels/:novelId/categories/:category',
 );
 
 /* ---------------------- Static File Serving ---------------------- */
-app.get('/', (req, res) => {
+app.get('/', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 // Serve manage page
-app.get('/manage', (req, res) => {
+app.get('/manage', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'manage.html'));
 });
 
 // Serve settings page
-app.get('/settings', (req, res) => {
+app.get('/settings', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'settings.html'));
 });
 
 // Redirect old novels page to MyList (clean integration)
-app.get('/novels', (req, res) => {
+app.get('/novels', requireAuth, (req, res) => {
     res.redirect('/mylist');
 });
 
 // Serve new MyList page
-app.get('/mylist', (req, res) => {
+app.get('/mylist', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'mylist.html'));
 });
 
-app.get('/novel/:novelId', (req, res) => {
+app.get('/novel/:novelId', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'novel.html'));
 });
 
 // Redirect old detail page route to new canonical one
-app.get('/novels/:novelId', (req, res) => {
+app.get('/novels/:novelId', requireAuth, (req, res) => {
     res.redirect('/novel/' + encodeURIComponent(req.params.novelId));
 });
 
 // 🔹 INTEGRATION: Admin panel route
-app.get('/admin', (req, res) => {
+app.get('/admin', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
