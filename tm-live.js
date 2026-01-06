@@ -620,8 +620,7 @@
                         }, window.location.origin);
                         log('📡 Notified parent of no chapter info');
 
-                        // Close tab after notification
-                        setTimeout(() => window.close(), 500);
+                        // Let parent window close the tab
                     } catch (e) {
                         log('⚠️ Failed to notify parent:', e);
                     }
@@ -667,8 +666,8 @@
                         }, window.location.origin);
                         log('📡 Notified parent of success');
 
-                        // Close tab after notification
-                        setTimeout(() => window.close(), 1000);
+                        // Let parent window close the tab (don't self-close)
+                        // Parent will close after seeing the green notification
                     } catch (e) {
                         log('⚠️ Failed to notify parent:', e);
                     }
@@ -689,8 +688,7 @@
                         }, window.location.origin);
                         log('📡 Notified parent of API failure');
 
-                        // Close tab after notification
-                        setTimeout(() => window.close(), 500);
+                        // Let parent window close the tab
                     } catch (e) {
                         log('⚠️ Failed to notify parent:', e);
                     }
@@ -722,8 +720,7 @@
                     }, window.location.origin);
                     log('📡 Notified parent of exception');
 
-                    // Close tab after notification
-                    setTimeout(() => window.close(), 500);
+                    // Let parent window close the tab
                 } catch (e) {
                     log('⚠️ Failed to notify parent:', e);
                 }

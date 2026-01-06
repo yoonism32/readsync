@@ -1728,6 +1728,7 @@
 
                 // Cleanup function
                 function cleanup() {
+                    clearInterval(fallbackInterval);
                     window.removeEventListener('message', messageHandler);
                     window.removeEventListener('storage', storageListener);
                 }
