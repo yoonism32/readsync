@@ -1606,8 +1606,12 @@
 
                 const fullNovelId = `novelbin:${novelId}`;
                 let resolved = false;
+                let updateDetected = false;
                 const startTime = Date.now();
                 const TIMEOUT_MS = 30000; // 30 seconds max
+
+                // Clear any previous update signal
+                localStorage.removeItem('readsync_last_update');
 
                 // Open tab with unique name for identification
                 const tabName = `_novel_${fullNovelId}`;
@@ -1619,7 +1623,7 @@
                     return;
                 }
 
-                // Set up message listener for this specific novel
+                // 🆕 postMessage listener (primary method)
                 const messageHandler = (event) => {
                     // Security check - only accept messages from same origin
                     if (event.origin !== window.location.origin) return;
@@ -1627,17 +1631,29 @@
                     // Check if message is for this novel
                     if (event.data.type === 'NOVEL_UPDATE_COMPLETE' && event.data.novelId === fullNovelId) {
                         const elapsed = Date.now() - startTime;
+                        updateDetected = true;
 
                         if (event.data.success) {
-                            console.log(`✅ ${title} (${elapsed}ms)`);
-                            cleanup();
-                            if (!resolved) {
-                                resolved = true;
-                                resolve(true);
-                            }
+                            console.log(`✅ ${title} (${elapsed}ms) [postMessage]`);
+
+                            // Wait a moment for the green notification to show
+                            setTimeout(() => {
+                                try {
+                                    newTab.close();
+                                } catch (e) { }
+
+                                cleanup();
+                                if (!resolved) {
+                                    resolved = true;
+                                    resolve(true);
+                                }
+                            }, 1000); // Wait 1 second for visual confirmation
                         } else {
                             console.warn(`⚠️ ${title} failed: ${event.data.reason || 'unknown'} (${elapsed}ms)`);
                             cleanup();
+                            try {
+                                newTab.close();
+                            } catch (e) { }
                             if (!resolved) {
                                 resolved = true;
                                 resolve(false);
@@ -1646,25 +1662,74 @@
                     }
                 };
 
-                window.addEventListener('message', messageHandler);
+                // 🔄 localStorage listener (fallback method)
+                const storageListener = (e) => {
+                    if (e.key === 'readsync_last_update' && e.newValue) {
+                        try {
+                            const signal = JSON.parse(e.newValue);
+                            // Check if this signal is for the current novel
+                            if (signal.novel_id && signal.novel_id.includes(novelId) && signal.success) {
+                                updateDetected = true;
+                                const elapsed = Date.now() - startTime;
+                                console.log(`✅ ${title} (${elapsed}ms) [localStorage]`);
 
-                // Timeout handler
-                const timeoutId = setTimeout(() => {
-                    console.warn(`⏱️ Timeout for: ${title} - forcing close`);
-                    cleanup();
-                    try {
-                        newTab.close();
-                    } catch (e) { }
-                    if (!resolved) {
-                        resolved = true;
-                        resolve(false);
+                                // Wait a moment for the green notification to show
+                                setTimeout(() => {
+                                    try {
+                                        newTab.close();
+                                    } catch (e) { }
+
+                                    cleanup();
+                                    if (!resolved) {
+                                        resolved = true;
+                                        resolve(true);
+                                    }
+                                }, 1000); // Wait 1 second after update for visual confirmation
+                            }
+                        } catch (e) {
+                            console.error('Error parsing update signal:', e);
+                        }
                     }
-                }, TIMEOUT_MS);
+                };
+
+                window.addEventListener('message', messageHandler);
+                window.addEventListener('storage', storageListener);
+
+                // Fallback: Check if tab closed or timeout
+                const fallbackInterval = setInterval(() => {
+                    const elapsed = Date.now() - startTime;
+
+                    // Tab closed itself
+                    if (newTab.closed) {
+                        console.log(`✅ Tab self-closed for: ${title}`);
+                        clearInterval(fallbackInterval);
+                        cleanup();
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(updateDetected); // Return true if we detected update, false otherwise
+                        }
+                        return;
+                    }
+
+                    // Timeout
+                    if (elapsed >= TIMEOUT_MS) {
+                        console.warn(`⏱️ Timeout for: ${title} - forcing close`);
+                        clearInterval(fallbackInterval);
+                        cleanup();
+                        try {
+                            newTab.close();
+                        } catch (e) { }
+                        if (!resolved) {
+                            resolved = true;
+                            resolve(updateDetected); // Return whether we saw update before timeout
+                        }
+                    }
+                }, 1000);
 
                 // Cleanup function
                 function cleanup() {
-                    clearTimeout(timeoutId);
                     window.removeEventListener('message', messageHandler);
+                    window.removeEventListener('storage', storageListener);
                 }
             });
         }
