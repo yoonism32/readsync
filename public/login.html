@@ -23,18 +23,110 @@
 
         body {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: radial-gradient(circle at top, #1f2933 0, #020617 55%);
+            background: #020617;
             color: #e5e7eb;
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Shooting Stars Container */
+        .shooting-stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            transform: rotate(0deg);
+        }
+
+        /* Static Twinkling Stars Background */
+        .star-field {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            animation: twinkle 4s ease-in-out infinite;
+        }
+
+        @keyframes twinkle {
+
+            0%,
+            100% {
+                opacity: 0.3;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.2);
+            }
+        }
+
+        /* Shooting Star with Enhanced Trail */
+        .shooting-star {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: #fff;
+            border-radius: 50%;
+            box-shadow: 0 0 0 4px rgba(147, 197, 253, 0.1),
+                0 0 0 8px rgba(147, 197, 253, 0.1),
+                0 0 20px rgba(147, 197, 253, 0.3);
+            left: initial;
+            z-index: -1;
+            opacity: 0;
+        }
+
+        .shooting-star::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 300px;
+            height: 1px;
+            background: linear-gradient(90deg, rgba(255, 255, 255, 1), rgba(147, 197, 253, 0.8), transparent);
+        }
+
+        /* Shooting Motion - Top Right to Bottom Left */
+        @keyframes shootingStar {
+            0% {
+                transform: rotate(315deg) translateX(0);
+                opacity: 1;
+            }
+
+            70% {
+                opacity: 1;
+            }
+
+            100% {
+                transform: rotate(315deg) translateX(-1000px);
+                opacity: 0;
+            }
         }
 
         .login-container {
             width: 100%;
             max-width: 400px;
+            position: relative;
+            z-index: 1;
         }
 
         .login-card {
@@ -165,6 +257,12 @@
 </head>
 
 <body>
+    <!-- Static Twinkling Stars Background -->
+    <div class="star-field" id="starField"></div>
+
+    <!-- Shooting Stars Container -->
+    <div class="shooting-stars" id="shootingStars"></div>
+
     <div class="login-container">
         <div class="login-card">
             <div class="logo">
@@ -252,6 +350,100 @@
 
         // Auto-focus username field
         document.getElementById('username').focus();
+
+        // Utility function for random number generation
+        function random(min, max) {
+            return Math.random() * (max - min) + min;
+        }
+
+        // Seeded random number generator for consistent positions
+        function seededRandom(seed) {
+            let x = Math.sin(seed++) * 10000;
+            return x - Math.floor(x);
+        }
+
+        // Generate static twinkling stars background with consistent positions
+        function generateStarField() {
+            const starField = document.getElementById('starField');
+            const numStars = 150;
+            let seed = 12345; // Fixed seed for consistent positions
+
+            for (let i = 0; i < numStars; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+
+                // Consistent positioning using seeded random
+                star.style.top = `${seededRandom(seed++) * 100}%`;
+                star.style.left = `${seededRandom(seed++) * 100}%`;
+
+                // Consistent animation delay
+                star.style.animationDelay = `${seededRandom(seed++) * 4}s`;
+
+                // Consistent animation duration
+                star.style.animationDuration = `${3 + seededRandom(seed++) * 4}s`;
+
+                // Consistent size variation
+                const size = seededRandom(seed++) < 0.5 ? 1 : 2;
+                star.style.width = `${size}px`;
+                star.style.height = `${size}px`;
+
+                // Add twinkle animation to some stars consistently
+                if (seededRandom(seed++) < 0.3) {
+                    const twinkleTypes = ['twinkle'];
+                    star.style.animation = `${twinkleTypes[0]} ${5 + seededRandom(seed++) * 3}s infinite`;
+                }
+
+                starField.appendChild(star);
+            }
+        }
+
+        // Generate shooting stars with dynamic repositioning
+        function generateShootingStars() {
+            const shootingStarsContainer = document.getElementById('shootingStars');
+            const numShootingStars = 6;
+
+            for (let i = 0; i < numShootingStars; i++) {
+                const shootingStar = document.createElement('div');
+                shootingStar.className = 'shooting-star';
+
+                // Position randomly in top-right area
+                if (Math.random() < 0.75) {
+                    shootingStar.style.top = '-4px'; // Hidden off screen
+                    shootingStar.style.right = `${random(0, 90)}%`;
+                } else {
+                    shootingStar.style.top = `${random(0, 50)}%`;
+                    shootingStar.style.right = '-4px'; // Hidden off screen
+                }
+
+                // Random animation duration and delay
+                shootingStar.style.animation = `shootingStar ${Math.floor(Math.random() * 2) + 2}s linear`;
+                shootingStar.style.animationDelay = `${Math.floor(Math.random() * 8)}s`;
+
+                shootingStarsContainer.appendChild(shootingStar);
+
+                // Reposition and restart animation when it ends
+                shootingStar.addEventListener('animationend', () => {
+                    // Reposition randomly
+                    if (Math.random() < 0.75) {
+                        shootingStar.style.top = '-4px';
+                        shootingStar.style.right = `${random(0, 90)}%`;
+                    } else {
+                        shootingStar.style.top = `${random(0, 50)}%`;
+                        shootingStar.style.right = '-4px';
+                    }
+
+                    // Reset animation
+                    shootingStar.style.animation = 'none';
+                    void shootingStar.offsetWidth; // Trigger reflow
+                    shootingStar.style.animation = `shootingStar ${Math.floor(Math.random() * 2) + 2}s linear`;
+                    shootingStar.style.animationDelay = `${Math.random() * 2}s`;
+                });
+            }
+        }
+
+        // Initialize on page load
+        generateStarField();
+        generateShootingStars();
     </script>
 </body>
 

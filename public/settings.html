@@ -275,6 +275,16 @@
                 <a href="/admin" class="btn btn-primary">🤖 Bot Admin</a>
             </div>
         </div>
+
+        <!-- Account -->
+        <div class="card">
+            <h2>👤 Account</h2>
+            <p>Sign out of your ReadSync account.</p>
+            <div class="button-group">
+                <button class="btn btn-danger" onclick="logout()">🚪 Logout</button>
+            </div>
+            <div id="logoutStatus"></div>
+        </div>
     </div>
 
     <script src="/js/shared.js"></script>
@@ -348,6 +358,35 @@
 
             // Reset file input
             event.target.value = '';
+        }
+
+        async function logout() {
+            const statusEl = document.getElementById('logoutStatus');
+            statusEl.innerHTML = '<div class="info-box">Logging out...</div>';
+
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    statusEl.innerHTML = '<div class="success-box">✅ Logged out successfully. Redirecting...</div>';
+
+                    // Redirect to login page after short delay
+                    setTimeout(() => {
+                        window.location.href = '/login.html';
+                    }, 1000);
+                } else {
+                    const data = await response.json();
+                    statusEl.innerHTML = `<div class="error-box">❌ Logout failed: ${data.error || 'Unknown error'}</div>`;
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                statusEl.innerHTML = '<div class="error-box">❌ Network error during logout</div>';
+            }
         }
     </script>
 </body>
