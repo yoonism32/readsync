@@ -2,14 +2,14 @@
 // databaseurl env var required
 require('dotenv').config();
 
-// 🛡️ CRITICAL: Prevent crashes from unhandled rejections
+// Prevent crashes from unhandled rejections
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('🔴 UNHANDLED REJECTION:', reason);
+    console.error('UNHANDLED REJECTION:', reason);
     console.error('Promise:', promise);
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('🔴 UNCAUGHT EXCEPTION:', error);
+    console.error('UNCAUGHT EXCEPTION:', error);
     console.error('Stack:', error.stack);
 });
 
@@ -20,7 +20,6 @@ const { Pool } = require('pg');
 const cors = require('cors');
 const path = require('path');
 const { URL } = require('url');
-// const rateLimit = require('express-rate-limit'); // DISABLED
 const { body, param, query, validationResult } = require('express-validator');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
@@ -102,28 +101,6 @@ if (require.main === module) {
     // Only require bot when server.js is run directly, not when required as module
     bot = require('./chapter-update-bot-enhanced');
 }
-
-/* ---------------------- Rate Limiting ---------------------- */
-// DISABLED FOR PERSONAL USE
-/*
-const apiLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-
-//Stricter rate limiter for auth endpoints: 20 requests per 15 minutes
-const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    max: 20,
-    message: 'Too many authentication attempts, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-});
-*/
-
 
 /* ---------------------- Proxy Configuration ---------------------- */
 // Enable trust proxy for accurate client IP detection behind Render's proxy
@@ -257,7 +234,7 @@ app.post('/api/auth/login', async (req, res) => {
     const ADMIN_PASSWORD_HASH = process.env.ADMIN_PASSWORD_HASH;
 
     if (!ADMIN_PASSWORD_HASH) {
-        console.error('🔴 FATAL: ADMIN_PASSWORD_HASH not set in .env file!');
+        console.error('FATAL: ADMIN_PASSWORD_HASH not set in .env file!');
         return res.status(500).json({ error: 'Server configuration error' });
     }
 
@@ -269,13 +246,13 @@ app.post('/api/auth/login', async (req, res) => {
             req.session.authenticated = true;
             req.session.username = username;
 
-            console.log(`✅ Login successful: ${username} from ${clientIp}`);
+            console.log(`Login successful: ${username} from ${clientIp}`);
             loginAttempts.delete(clientIp);
 
             return res.json({ success: true });
         } else {
             recordAttempt(clientIp);
-            console.log(`⚠️ Login failed: ${username} from ${clientIp}`);
+            console.log(`Login failed: ${username} from ${clientIp}`);
 
             return res.status(401).json({ error: 'Invalid username or password' });
         }
@@ -469,7 +446,7 @@ async function initDatabase() {
       )
     `);
 
-        // 🔹 Add latest chapter columns (+ new time columns)
+        // Add latest chapter columns
         await client.query(`
             ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_num INTEGER;
             ALTER TABLE novels ADD COLUMN IF NOT EXISTS latest_chapter_title TEXT;
@@ -612,9 +589,9 @@ async function initDatabase() {
         for (const indexQuery of indexes) {
             try {
                 await client.query(indexQuery);
-                console.log(`✓ Index created: ${indexQuery.match(/idx_\w+/)[0]}`);
+                console.log(`Index created: ${indexQuery.match(/idx_\w+/)[0]}`);
             } catch (indexError) {
-                console.log(`⚠ Index might already exist or had issue: ${indexQuery.match(/idx_\w+/)[0]}`, indexError.message);
+                console.log(`Index might already exist or had issue: ${indexQuery.match(/idx_\w+/)[0]}`, indexError.message);
                 // Continue with other indexes even if one fails
             }
         }
@@ -628,7 +605,7 @@ async function initDatabase() {
         api_key = EXCLUDED.api_key
     `);
 
-        console.log('✅ Database schema initialized successfully');
+        console.log('Database schema initialized successfully');
     } catch (error) {
         console.error('Database initialization failed:', error);
         throw error;
@@ -816,13 +793,13 @@ app.post('/api/v1/progress',
         // Extract base novel URL (remove chapter part) for storage
         const baseNovelUrl = novel_url.replace(/\/c*chapter-?\d+.*$/, '');
 
-        // 🔹 FIXED: Use current_chapter_num from userscript if available, fallback to URL parsing
+        // Use current_chapter_num from userscript if available, fallback to URL parsing
         const chapterInfo = req.body.current_chapter_num ?
             { token: 'chapter', num: req.body.current_chapter_num } :
             parseChapterFromUrl(novel_url);
 
         // Log chapter detection for debugging
-        console.log('📊 Chapter detection:', {
+        console.log('Chapter detection:', {
             current_chapter_num: req.body.current_chapter_num,
             current_chapter_source: req.body.current_chapter_source,
             url_parsed: parseChapterFromUrl(novel_url),
@@ -839,7 +816,7 @@ app.post('/api/v1/progress',
 
         try {
             const result = await withTransaction(async (client) => {
-                // ✅ NEW: Check if novel already exists in user's reading list
+                // Check if novel already exists in user's reading list
                 const existingNovel = await client.query(`
                     SELECT novel_id FROM user_novel_meta
                     WHERE user_id = $1 AND novel_id = $2
@@ -850,20 +827,20 @@ app.post('/api/v1/progress',
                 // If novel doesn't exist, create it (first time reading)
                 // But only if we have actual progress (not just visiting the page)
                 if (!novelExistsInList) {
-                    // Only create if: 
+                    // Only create if:
                     // 1. Reading an actual chapter (percent > 0 OR seconds > 5)
                     // 2. OR has made meaningful progress
                     const hasProgress = percentValue > 0 || seconds_on_page > 5;
 
                     if (!hasProgress) {
-                        console.log(`ℹ️  Novel ${novel_id} not in list and no progress - skipping`);
+                        console.log(`Novel ${novel_id} not in list and no progress - skipping`);
                         return res.status(404).json({
                             error: 'Novel not in reading list',
                             message: 'Start reading a chapter to add this novel to your list'
                         });
                     }
 
-                    console.log(`📚 Creating new novel entry: ${novel_id} (first read)`);
+                    console.log(`Creating new novel entry: ${novel_id} (first read)`);
                 }
 
                 // Upsert device with type detection
@@ -1076,7 +1053,7 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
 
             const whereClause = whereConditions.length ? `AND ${whereConditions.join(' AND ')}` : '';
 
-            // 🚀 OPTIMIZED: Single query with LATERAL join instead of N+1 queries
+            // Single query with LATERAL join instead of N+1 queries
             const novelsQuery = `
                 WITH latest_activity AS (
                     SELECT DISTINCT ON (novel_id) 
@@ -1157,7 +1134,7 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                 const latest_global = novel.latest_global_json || null;
                 let latest_per_device = novel.latest_per_device_json || {};
 
-                // 🚀 CLEANUP: Remove stale device states
+                // Remove stale device states
                 if (latest_global && latest_per_device && Object.keys(latest_per_device).length > 0) {
                     const cleaned = {};
                     const globalChapter = Number(latest_global.chapter_num) || 0;
@@ -1219,7 +1196,7 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
     }
 });
 
-// 🔴 FIXED status endpoint
+// Status endpoint
 app.put('/api/v1/novels/:novelId/status', requireAuthAPI,
     [
         param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage('Invalid novel ID format'),
@@ -1435,7 +1412,7 @@ app.put('/api/v1/novels/:novelId/notes', validateApiKey, validateNovelId, async 
     }
 });
 
-/* ---------------------- 🔹 ADMIN/BOT MANAGEMENT ROUTES 🔹 ---------------------- */
+/* ---------------------- ADMIN/BOT MANAGEMENT ROUTES ---------------------- */
 
 // Get novels that need chapter updates
 app.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
@@ -1559,7 +1536,7 @@ app.post('/admin/force-refresh-all', async (req, res) => {
     try {
         await pool.query(`UPDATE novels SET chapters_updated_at = NULL`);
 
-        // ✅ CORRECT - use bot.updateNovelChapters()
+        // Use bot.updateNovelChapters()
         if (bot.updateNovelChapters) {
             setImmediate(() => bot.updateNovelChapters());
         }
@@ -1580,7 +1557,7 @@ app.get('/api/v1/admin/bot/progress', validateApiKey, async (req, res) => {
             novelsUpdated: 0,
         };
 
-        // 🚀 FIXED: Use DISTINCT to prevent query explosion
+        // Use DISTINCT to prevent query explosion
         const result = await pool.query(`
             SELECT COUNT(DISTINCT n.id) as count
             FROM novels n
@@ -1675,7 +1652,7 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
         );
 
         if (checkResult.rows.length === 0) {
-            console.log(`ℹ️  Novel ${novel_id} not in database`);
+            console.log(`Novel ${novel_id} not in database`);
             return res.status(HTTP_NOT_FOUND).json({
                 error: 'Novel not in your list',
                 novel_id: novel_id
@@ -1684,11 +1661,11 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
         const currentChapter = checkResult.rows[0].latest_chapter_num;
 
-        // Parse the update time - EXACT SAME LOGIC AS BOT (lines 292-294)
+        // Parse the update time
         const parsed = parseTimeAgo(update_time_raw);
         const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 
-        console.log(`⏰ Time: "${update_time_raw}" → ${site_latest_chapter_time}`);
+        console.log(`Time: "${update_time_raw}" → ${site_latest_chapter_time}`);
 
         // Update WITHOUT touching chapters_updated_at (that's for reading, not metadata)
         const result = await pool.query(`
@@ -1715,11 +1692,11 @@ app.post('/api/v1/admin/novels/auto-update', async (req, res) => {
 
         // Log if this is a new chapter
         if (currentChapter && chapter_num > currentChapter) {
-            console.log(`🆕 New chapter! ${novel_id}: Ch.${currentChapter} → Ch.${chapter_num}`);
+            console.log(`New chapter! ${novel_id}: Ch.${currentChapter} → Ch.${chapter_num}`);
         } else if (currentChapter === chapter_num) {
-            console.log(`✅ Confirmed: ${novel_id} Ch.${chapter_num}`);
+            console.log(`Confirmed: ${novel_id} Ch.${chapter_num}`);
         } else {
-            console.log(`✅ Updated: ${novel_id} → Ch.${chapter_num}`);
+            console.log(`Updated: ${novel_id} → Ch.${chapter_num}`);
         }
 
         res.json({
@@ -2884,7 +2861,7 @@ app.get('/novels/:novelId', requireAuth, (req, res) => {
     res.redirect('/novel/' + encodeURIComponent(req.params.novelId));
 });
 
-// 🔹 INTEGRATION: Admin panel route
+// Admin panel route
 app.get('/admin', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
@@ -2917,7 +2894,7 @@ function validateEnvironment() {
         ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS || 'default'
     };
 
-    console.log('✅ Environment variables validated');
+    console.log('Environment variables validated');
     console.log(`   PORT: ${optional.PORT}`);
     console.log(`   NODE_ENV: ${optional.NODE_ENV}`);
     console.log(`   ALLOWED_ORIGINS: ${optional.ALLOWED_ORIGINS}`);
@@ -2931,12 +2908,12 @@ async function startServer() {
 
         await initDatabase();
 
-        // 🔹 INTEGRATION: Start the chapter update bot
+        // Start the chapter update bot
         if (bot) {
-            console.log('🤖 Starting chapter update bot...');
+            console.log('Starting chapter update bot...');
             bot.startBot().catch(err => {
-                console.error('⚠️ Bot failed to start:', err);
-                console.log('📝 Server will continue without bot');
+                console.error('Bot failed to start:', err);
+                console.log('Server will continue without bot');
             });
         }
 
@@ -2982,14 +2959,14 @@ async function startServer() {
         });
 
         httpServer.listen(PORT, '0.0.0.0', () => {
-            console.log(`🚀 ReadSync API server running on port ${PORT}`);
-            console.log(`📊 Dashboard: http://localhost:${PORT}`);
-            console.log(`📚 MyList: http://localhost:${PORT}/mylist`);
-            console.log(`🛠️ Manage: http://localhost:${PORT}/manage`);
-            console.log(`🤖 Admin Panel: http://localhost:${PORT}/admin`);
-            console.log(`🩺 Health check: http://localhost:${PORT}/health`);
-            console.log(`📚 API docs: http://localhost:${PORT}/api/v1/`);
-            console.log(`🔌 WebSocket server ready`);
+            console.log(`ReadSync API server running on port ${PORT}`);
+            console.log(`Dashboard: http://localhost:${PORT}`);
+            console.log(`MyList: http://localhost:${PORT}/mylist`);
+            console.log(`Manage: http://localhost:${PORT}/manage`);
+            console.log(`Admin Panel: http://localhost:${PORT}/admin`);
+            console.log(`Health check: http://localhost:${PORT}/health`);
+            console.log(`API docs: http://localhost:${PORT}/api/v1/`);
+            console.log(`WebSocket server ready`);
         });
 
         // Graceful shutdown

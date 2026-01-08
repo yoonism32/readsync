@@ -39,17 +39,17 @@ async function getBrowser() {
     // Launch new browser
     browserLaunchInProgress = true;
     try {
-        console.log('🚀 Launching Puppeteer browser with Chromium + Stealth...');
+        console.log('Launching Puppeteer browser with Chromium + Stealth...');
         browserInstance = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: await chromium.executablePath(),
             headless: chromium.headless,
         });
-        console.log('✅ Browser launched successfully (stealth mode enabled)');
+        console.log('Browser launched successfully (stealth mode enabled)');
         return browserInstance;
     } catch (error) {
-        console.error('❌ Failed to launch browser:', error);
+        console.error('Failed to launch browser:', error);
         browserInstance = null;
         throw error;
     } finally {
@@ -169,17 +169,17 @@ async function fetchNovelMainPage(novelUrl) {
                 };
             });
 
-            console.log(`   [${elapsed}s] 👁️  Title: "${pageTitle}"`);
-            console.log(`   [${elapsed}s] 📊 Cloudflare=${hasCloudflare ? '❌ YES' : '✅ NO'} | ` +
-                `l-chapter=${contentChecks.hasLChapter ? '✅' : '❌'} | ` +
-                `meta=${contentChecks.hasMeta ? '✅' : '❌'} | ` +
+            console.log(`   [${elapsed}s] Title: "${pageTitle}"`);
+            console.log(`   [${elapsed}s] Cloudflare=${hasCloudflare ? 'YES' : 'NO'} | ` +
+                `l-chapter=${contentChecks.hasLChapter ? 'YES' : 'NO'} | ` +
+                `meta=${contentChecks.hasMeta ? 'YES' : 'NO'} | ` +
                 `size=${(contentChecks.bodySize / 1024).toFixed(0)}KB`
             );
-            console.log(`   [${elapsed}s] 📝 Preview: "${contentChecks.visibleText}..."`);
+            console.log(`   [${elapsed}s] Preview: "${contentChecks.visibleText}..."`);
 
             // If we found the content, stop waiting
             if (!hasCloudflare && (contentChecks.hasLChapter || contentChecks.hasMeta)) {
-                console.log(`   [${elapsed}s] ✅ Novel content detected! Stopping early.`);
+                console.log(`   [${elapsed}s] Novel content detected! Stopping early.`);
                 foundContent = true;
                 break;
             }
@@ -187,18 +187,18 @@ async function fetchNovelMainPage(novelUrl) {
 
         // Get final HTML
         const html = await page.content();
-        console.log('✅ Page fetch complete, parsing...');
+        console.log('Page fetch complete, parsing...');
         return html;
 
     } catch (error) {
-        console.error('❌ Browser fetch failed:', error.message);
+        console.error('Browser fetch failed:', error.message);
 
         // Handle specific error codes
         if (error.message.includes('403')) {
-            console.error('🚫 Got 403 - setting cooldown');
+            console.error('Got 403 - setting cooldown');
             novelbinBlockedUntil = Date.now() + COOLDOWN_403_MS;
         } else if (error.message.includes('429')) {
-            console.error('⏸️  Got 429 - setting cooldown');
+            console.error('Got 429 - setting cooldown');
             novelbinBlockedUntil = Date.now() + COOLDOWN_429_MS;
         }
 
@@ -443,7 +443,7 @@ async function runSingleNovelOnly(novelId) {
             novelInfo.site_latest_chapter_time
         );
 
-        console.log(`✅ SINGLE-NOVEL SUCCESS: ${novel.id} → Ch.${updated.latest_chapter_num}`);
+        console.log(`SINGLE-NOVEL SUCCESS: ${novel.id} → Ch.${updated.latest_chapter_num}`);
 
         return {
             success: true,
@@ -453,7 +453,7 @@ async function runSingleNovelOnly(novelId) {
         };
 
     } catch (err) {
-        console.error(`❌ SINGLE-NOVEL FAILED:`, err.message);
+        console.error(`SINGLE-NOVEL FAILED:`, err.message);
         return { error: err.message };
     } finally {
         singleRunLock = false;
@@ -471,11 +471,11 @@ function log(level, message, context = {}) {
     };
 
     const prefix = {
-        info: 'ℹ️',
-        warn: '⚠️',
-        error: '❌',
-        success: '✅'
-    }[level] || '📝';
+        info: '[INFO]',
+        warn: '[WARN]',
+        error: '[ERROR]',
+        success: '[SUCCESS]'
+    }[level] || '[LOG]';
 
     console.log(`${prefix} [${timestamp}] ${message}`, Object.keys(context).length > 0 ? context : '');
 
@@ -731,7 +731,7 @@ async function startBot() {
     global.triggerManualUpdate = triggerManualUpdate;
     global.runSingleNovelOnly = runSingleNovelOnly;
 
-    // ✅ AUTO-BOT DISABLED - Uncomment these lines to enable automatic updates
+    // AUTO-BOT DISABLED - Uncomment these lines to enable automatic updates
     // await safeUpdateCycle();
     // setInterval(safeUpdateCycle, CHECK_INTERVAL_MS);
 

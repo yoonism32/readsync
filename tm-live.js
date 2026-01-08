@@ -59,7 +59,7 @@
     const SYNC_DEBOUNCE_MS = 500;   // Wait 0.5s before syncing progress (much faster)
     const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
 
-    // 🆕 Check if this page was opened by MyList refresh
+    // Check if this page was opened by MyList refresh
     const isRefreshTab = window.opener && window.name && window.name.startsWith('_novel_');
 
     log('Script start', { path: location.pathname, href: location.href, deviceId: READSYNC_DEVICE_ID, deviceLabel: READSYNC_DEVICE_LABEL, isRefreshTab: isRefreshTab, windowName: window.name });
@@ -303,7 +303,7 @@
                         }
 
                         if (mainPageMax > maxChapter) {
-                            log('🎯 Found real chapter count from main page!', {
+                            log('Found real chapter count from main page!', {
                                 was: maxChapter,
                                 now: mainPageMax,
                                 improvement: mainPageMax - maxChapter
@@ -360,7 +360,7 @@
                         const chapterNum = parseInt(match[1], 10);
                         // Sanity check: chapter numbers typically 1-9999
                         if (chapterNum > 0 && chapterNum < 10000) {
-                            log(`✅ Found current chapter from ${source}`, { text: text.substring(0, 100), chapterNum, pattern: pattern.toString() });
+                            log(`Found current chapter from ${source}`, { text: text.substring(0, 100), chapterNum, pattern: pattern.toString() });
                             return {
                                 num: chapterNum,
                                 token: 'chapter',
@@ -443,12 +443,12 @@
         // First try to get chapter from page content
         const contentChapter = getCurrentChapterFromContent();
         if (contentChapter) {
-            log('🎯 Using chapter from content:', contentChapter);
+            log('Using chapter from content:', contentChapter);
             return contentChapter;
         }
 
         // Fallback to URL parsing with multiple strategies
-        log('⚠️ Falling back to URL parsing for chapter detection');
+        log('Falling back to URL parsing for chapter detection');
 
         // Strategy 1: Standard chapter format (chapter-31, cchapter31, etc.)
         const standardMatch = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
@@ -607,9 +607,9 @@
             const latestChapterInfo = extractLatestChapterInfo();
 
             if (!latestChapterInfo.latestChapterNum) {
-                log('⚠️ No chapter info found to update');
+                log('No chapter info found to update');
 
-                // 🆕 Notify parent window of failure if this is a refresh tab
+                // Notify parent window of failure if this is a refresh tab
                 if (isRefreshTab && window.opener && !window.opener.closed) {
                     try {
                         window.opener.postMessage({
@@ -618,11 +618,11 @@
                             success: false,
                             reason: 'no_chapter_info'
                         }, window.location.origin);
-                        log('📡 Notified parent of no chapter info');
+                        log('Notified parent of no chapter info');
 
                         // Let parent window close the tab
                     } catch (e) {
-                        log('⚠️ Failed to notify parent:', e);
+                        log('Failed to notify parent:', e);
                     }
                 }
                 return;
@@ -652,10 +652,10 @@
 
             if (response.ok) {
                 const result = await response.json();
-                log('✅ Novel info auto-updated successfully!', result);
+                log('Novel info auto-updated successfully!', result);
                 showAutoUpdateNotification('✅ Chapter info updated!', 'success');
 
-                // 🆕 Notify parent window of success if this is a refresh tab
+                // Notify parent window of success if this is a refresh tab
                 if (isRefreshTab && window.opener && !window.opener.closed) {
                     try {
                         window.opener.postMessage({
@@ -664,19 +664,19 @@
                             success: true,
                             data: result
                         }, window.location.origin);
-                        log('📡 Notified parent of success');
+                        log('Notified parent of success');
 
                         // Let parent window close the tab (don't self-close)
                         // Parent will close after seeing the green notification
                     } catch (e) {
-                        log('⚠️ Failed to notify parent:', e);
+                        log('Failed to notify parent:', e);
                     }
                 }
             } else {
                 const error = await response.text();
-                log('❌ Auto-update failed:', response.status, error);
+                log('Auto-update failed:', response.status, error);
 
-                // 🆕 Notify parent window of API failure if this is a refresh tab
+                // Notify parent window of API failure if this is a refresh tab
                 if (isRefreshTab && window.opener && !window.opener.closed) {
                     try {
                         window.opener.postMessage({
@@ -686,11 +686,11 @@
                             reason: 'api_error',
                             status: response.status
                         }, window.location.origin);
-                        log('📡 Notified parent of API failure');
+                        log('Notified parent of API failure');
 
                         // Let parent window close the tab
                     } catch (e) {
-                        log('⚠️ Failed to notify parent:', e);
+                        log('Failed to notify parent:', e);
                     }
                 }
 
@@ -701,7 +701,7 @@
         } catch (error) {
             console.warn(`[${LOG_TAG}] Auto-update error:`, error);
 
-            // 🆕 Notify parent window of exception if this is a refresh tab
+            // Notify parent window of exception if this is a refresh tab
             if (isRefreshTab && window.opener && !window.opener.closed) {
                 try {
                     // Try to get novelId if we can
@@ -718,11 +718,11 @@
                         reason: 'exception',
                         error: error.message
                     }, window.location.origin);
-                    log('📡 Notified parent of exception');
+                    log('Notified parent of exception');
 
                     // Let parent window close the tab
                 } catch (e) {
-                    log('⚠️ Failed to notify parent:', e);
+                    log('Failed to notify parent:', e);
                 }
             }
         }

@@ -25,20 +25,20 @@ if (!password) {
 }
 
 // Generate hash
-console.log('🔐 Generating bcrypt hash...\n');
+console.log('Generating bcrypt hash...\n');
 
 bcrypt.hash(password, 10, (err, hash) => {
     if (err) {
-        console.error('❌ Error generating hash:', err);
+        console.error('Error generating hash:', err);
         process.exit(1);
     }
 
-    console.log('✅ Hash generated successfully!\n');
+    console.log('Hash generated successfully!\n');
     console.log('Copy this line to your .env file:');
     console.log('─────────────────────────────────────────────────────────');
     console.log(`ADMIN_PASSWORD_HASH="${hash}"`);
     console.log('─────────────────────────────────────────────────────────');
     console.log('');
-    console.log('⚠️  IMPORTANT: Keep this hash secret! Do not commit to git.');
+    console.log('IMPORTANT: Keep this hash secret! Do not commit to git.');
     console.log('');
 });
