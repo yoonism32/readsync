@@ -920,7 +920,7 @@
         function buildCoverUrl(novelId) {
             if (!novelId) return null;
             // Use cached cover endpoint instead of direct NovelBin URL
-            return `/api/v1/covers/${encodeURIComponent(novelId)}?key=${getApiKey()}`;
+            return `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${getApiKey()}`;
         }
 
         function safePercent(n) {
