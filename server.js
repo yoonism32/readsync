@@ -2867,7 +2867,7 @@ app.get('/api/v1/covers/:novelId', validateApiKey, validateNovelId, async (req, 
 
         // Fetch cover from NovelBin
         const slug = novelId.replace(/^novelbin:/, '');
-        const coverUrl = `https://novelbin.com/media/novel/${slug}.jpg`;
+        const coverUrl = `https://images.novelbin.com/novel/${slug}.jpg`;
 
         console.log(`📸 Fetching cover for ${slug}...`);
 
