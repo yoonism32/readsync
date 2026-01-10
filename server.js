@@ -24,6 +24,7 @@ const { body, param, query, validationResult } = require('express-validator');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { createPool, forceNoVerify } = require('./db-utils');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 const httpServer = createServer(app);
@@ -101,6 +102,12 @@ if (require.main === module) {
     // Only require bot when server.js is run directly, not when required as module
     bot = require('./chapter-update-bot-enhanced');
 }
+
+/* ---------------------- Supabase Storage Client ---------------------- */
+const supabase = createClient(
+    process.env.SUPABASE_URL || '',
+    process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY || ''
+);
 
 /* ---------------------- Proxy Configuration ---------------------- */
 // Enable trust proxy for accurate client IP detection behind Render's proxy
@@ -453,6 +460,7 @@ async function initDatabase() {
             ALTER TABLE novels ADD COLUMN IF NOT EXISTS chapters_updated_at TIMESTAMP;
             ALTER TABLE novels ADD COLUMN IF NOT EXISTS site_latest_chapter_time_raw TEXT;
             ALTER TABLE novels ADD COLUMN IF NOT EXISTS site_latest_chapter_time TIMESTAMP;
+            ALTER TABLE novels ADD COLUMN IF NOT EXISTS cover_img TEXT;
         `);
 
         // Progress snapshots (time-series data)
@@ -2826,6 +2834,104 @@ app.delete('/api/v1/novels/:novelId/categories/:category',
         }
     }
 );
+
+/* ---------------------- Cover Image Caching ---------------------- */
+// Fetch and cache cover images from NovelBin to Supabase Storage
+app.get('/api/v1/covers/:novelId', validateApiKey, validateNovelId, async (req, res) => {
+    const { novelId } = req.params;
+    const forceRefresh = req.query.refresh === 'true';
+
+    try {
+        // Check if cover is already cached in database
+        const novelResult = await pool.query(
+            'SELECT cover_img FROM novels WHERE id = $1',
+            [novelId]
+        );
+
+        if (novelResult.rows.length === 0) {
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Novel not found' });
+        }
+
+        const cachedCoverUrl = novelResult.rows[0].cover_img;
+
+        // Return cached cover if exists and not forcing refresh
+        if (cachedCoverUrl && cachedCoverUrl !== 'failed' && !forceRefresh) {
+            // Redirect to Supabase Storage URL
+            return res.redirect(cachedCoverUrl);
+        }
+
+        // If previously failed and not forcing refresh, don't retry
+        if (cachedCoverUrl === 'failed' && !forceRefresh) {
+            return res.status(HTTP_NOT_FOUND).send('Cover not available');
+        }
+
+        // Fetch cover from NovelBin
+        const slug = novelId.replace(/^novelbin:/, '');
+        const coverUrl = `https://novelbin.com/media/novel/${slug}.jpg`;
+
+        console.log(`📸 Fetching cover for ${slug}...`);
+
+        const fetch = (await import('node-fetch')).default;
+        const response = await fetch(coverUrl, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://novelbin.com/'
+            },
+            timeout: 10000
+        });
+
+        if (!response.ok) {
+            console.warn(`⚠️ Cover fetch failed for ${slug}: ${response.status}`);
+            // Store the failure so we don't keep trying
+            await pool.query(
+                'UPDATE novels SET cover_img = $1 WHERE id = $2',
+                ['failed', novelId]
+            );
+            return res.status(HTTP_NOT_FOUND).json({ error: 'Cover not found on source' });
+        }
+
+        // Get image buffer
+        const arrayBuffer = await response.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const fileSizeKB = Math.round(buffer.length / 1024);
+
+        // Upload to Supabase Storage
+        const fileName = `${slug}.jpg`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('novel-covers')
+            .upload(fileName, buffer, {
+                contentType: 'image/jpeg',
+                upsert: true // Overwrite if exists
+            });
+
+        if (uploadError) {
+            console.error(`❌ Failed to upload cover for ${slug}:`, uploadError);
+            return res.status(HTTP_INTERNAL_ERROR).json({ error: 'Failed to cache cover' });
+        }
+
+        // Get public URL
+        const { data: urlData } = supabase.storage
+            .from('novel-covers')
+            .getPublicUrl(fileName);
+
+        const publicUrl = urlData.publicUrl;
+
+        // Store URL in database
+        await pool.query(
+            'UPDATE novels SET cover_img = $1 WHERE id = $2',
+            [publicUrl, novelId]
+        );
+
+        console.log(`✅ Cached cover for ${slug} (${fileSizeKB}KB) → ${publicUrl}`);
+
+        // Redirect to the cached image
+        res.redirect(publicUrl);
+
+    } catch (error) {
+        console.error('Error fetching/caching cover:', error);
+        res.status(HTTP_INTERNAL_ERROR).send('Failed to fetch cover');
+    }
+});
 
 /* ---------------------- Static File Serving ---------------------- */
 app.get('/', requireAuth, (req, res) => {

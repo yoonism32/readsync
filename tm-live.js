@@ -111,6 +111,7 @@
     let syncTimeout = null;
     let compareInterval = null;
     let syncBanner = null;
+    let dismissedConflicts = new Set(); // Track dismissed conflicts to prevent re-showing
 
     /* ========= Enhanced Latest Chapter Extraction ========= */
     function extractLatestChapterInfo() {
@@ -955,6 +956,16 @@
 
     function showSyncBanner(globalState) {
         log('showSyncBanner', globalState);
+
+        // Create unique key for this conflict (device + chapter + rough percent)
+        const conflictKey = `${globalState.device_id}_${globalState.chapter_num}_${Math.floor(globalState.percent / 5)}`;
+
+        // Don't show if user already dismissed this conflict
+        if (dismissedConflicts.has(conflictKey)) {
+            log('Conflict already dismissed, skipping banner', { conflictKey });
+            return;
+        }
+
         if (syncBanner) syncBanner.remove();
 
         syncBanner = document.createElement('div');
@@ -1017,6 +1028,10 @@
         const dismissBtn = syncBanner.querySelector('.sync-dismiss');
 
         jumpBtn.onclick = () => {
+            // Remember this dismissal (so it doesn't come back)
+            dismissedConflicts.add(conflictKey);
+            log('Conflict resolved via jump', { conflictKey });
+
             const targetUrl = globalState.url;
             const targetPercent = globalState.percent;
 
@@ -1033,6 +1048,10 @@
         };
 
         dismissBtn.onclick = () => {
+            // Remember this dismissal
+            dismissedConflicts.add(conflictKey);
+            log('Conflict dismissed', { conflictKey });
+
             syncBanner.remove();
             syncBanner = null;
         };

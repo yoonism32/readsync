@@ -919,11 +919,8 @@
 
         function buildCoverUrl(novelId) {
             if (!novelId) return null;
-            const prefix = 'novelbin:';
-            if (!novelId.startsWith(prefix)) return null;
-            const slug = novelId.slice(prefix.length);
-            if (!slug) return null;
-            return `https://novelbin.com/media/novel/${slug}.jpg`;
+            // Use cached cover endpoint instead of direct NovelBin URL
+            return `/api/v1/covers/${encodeURIComponent(novelId)}?key=${getApiKey()}`;
         }
 
         function safePercent(n) {
