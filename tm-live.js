@@ -618,7 +618,7 @@
                             novelId: novelId,
                             success: false,
                             reason: 'no_chapter_info'
-                        }, window.location.origin);
+                        }, '*');
                         log('Notified parent of no chapter info');
 
                         // Let parent window close the tab
@@ -664,7 +664,7 @@
                             novelId: novelId,
                             success: true,
                             data: result
-                        }, window.location.origin);
+                        }, '*');
                         log('Notified parent of success');
 
                         // Let parent window close the tab (don't self-close)
@@ -686,7 +686,7 @@
                             success: false,
                             reason: 'api_error',
                             status: response.status
-                        }, window.location.origin);
+                        }, '*');
                         log('Notified parent of API failure');
 
                         // Let parent window close the tab
@@ -718,7 +718,7 @@
                         success: false,
                         reason: 'exception',
                         error: error.message
-                    }, window.location.origin);
+                    }, '*');
                     log('Notified parent of exception');
 
                     // Let parent window close the tab

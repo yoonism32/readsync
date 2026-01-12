@@ -917,9 +917,93 @@
         // - showError()
         // - formatTimestamp() (replaces formatAgo)
 
+        /* ============ COVER IMAGE CACHING SYSTEM ============ */
+        // Cache cover URLs in memory and localStorage to reduce API calls
+        const coverUrlCache = new Map();
+        const COVER_CACHE_KEY = 'readsync_cover_urls';
+        const COVER_CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+        // Load cached cover URLs from localStorage
+        function loadCoverCache() {
+            try {
+                const cached = localStorage.getItem(COVER_CACHE_KEY);
+                if (cached) {
+                    const data = JSON.parse(cached);
+                    // Check if cache is expired
+                    if (data.timestamp && (Date.now() - data.timestamp) < COVER_CACHE_EXPIRY) {
+                        Object.entries(data.urls).forEach(([novelId, url]) => {
+                            coverUrlCache.set(novelId, url);
+                        });
+                        console.log(`Loaded ${coverUrlCache.size} cover URLs from cache`);
+                    } else {
+                        console.log('Cover cache expired, clearing...');
+                        localStorage.removeItem(COVER_CACHE_KEY);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load cover cache:', e);
+            }
+        }
+
+        // Save cover URLs to localStorage
+        function saveCoverCache() {
+            try {
+                const data = {
+                    timestamp: Date.now(),
+                    urls: Object.fromEntries(coverUrlCache)
+                };
+                localStorage.setItem(COVER_CACHE_KEY, JSON.stringify(data));
+            } catch (e) {
+                console.error('Failed to save cover cache:', e);
+            }
+        }
+
+        // Fetch cover URL and cache it
+        async function fetchAndCacheCoverUrl(novelId) {
+            if (!novelId) return null;
+
+            // Check cache first
+            if (coverUrlCache.has(novelId)) {
+                return coverUrlCache.get(novelId);
+            }
+
+            try {
+                const apiUrl = `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${getApiKey()}`;
+
+                // Use HEAD request to get the final URL after redirect without downloading the image
+                const response = await fetch(apiUrl, {
+                    method: 'HEAD',
+                    redirect: 'follow' // Follow redirects automatically
+                });
+
+                if (response.ok) {
+                    // response.url contains the final URL after all redirects
+                    const coverUrl = response.url;
+                    coverUrlCache.set(novelId, coverUrl);
+                    saveCoverCache();
+                    return coverUrl;
+                }
+
+                // If request failed, mark as failed so we don't keep trying
+                coverUrlCache.set(novelId, 'failed');
+                return null;
+            } catch (error) {
+                console.error(`Failed to fetch cover for ${novelId}:`, error);
+                coverUrlCache.set(novelId, 'failed');
+                return null;
+            }
+        }
+
         function buildCoverUrl(novelId) {
             if (!novelId) return null;
-            // Use cached cover endpoint instead of direct NovelBin URL
+
+            // Check cache first
+            const cached = coverUrlCache.get(novelId);
+            if (cached && cached !== 'failed') {
+                return cached;
+            }
+
+            // Return API endpoint as fallback (will trigger fetch on image load)
             return `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${getApiKey()}`;
         }
 
@@ -1078,6 +1162,9 @@
             });
         }
 
+        // expose for inline handler
+        window.goToPage = goToPage;
+
         function formatProgress(novel, global) {
             const currentCh = global ? Number(global.chapter_num) || 0 : 0;
             const totalCh = Number(novel.latest_chapter_num) || 0;
@@ -1211,7 +1298,8 @@
                     ? `
             <div class="img-wrapper">
               <img src="${coverUrl}" alt="cover" loading="lazy"
-                   onerror="this.parentElement.classList.add('fallback'); this.remove();">
+                   onload="this.parentElement.classList.remove('loading');"
+                   onerror="this.parentElement.classList.add('fallback'); this.classList.add('hidden');">
             </div>
           `
                     : `
@@ -1308,6 +1396,35 @@
             createPaginationControls();
         }
 
+        // Batch pre-fetch cover URLs in the background
+        async function prefetchCoverUrls(novels) {
+            if (!novels || novels.length === 0) return;
+
+            const BATCH_SIZE = 10; // Fetch 10 covers at a time
+            const BATCH_DELAY = 500; // Wait 500ms between batches
+
+            console.log(`Pre-fetching cover URLs for ${novels.length} novels in batches of ${BATCH_SIZE}...`);
+
+            for (let i = 0; i < novels.length; i += BATCH_SIZE) {
+                const batch = novels.slice(i, i + BATCH_SIZE);
+
+                // Fetch this batch in parallel
+                await Promise.all(
+                    batch.map(novel => fetchAndCacheCoverUrl(novel.novel_id))
+                );
+
+                // Wait before next batch to avoid overwhelming the server
+                if (i + BATCH_SIZE < novels.length) {
+                    await new Promise(resolve => setTimeout(resolve, BATCH_DELAY));
+                }
+            }
+
+            console.log(`Pre-fetched ${coverUrlCache.size} cover URLs`);
+
+            // Re-render to update images with cached URLs
+            renderList();
+        }
+
         async function loadMyList() {
             const loading = $('loading');
             const wrapper = $('tableWrapper');
@@ -1326,6 +1443,11 @@
                 allNovels = data;
                 updateSortIndicators();
                 renderList();
+
+                // Pre-fetch cover URLs in the background (non-blocking)
+                prefetchCoverUrls(allNovels).catch(err => {
+                    console.error('Failed to prefetch covers:', err);
+                });
             } catch (err) {
                 console.error('Failed to load novels', err);
                 loading.style.display = 'none';
@@ -1385,6 +1507,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // Load cover URL cache from localStorage
+            loadCoverCache();
+
             attachEvents();
             loadMyList();
 
