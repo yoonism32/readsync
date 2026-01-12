@@ -1082,7 +1082,6 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                     n.chapters_updated_at,
                     n.site_latest_chapter_time_raw,
                     n.site_latest_chapter_time,
-                    n.cover_img,
                     la.last_activity,
                     COALESCE(m.status, 'reading') AS status,
                     COALESCE(m.favorite, FALSE) AS favorite,

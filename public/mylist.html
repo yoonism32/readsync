@@ -1162,11 +1162,7 @@
 
             const rows = pageNovels.map(novel => {
                 const global = novel.latest_global || null;
-                // Use cover_img from API response directly (Supabase URL) to avoid N+1 API calls
-                // Only fall back to API endpoint if cover hasn't been fetched yet (null)
-                const coverUrl = novel.cover_img && novel.cover_img !== 'failed'
-                    ? novel.cover_img
-                    : (novel.cover_img === null ? buildCoverUrl(novel.novel_id) : null);
+                const coverUrl = buildCoverUrl(novel.novel_id);
                 const fav = !!novel.favorite;
                 const status = (novel.status || 'reading').toLowerCase();
 
