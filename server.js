@@ -2972,6 +2972,16 @@ app.get('/admin', requireAuth, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
+// API Explorer page
+app.get('/explorer', requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'explorer.html'));
+});
+
+// Component Library / Practice page
+app.get('/practice', requireAuth, (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'practice.html'));
+});
+
 // 404 handler for API routes
 app.use('/api/*', (req, res) => {
     res.status(HTTP_NOT_FOUND).json({
@@ -3070,6 +3080,7 @@ async function startServer() {
             console.log(`MyList: http://localhost:${PORT}/mylist`);
             console.log(`Manage: http://localhost:${PORT}/manage`);
             console.log(`Admin Panel: http://localhost:${PORT}/admin`);
+            console.log(`API Explorer: http://localhost:${PORT}/explorer`);
             console.log(`Health check: http://localhost:${PORT}/health`);
             console.log(`API docs: http://localhost:${PORT}/api/v1/`);
             console.log(`WebSocket server ready`);

@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Explorer - ReadSync</title>
+    <script src="/js/shared.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            min-height: 100vh;
+            padding: 24px;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        h1 { font-size: 1.5rem; color: #fff; }
+        .back-link {
+            color: #60a5fa;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        .controls {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            align-items: flex-end;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            flex: 1;
+            min-width: 200px;
+        }
+        .control-group.small { flex: 0 0 auto; min-width: 120px; }
+
+        label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            font-weight: 500;
+        }
+        select, input {
+            background: #0f172a;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            padding: 10px 12px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            width: 100%;
+        }
+        select:focus, input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        button {
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        button:hover { background: #2563eb; }
+        button:disabled { background: #475569; cursor: not-allowed; }
+
+        .endpoint-info {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            font-family: monospace;
+            font-size: 0.9rem;
+            color: #10b981;
+            word-break: break-all;
+        }
+
+        .results {
+            background: #1e293b;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .results-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .results-header h2 {
+            font-size: 1rem;
+            font-weight: 500;
+        }
+        .result-meta {
+            font-size: 0.8rem;
+            color: #64748b;
+        }
+
+        .results-body {
+            padding: 20px;
+            max-height: 70vh;
+            overflow: auto;
+        }
+
+        pre {
+            background: #0f172a;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 0.85rem;
+            line-height: 1.5;
+        }
+
+        .error { color: #ef4444; }
+        .loading { color: #94a3b8; font-style: italic; }
+
+        /* Table view for array data */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+        .data-table th {
+            text-align: left;
+            padding: 12px;
+            background: #0f172a;
+            color: #94a3b8;
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+        }
+        .data-table td {
+            padding: 12px;
+            border-top: 1px solid #334155;
+            color: #e2e8f0;
+        }
+        .data-table tr:hover td { background: rgba(59, 130, 246, 0.1); }
+
+        .view-toggle {
+            display: flex;
+            gap: 8px;
+        }
+        .view-toggle button {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+            background: #334155;
+        }
+        .view-toggle button.active { background: #3b82f6; }
+
+        /* Stats cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #0f172a;
+            padding: 20px;
+            border-radius: 12px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #3b82f6;
+        }
+        .stat-label {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>API Explorer</h1>
+            <a href="/" class="back-link">&larr; Back to Dashboard</a>
+        </header>
+
+        <div class="controls">
+            <div class="control-group">
+                <label for="endpoint">Endpoint</label>
+                <select id="endpoint">
+                    <optgroup label="Statistics">
+                        <option value="stats/summary">Stats Summary</option>
+                        <option value="stats/daily">Stats Daily</option>
+                        <option value="stats/novels/{novelId}">Stats for Novel</option>
+                    </optgroup>
+                    <optgroup label="Bookmarks">
+                        <option value="bookmarks">All Bookmarks</option>
+                        <option value="bookmarks/{novelId}">Bookmarks for Novel</option>
+                    </optgroup>
+                    <optgroup label="Reading Sessions">
+                        <option value="sessions">All Sessions</option>
+                        <option value="sessions/active">Active Sessions</option>
+                        <option value="sessions/{novelId}">Sessions for Novel</option>
+                    </optgroup>
+                    <optgroup label="Devices">
+                        <option value="devices">All Devices</option>
+                    </optgroup>
+                    <optgroup label="Categories">
+                        <option value="categories">All Categories</option>
+                        <option value="novels/{novelId}/categories">Categories for Novel</option>
+                    </optgroup>
+                    <optgroup label="Notes">
+                        <option value="novels/{novelId}/notes">Notes for Novel</option>
+                    </optgroup>
+                    <optgroup label="Novels">
+                        <option value="novels/completed">Completed Novels</option>
+                        <option value="novels/favorites">Favorite Novels</option>
+                    </optgroup>
+                    <optgroup label="Debug">
+                        <option value="debug/last">Last Progress Snapshot</option>
+                        <option value="admin/bot/progress">Bot Progress</option>
+                    </optgroup>
+                </select>
+            </div>
+
+            <div class="control-group" id="novelIdGroup" style="display: none;">
+                <label for="novelId">Novel ID</label>
+                <select id="novelId">
+                    <option value="">Loading novels...</option>
+                </select>
+            </div>
+
+            <div class="control-group small" id="daysGroup" style="display: none;">
+                <label for="days">Days</label>
+                <input type="number" id="days" value="30" min="1" max="365">
+            </div>
+
+            <div class="control-group small">
+                <label>&nbsp;</label>
+                <button id="fetchBtn">Fetch Data</button>
+            </div>
+        </div>
+
+        <div class="endpoint-info" id="endpointInfo">
+            GET /api/v1/stats/summary
+        </div>
+
+        <div class="results">
+            <div class="results-header">
+                <h2>Results</h2>
+                <div class="view-toggle">
+                    <button id="tableViewBtn" class="active">Table</button>
+                    <button id="jsonViewBtn">JSON</button>
+                </div>
+            </div>
+            <div class="results-body" id="resultsBody">
+                <p class="loading">Select an endpoint and click Fetch Data</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const endpointSelect = document.getElementById('endpoint');
+        const novelIdGroup = document.getElementById('novelIdGroup');
+        const novelIdSelect = document.getElementById('novelId');
+        const daysGroup = document.getElementById('daysGroup');
+        const daysInput = document.getElementById('days');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const endpointInfo = document.getElementById('endpointInfo');
+        const resultsBody = document.getElementById('resultsBody');
+        const tableViewBtn = document.getElementById('tableViewBtn');
+        const jsonViewBtn = document.getElementById('jsonViewBtn');
+
+        let currentData = null;
+        let viewMode = 'table';
+        let novels = [];
+
+        // Load novels for dropdown
+        async function loadNovels() {
+            try {
+                novels = await getJSON('novels');
+                novelIdSelect.innerHTML = novels.map(n =>
+                    `<option value="${n.novel_id}">${n.title}</option>`
+                ).join('');
+            } catch (err) {
+                novelIdSelect.innerHTML = '<option value="">Failed to load novels</option>';
+            }
+        }
+
+        // Update UI based on selected endpoint
+        function updateControls() {
+            const endpoint = endpointSelect.value;
+            const needsNovelId = endpoint.includes('{novelId}');
+            const needsDays = endpoint === 'stats/daily';
+
+            novelIdGroup.style.display = needsNovelId ? 'flex' : 'none';
+            daysGroup.style.display = needsDays ? 'flex' : 'none';
+
+            updateEndpointInfo();
+        }
+
+        function updateEndpointInfo() {
+            let endpoint = endpointSelect.value;
+            if (endpoint.includes('{novelId}') && novelIdSelect.value) {
+                endpoint = endpoint.replace('{novelId}', encodeURIComponent(novelIdSelect.value));
+            }
+            if (endpoint === 'stats/daily') {
+                endpoint += `?days=${daysInput.value}`;
+            }
+            endpointInfo.textContent = `GET /api/v1/${endpoint}`;
+        }
+
+        // Fetch data from selected endpoint
+        async function fetchData() {
+            let endpoint = endpointSelect.value;
+
+            if (endpoint.includes('{novelId}')) {
+                if (!novelIdSelect.value) {
+                    resultsBody.innerHTML = '<p class="error">Please select a novel</p>';
+                    return;
+                }
+                endpoint = endpoint.replace('{novelId}', encodeURIComponent(novelIdSelect.value));
+            }
+
+            const qs = {};
+            if (endpoint === 'stats/daily') {
+                qs.days = daysInput.value;
+            }
+
+            fetchBtn.disabled = true;
+            fetchBtn.textContent = 'Loading...';
+            resultsBody.innerHTML = '<p class="loading">Fetching data...</p>';
+
+            try {
+                currentData = await getJSON(endpoint, { qs });
+                renderData();
+            } catch (err) {
+                resultsBody.innerHTML = `<p class="error">Error: ${err.message}</p>`;
+                currentData = null;
+            } finally {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = 'Fetch Data';
+            }
+        }
+
+        // Render data based on view mode
+        function renderData() {
+            if (!currentData) {
+                resultsBody.innerHTML = '<p class="loading">No data</p>';
+                return;
+            }
+
+            if (viewMode === 'json') {
+                resultsBody.innerHTML = `<pre>${JSON.stringify(currentData, null, 2)}</pre>`;
+                return;
+            }
+
+            // Table view
+            if (Array.isArray(currentData)) {
+                if (currentData.length === 0) {
+                    resultsBody.innerHTML = '<p class="loading">No results found</p>';
+                    return;
+                }
+                renderTable(currentData);
+            } else if (typeof currentData === 'object') {
+                // Object - render as stats cards or key-value
+                renderObject(currentData);
+            } else {
+                resultsBody.innerHTML = `<pre>${currentData}</pre>`;
+            }
+        }
+
+        function renderTable(data) {
+            const keys = Object.keys(data[0]);
+            let html = '<table class="data-table"><thead><tr>';
+            keys.forEach(key => {
+                html += `<th>${formatKey(key)}</th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            data.forEach(row => {
+                html += '<tr>';
+                keys.forEach(key => {
+                    html += `<td>${formatValue(row[key], key)}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            resultsBody.innerHTML = html;
+        }
+
+        function renderObject(data) {
+            // Check if it's stats summary
+            if (data.total_novels !== undefined || data.novels_by_status) {
+                renderStatsSummary(data);
+                return;
+            }
+
+            // Generic object rendering
+            let html = '<div class="stats-grid">';
+            for (const [key, value] of Object.entries(data)) {
+                if (typeof value === 'object' && value !== null) {
+                    html += `<div class="stat-card">
+                        <div class="stat-label">${formatKey(key)}</div>
+                        <pre style="text-align:left;margin-top:8px;font-size:0.75rem">${JSON.stringify(value, null, 2)}</pre>
+                    </div>`;
+                } else {
+                    html += `<div class="stat-card">
+                        <div class="stat-value">${formatValue(value, key)}</div>
+                        <div class="stat-label">${formatKey(key)}</div>
+                    </div>`;
+                }
+            }
+            html += '</div>';
+            resultsBody.innerHTML = html;
+        }
+
+        function renderStatsSummary(data) {
+            let html = '<div class="stats-grid">';
+
+            html += `<div class="stat-card">
+                <div class="stat-value">${data.total_novels || 0}</div>
+                <div class="stat-label">Total Novels</div>
+            </div>`;
+
+            if (data.novels_by_status) {
+                for (const [status, count] of Object.entries(data.novels_by_status)) {
+                    html += `<div class="stat-card">
+                        <div class="stat-value">${count}</div>
+                        <div class="stat-label">${formatKey(status)}</div>
+                    </div>`;
+                }
+            }
+
+            html += `<div class="stat-card">
+                <div class="stat-value">${data.avg_progress?.toFixed(1) || 0}%</div>
+                <div class="stat-label">Avg Progress</div>
+            </div>`;
+
+            html += `<div class="stat-card">
+                <div class="stat-value">${data.total_bookmarks || 0}</div>
+                <div class="stat-label">Bookmarks</div>
+            </div>`;
+
+            html += `<div class="stat-card">
+                <div class="stat-value">${data.active_devices || 0}</div>
+                <div class="stat-label">Active Devices</div>
+            </div>`;
+
+            if (data.reading_sessions) {
+                html += `<div class="stat-card">
+                    <div class="stat-value">${data.reading_sessions.total || 0}</div>
+                    <div class="stat-label">Total Sessions</div>
+                </div>`;
+                html += `<div class="stat-card">
+                    <div class="stat-value">${formatDuration(data.reading_sessions.total_time_seconds || 0)}</div>
+                    <div class="stat-label">Total Reading Time</div>
+                </div>`;
+            }
+
+            html += '</div>';
+            resultsBody.innerHTML = html;
+        }
+
+        function formatKey(key) {
+            return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        function formatValue(value, key) {
+            if (value === null || value === undefined) return '-';
+
+            // Date formatting
+            if (key.includes('date') || key.includes('_at') || key.includes('time')) {
+                if (typeof value === 'string' && value.includes('T')) {
+                    const d = new Date(value);
+                    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                }
+            }
+
+            // Duration formatting
+            if (key.includes('seconds')) {
+                return formatDuration(value);
+            }
+
+            // Percent formatting
+            if (key === 'percent') {
+                return Number(value).toFixed(1) + '%';
+            }
+
+            // Boolean
+            if (typeof value === 'boolean') {
+                return value ? 'Yes' : 'No';
+            }
+
+            // Truncate long strings
+            if (typeof value === 'string' && value.length > 50) {
+                return value.substring(0, 50) + '...';
+            }
+
+            return value;
+        }
+
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '0s';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            if (h > 0) return `${h}h ${m}m`;
+            if (m > 0) return `${m}m ${s}s`;
+            return `${s}s`;
+        }
+
+        // Event listeners
+        endpointSelect.addEventListener('change', updateControls);
+        novelIdSelect.addEventListener('change', updateEndpointInfo);
+        daysInput.addEventListener('change', updateEndpointInfo);
+        fetchBtn.addEventListener('click', fetchData);
+
+        tableViewBtn.addEventListener('click', () => {
+            viewMode = 'table';
+            tableViewBtn.classList.add('active');
+            jsonViewBtn.classList.remove('active');
+            renderData();
+        });
+
+        jsonViewBtn.addEventListener('click', () => {
+            viewMode = 'json';
+            jsonViewBtn.classList.add('active');
+            tableViewBtn.classList.remove('active');
+            renderData();
+        });
+
+        // Init
+        loadNovels();
+        updateControls();
+    </script>
+</body>
+</html>

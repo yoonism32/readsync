@@ -1,0 +1,1649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Component Library - ReadSync</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════════════
+           DESIGN SYSTEM - ReadSync Premium Component Library
+           ═══════════════════════════════════════════════════════════════ */
+
+        :root {
+            /* Core Palette */
+            --primary: #6366f1;
+            --primary-hover: #818cf8;
+            --primary-glow: rgba(99, 102, 241, 0.4);
+            --primary-soft: rgba(99, 102, 241, 0.12);
+
+            /* Brand Teal */
+            --teal: #3cb2ad;
+            --teal-hover: #4ecdc4;
+            --teal-glow: rgba(60, 178, 173, 0.4);
+
+            /* Backgrounds - Layered depths */
+            --bg-abyss: #020617;
+            --bg-deep: #0a0f1a;
+            --bg-base: #0f172a;
+            --bg-elevated: #1e293b;
+            --bg-surface: #334155;
+
+            /* Borders */
+            --border-subtle: rgba(51, 65, 85, 0.5);
+            --border-default: #334155;
+            --border-strong: #475569;
+
+            /* Text */
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --text-ghost: #475569;
+
+            /* Status */
+            --success: #22c55e;
+            --success-soft: rgba(34, 197, 94, 0.15);
+            --warning: #f59e0b;
+            --warning-soft: rgba(245, 158, 11, 0.15);
+            --danger: #ef4444;
+            --danger-soft: rgba(239, 68, 68, 0.15);
+            --info: #3b82f6;
+            --info-soft: rgba(59, 130, 246, 0.15);
+
+            /* Purple accent */
+            --purple: #a855f7;
+            --purple-soft: rgba(168, 85, 247, 0.15);
+
+            /* Sizing */
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --radius-xl: 24px;
+
+            /* Shadows */
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+            --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+            --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+            --shadow-glow: 0 0 40px var(--primary-glow);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, sans-serif;
+            background: var(--bg-abyss);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Noise texture overlay */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+            opacity: 0.03;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Gradient orbs background */
+        .bg-orbs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+            overflow: hidden;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.4;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb-1 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+            top: -200px;
+            right: -100px;
+            animation-delay: 0s;
+        }
+
+        .orb-2 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--teal) 0%, transparent 70%);
+            bottom: -100px;
+            left: -100px;
+            animation-delay: -7s;
+        }
+
+        .orb-3 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, var(--purple) 0%, transparent 70%);
+            top: 40%;
+            left: 30%;
+            animation-delay: -14s;
+            opacity: 0.2;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(30px, -30px) scale(1.05); }
+            66% { transform: translate(-20px, 20px) scale(0.95); }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-deep);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-surface);
+            border-radius: 5px;
+            border: 2px solid var(--bg-deep);
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--border-strong);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           LAYOUT
+           ═══════════════════════════════════════════════════════════════ */
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        /* Header */
+        header {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--border-subtle);
+            padding: 16px 0;
+        }
+
+        .header-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .logo-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            padding: 8px 16px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border-radius: var(--radius-md);
+            transition: all 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        .nav-link.active {
+            color: var(--primary);
+            background: var(--primary-soft);
+        }
+
+        /* Hero */
+        .hero {
+            padding: 80px 0 60px;
+            text-align: center;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 16px;
+            background: linear-gradient(135deg, var(--text-primary) 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        /* Sections */
+        .section {
+            padding: 60px 0;
+            opacity: 0;
+            animation: fadeInUp 0.6s ease-out forwards;
+        }
+
+        .section:nth-child(2) { animation-delay: 0.1s; }
+        .section:nth-child(3) { animation-delay: 0.2s; }
+        .section:nth-child(4) { animation-delay: 0.3s; }
+        .section:nth-child(5) { animation-delay: 0.4s; }
+        .section:nth-child(6) { animation-delay: 0.5s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .section-header {
+            margin-bottom: 32px;
+        }
+
+        .section-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .section-title::before {
+            content: '';
+            width: 4px;
+            height: 24px;
+            background: linear-gradient(180deg, var(--primary), var(--teal));
+            border-radius: 2px;
+        }
+
+        .section-desc {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+        }
+
+        .component-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+        }
+
+        .component-box {
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .component-box:hover {
+            border-color: var(--border-default);
+            box-shadow: var(--shadow-md);
+            transform: translateY(-2px);
+        }
+
+        .component-label {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TYPOGRAPHY
+           ═══════════════════════════════════════════════════════════════ */
+
+        .type-display {
+            font-size: 3rem;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+            margin-bottom: 8px;
+        }
+
+        .type-h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+
+        .type-h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .type-h3 {
+            font-size: 1.125rem;
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .type-body {
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .type-small {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+        }
+
+        .type-mono {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.875rem;
+            color: var(--teal);
+            background: var(--bg-elevated);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+        }
+
+        .type-link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s ease;
+        }
+
+        .type-link:hover {
+            color: var(--primary-hover);
+            text-decoration: underline;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           BUTTONS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 10px 20px;
+            font-family: inherit;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border: none;
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #4f46e5);
+            color: white;
+            box-shadow: 0 2px 12px var(--primary-glow);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--primary-glow);
+        }
+
+        .btn-teal {
+            background: linear-gradient(135deg, var(--teal), #2a9d99);
+            color: white;
+            box-shadow: 0 2px 12px var(--teal-glow);
+        }
+
+        .btn-teal:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 20px var(--teal-glow);
+        }
+
+        .btn-secondary {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            border: 1px solid var(--border-default);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-surface);
+            border-color: var(--border-strong);
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-secondary);
+        }
+
+        .btn-ghost:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+
+        .btn-lg {
+            padding: 14px 28px;
+            font-size: 1rem;
+        }
+
+        .btn-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border-radius: var(--radius-md);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .btn-loading {
+            position: relative;
+            color: transparent !important;
+        }
+
+        .btn-loading::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           CARDS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .card {
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            padding: 24px;
+            transition: all 0.3s ease;
+        }
+
+        .card-hover:hover {
+            border-color: var(--primary);
+            box-shadow: var(--shadow-glow);
+            transform: translateY(-4px);
+        }
+
+        .card-glass {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .card-gradient {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.05) 100%);
+            border-color: rgba(99, 102, 241, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .card-desc {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        /* Stat Card */
+        .stat-card {
+            text-align: center;
+            padding: 32px 24px;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, var(--text-primary), var(--primary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-change {
+            font-size: 0.8rem;
+            margin-top: 8px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+        }
+
+        .stat-change.up {
+            color: var(--success);
+            background: var(--success-soft);
+        }
+
+        .stat-change.down {
+            color: var(--danger);
+            background: var(--danger-soft);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           INPUTS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .input-group {
+            margin-bottom: 16px;
+        }
+
+        .input-label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+        }
+
+        .input {
+            width: 100%;
+            padding: 12px 16px;
+            font-family: inherit;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            background: var(--bg-deep);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            transition: all 0.2s ease;
+        }
+
+        .input::placeholder {
+            color: var(--text-ghost);
+        }
+
+        .input:hover {
+            border-color: var(--border-strong);
+        }
+
+        .input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px var(--primary-soft);
+        }
+
+        .input-search {
+            padding-left: 44px;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: 14px center;
+        }
+
+        select.input {
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 44px;
+            cursor: pointer;
+        }
+
+        /* Toggle */
+        .toggle-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .toggle {
+            position: relative;
+            width: 48px;
+            height: 26px;
+            background: var(--bg-surface);
+            border-radius: 13px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .toggle::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s ease;
+        }
+
+        .toggle.active {
+            background: var(--primary);
+        }
+
+        .toggle.active::after {
+            transform: translateX(22px);
+        }
+
+        .toggle-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* Checkbox */
+        .checkbox-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            background: var(--bg-deep);
+            border: 2px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+        }
+
+        .checkbox.checked {
+            background: var(--primary);
+            border-color: var(--primary);
+        }
+
+        .checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .checkbox-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           BADGES
+           ═══════════════════════════════════════════════════════════════ */
+
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 5px 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+            border-radius: 999px;
+            border: 1px solid transparent;
+        }
+
+        .badge-default {
+            background: var(--bg-elevated);
+            color: var(--text-secondary);
+            border-color: var(--border-subtle);
+        }
+
+        .badge-primary {
+            background: var(--primary-soft);
+            color: var(--primary-hover);
+            border-color: rgba(99, 102, 241, 0.3);
+        }
+
+        .badge-success {
+            background: var(--success-soft);
+            color: var(--success);
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .badge-warning {
+            background: var(--warning-soft);
+            color: var(--warning);
+            border-color: rgba(245, 158, 11, 0.3);
+        }
+
+        .badge-danger {
+            background: var(--danger-soft);
+            color: var(--danger);
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-info {
+            background: var(--info-soft);
+            color: var(--info);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .badge-purple {
+            background: var(--purple-soft);
+            color: var(--purple);
+            border-color: rgba(168, 85, 247, 0.3);
+        }
+
+        .badge-dot::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           PROGRESS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .progress-bar {
+            height: 8px;
+            background: var(--bg-elevated);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--teal));
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .progress-ring {
+            position: relative;
+            width: 100px;
+            height: 100px;
+        }
+
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring-bg {
+            fill: none;
+            stroke: var(--bg-elevated);
+            stroke-width: 8;
+        }
+
+        .progress-ring-fill {
+            fill: none;
+            stroke: url(#progressGradient);
+            stroke-width: 8;
+            stroke-linecap: round;
+            stroke-dasharray: 251.2;
+            stroke-dashoffset: 62.8; /* 75% complete */
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .progress-ring-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TABLE
+           ═══════════════════════════════════════════════════════════════ */
+
+        .table-wrap {
+            overflow-x: auto;
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        .table th {
+            text-align: left;
+            padding: 14px 16px;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: var(--bg-base);
+            border-bottom: 1px solid var(--border-subtle);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .table td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            color: var(--text-secondary);
+        }
+
+        .table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .table tr:hover td {
+            background: var(--bg-elevated);
+        }
+
+        .table td:first-child {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           TOAST / ALERTS
+           ═══════════════════════════════════════════════════════════════ */
+
+        .toast-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .toast {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 18px;
+            border-radius: var(--radius-md);
+            border: 1px solid;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(20px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .toast-success {
+            background: var(--success-soft);
+            border-color: rgba(34, 197, 94, 0.3);
+            color: var(--success);
+        }
+
+        .toast-warning {
+            background: var(--warning-soft);
+            border-color: rgba(245, 158, 11, 0.3);
+            color: var(--warning);
+        }
+
+        .toast-danger {
+            background: var(--danger-soft);
+            border-color: rgba(239, 68, 68, 0.3);
+            color: var(--danger);
+        }
+
+        .toast-info {
+            background: var(--info-soft);
+            border-color: rgba(59, 130, 246, 0.3);
+            color: var(--info);
+        }
+
+        .toast-icon {
+            font-size: 1.1rem;
+        }
+
+        .toast-message {
+            flex: 1;
+            font-weight: 500;
+        }
+
+        .toast-close {
+            opacity: 0.6;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .toast-close:hover {
+            opacity: 1;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           MODAL
+           ═══════════════════════════════════════════════════════════════ */
+
+        .modal-preview {
+            background: var(--bg-base);
+            border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-lg);
+            max-width: 400px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+        }
+
+        .modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: all 0.2s;
+        }
+
+        .modal-close:hover {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+
+        .modal-body {
+            padding: 24px;
+        }
+
+        .modal-body p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .modal-footer {
+            padding: 16px 24px;
+            background: var(--bg-deep);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           NAVIGATION
+           ═══════════════════════════════════════════════════════════════ */
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            background: var(--bg-deep);
+            border-radius: var(--radius-md);
+            margin-bottom: 16px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-muted);
+            background: transparent;
+            border: none;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-secondary);
+        }
+
+        .tab.active {
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .breadcrumbs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .breadcrumb {
+            color: var(--text-muted);
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+
+        .breadcrumb:hover {
+            color: var(--text-secondary);
+        }
+
+        .breadcrumb.current {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .breadcrumb-sep {
+            color: var(--text-ghost);
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           AVATAR
+           ═══════════════════════════════════════════════════════════════ */
+
+        .avatar-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        .avatar-sm {
+            width: 32px;
+            height: 32px;
+            font-size: 0.75rem;
+        }
+
+        .avatar-lg {
+            width: 56px;
+            height: 56px;
+            font-size: 1.25rem;
+        }
+
+        .avatar-stack {
+            display: flex;
+        }
+
+        .avatar-stack .avatar {
+            border: 3px solid var(--bg-base);
+            margin-left: -12px;
+        }
+
+        .avatar-stack .avatar:first-child {
+            margin-left: 0;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           FOOTER
+           ═══════════════════════════════════════════════════════════════ */
+
+        footer {
+            padding: 40px 0;
+            text-align: center;
+            border-top: 1px solid var(--border-subtle);
+            margin-top: 60px;
+        }
+
+        footer p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ═══════════════════════════════════════════════════════════════
+           RESPONSIVE
+           ═══════════════════════════════════════════════════════════════ */
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 0 20px;
+            }
+
+            .hero {
+                padding: 50px 0 40px;
+            }
+
+            .hero h1 {
+                font-size: 2rem;
+            }
+
+            .section {
+                padding: 40px 0;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .component-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background orbs -->
+    <div class="bg-orbs">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+    </div>
+
+    <!-- SVG Defs for gradients -->
+    <svg width="0" height="0">
+        <defs>
+            <linearGradient id="progressGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#6366f1"/>
+                <stop offset="100%" stop-color="#3cb2ad"/>
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <!-- Header -->
+    <header>
+        <div class="container header-inner">
+            <a href="/" class="logo">
+                <div class="logo-icon">R</div>
+                <span>ReadSync</span>
+            </a>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">Dashboard</a>
+                <a href="/mylist" class="nav-link">My List</a>
+                <a href="/practice" class="nav-link active">Components</a>
+                <a href="/explorer" class="nav-link">Explorer</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Hero -->
+        <section class="hero">
+            <h1>Component Library</h1>
+            <p>A curated collection of UI components built with the ReadSync design system. Use these as building blocks for your interfaces.</p>
+        </section>
+
+        <!-- Typography -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Typography</h2>
+                <p class="section-desc">Type scale using Outfit font family</p>
+            </div>
+            <div class="component-box">
+                <div class="type-display">Display Heading</div>
+                <div class="type-h1">Heading One</div>
+                <div class="type-h2">Heading Two</div>
+                <div class="type-h3">Heading Three</div>
+                <p class="type-body">Body text for paragraphs and descriptions. This is the default text style used throughout the application for readable content.</p>
+                <p class="type-small">Small text for captions and metadata</p>
+                <p style="margin-top: 12px;">
+                    <code class="type-mono">monospace code</code>
+                    <span style="margin: 0 8px; color: var(--text-ghost);">|</span>
+                    <a href="#" class="type-link">Link text</a>
+                </p>
+            </div>
+        </section>
+
+        <!-- Buttons -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Buttons</h2>
+                <p class="section-desc">Interactive elements with various states</p>
+            </div>
+            <div class="component-grid">
+                <div class="component-box">
+                    <div class="component-label">Variants</div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary">Primary</button>
+                        <button class="btn btn-teal">Teal</button>
+                        <button class="btn btn-secondary">Secondary</button>
+                        <button class="btn btn-ghost">Ghost</button>
+                        <button class="btn btn-danger">Danger</button>
+                    </div>
+                </div>
+                <div class="component-box">
+                    <div class="component-label">Sizes</div>
+                    <div class="btn-row" style="align-items: center;">
+                        <button class="btn btn-primary btn-sm">Small</button>
+                        <button class="btn btn-primary">Default</button>
+                        <button class="btn btn-primary btn-lg">Large</button>
+                    </div>
+                </div>
+                <div class="component-box">
+                    <div class="component-label">States</div>
+                    <div class="btn-row">
+                        <button class="btn btn-primary">Normal</button>
+                        <button class="btn btn-primary" disabled>Disabled</button>
+                        <button class="btn btn-primary btn-loading">Loading</button>
+                        <button class="btn btn-secondary btn-icon">+</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Cards -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Cards</h2>
+                <p class="section-desc">Container components for grouping content</p>
+            </div>
+            <div class="component-grid">
+                <div class="card card-hover">
+                    <div class="card-title">Hover Card</div>
+                    <p class="card-desc">This card lifts and glows on hover. Perfect for clickable list items.</p>
+                </div>
+                <div class="card card-glass">
+                    <div class="card-title">Glass Card</div>
+                    <p class="card-desc">Frosted glass effect with backdrop blur. Great for overlays.</p>
+                </div>
+                <div class="card card-gradient">
+                    <div class="card-title">Gradient Card</div>
+                    <p class="card-desc">Subtle gradient background for featured or premium content.</p>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">2,847</div>
+                    <div class="stat-label">Chapters Read</div>
+                    <div class="stat-change up">↑ 12% this week</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">156h</div>
+                    <div class="stat-label">Reading Time</div>
+                    <div class="stat-change down">↓ 3% vs last week</div>
+                </div>
+                <div class="card stat-card">
+                    <div class="stat-value">94%</div>
+                    <div class="stat-label">Completion Rate</div>
+                    <div class="stat-change up">↑ 5 points</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Inputs -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Form Inputs</h2>
+                <p class="section-desc">Form controls and input fields</p>
+            </div>
+            <div class="component-grid">
+                <div class="component-box">
+                    <div class="component-label">Text Inputs</div>
+                    <div class="input-group">
+                        <label class="input-label">Email</label>
+                        <input type="email" class="input" placeholder="you@example.com">
+                    </div>
+                    <div class="input-group">
+                        <label class="input-label">Search</label>
+                        <input type="text" class="input input-search" placeholder="Search novels...">
+                    </div>
+                </div>
+                <div class="component-box">
+                    <div class="component-label">Select & Toggles</div>
+                    <div class="input-group">
+                        <label class="input-label">Status</label>
+                        <select class="input">
+                            <option>Reading</option>
+                            <option>Completed</option>
+                            <option>On Hold</option>
+                            <option>Dropped</option>
+                        </select>
+                    </div>
+                    <div class="toggle-wrap" style="margin-bottom: 12px;">
+                        <div class="toggle active" onclick="this.classList.toggle('active')"></div>
+                        <span class="toggle-label">Auto-sync enabled</span>
+                    </div>
+                    <div class="checkbox-wrap" onclick="this.querySelector('.checkbox').classList.toggle('checked')">
+                        <div class="checkbox checked"></div>
+                        <span class="checkbox-label">Remember this device</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Badges -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Badges</h2>
+                <p class="section-desc">Status indicators and labels</p>
+            </div>
+            <div class="component-box">
+                <div class="component-label">Variants</div>
+                <div class="badge-row" style="margin-bottom: 16px;">
+                    <span class="badge badge-default">Default</span>
+                    <span class="badge badge-primary">Primary</span>
+                    <span class="badge badge-success">Success</span>
+                    <span class="badge badge-warning">Warning</span>
+                    <span class="badge badge-danger">Danger</span>
+                    <span class="badge badge-info">Info</span>
+                    <span class="badge badge-purple">Purple</span>
+                </div>
+                <div class="component-label">With Dots</div>
+                <div class="badge-row">
+                    <span class="badge badge-success badge-dot">Reading</span>
+                    <span class="badge badge-primary badge-dot">Completed</span>
+                    <span class="badge badge-warning badge-dot">On Hold</span>
+                    <span class="badge badge-danger badge-dot">Dropped</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Progress -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Progress</h2>
+                <p class="section-desc">Visual indicators for completion</p>
+            </div>
+            <div class="component-grid">
+                <div class="component-box">
+                    <div class="component-label">Progress Bars</div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">25%</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 25%"></div>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">60%</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 60%"></div>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 4px;">90%</p>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: 90%"></div>
+                    </div>
+                </div>
+                <div class="component-box" style="display: flex; align-items: center; justify-content: center;">
+                    <div class="progress-ring">
+                        <svg width="100" height="100">
+                            <circle class="progress-ring-bg" cx="50" cy="50" r="40"/>
+                            <circle class="progress-ring-fill" cx="50" cy="50" r="40"/>
+                        </svg>
+                        <span class="progress-ring-text">75%</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Toasts -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Toasts & Alerts</h2>
+                <p class="section-desc">Notification messages</p>
+            </div>
+            <div class="component-box">
+                <div class="toast-stack">
+                    <div class="toast toast-success">
+                        <span class="toast-icon">✓</span>
+                        <span class="toast-message">Progress synced successfully</span>
+                        <span class="toast-close">×</span>
+                    </div>
+                    <div class="toast toast-info">
+                        <span class="toast-icon">ℹ</span>
+                        <span class="toast-message">3 new chapters available</span>
+                        <span class="toast-close">×</span>
+                    </div>
+                    <div class="toast toast-warning">
+                        <span class="toast-icon">⚠</span>
+                        <span class="toast-message">Connection unstable</span>
+                        <span class="toast-close">×</span>
+                    </div>
+                    <div class="toast toast-danger">
+                        <span class="toast-icon">✕</span>
+                        <span class="toast-message">Failed to sync progress</span>
+                        <span class="toast-close">×</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Modal -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Modal</h2>
+                <p class="section-desc">Dialog overlays</p>
+            </div>
+            <div class="component-box" style="display: flex; justify-content: center;">
+                <div class="modal-preview">
+                    <div class="modal-header">
+                        <span class="modal-title">Confirm Action</span>
+                        <button class="modal-close">×</button>
+                    </div>
+                    <div class="modal-body">
+                        <p>Are you sure you want to remove this novel from your reading list? This action cannot be undone.</p>
+                    </div>
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary btn-sm">Cancel</button>
+                        <button class="btn btn-danger btn-sm">Remove</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Table -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Table</h2>
+                <p class="section-desc">Data display in tabular format</p>
+            </div>
+            <div class="table-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Novel</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Last Read</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Shadow Slave</td>
+                            <td><span class="badge badge-success badge-dot">Reading</span></td>
+                            <td>Ch. 1847 (92%)</td>
+                            <td>2 hours ago</td>
+                        </tr>
+                        <tr>
+                            <td>Lord of Mysteries</td>
+                            <td><span class="badge badge-primary badge-dot">Completed</span></td>
+                            <td>Ch. 1432 (100%)</td>
+                            <td>3 days ago</td>
+                        </tr>
+                        <tr>
+                            <td>Reverend Insanity</td>
+                            <td><span class="badge badge-warning badge-dot">On Hold</span></td>
+                            <td>Ch. 892 (45%)</td>
+                            <td>2 weeks ago</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Navigation -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Navigation</h2>
+                <p class="section-desc">Tabs and breadcrumbs</p>
+            </div>
+            <div class="component-grid">
+                <div class="component-box">
+                    <div class="component-label">Tabs</div>
+                    <div class="tabs">
+                        <button class="tab active">All</button>
+                        <button class="tab">Reading</button>
+                        <button class="tab">Completed</button>
+                        <button class="tab">On Hold</button>
+                    </div>
+                </div>
+                <div class="component-box">
+                    <div class="component-label">Breadcrumbs</div>
+                    <nav class="breadcrumbs">
+                        <a href="#" class="breadcrumb">Home</a>
+                        <span class="breadcrumb-sep">/</span>
+                        <a href="#" class="breadcrumb">My List</a>
+                        <span class="breadcrumb-sep">/</span>
+                        <span class="breadcrumb current">Shadow Slave</span>
+                    </nav>
+                </div>
+            </div>
+        </section>
+
+        <!-- Avatars -->
+        <section class="section">
+            <div class="section-header">
+                <h2 class="section-title">Avatars</h2>
+                <p class="section-desc">User representations</p>
+            </div>
+            <div class="component-box">
+                <div class="component-label">Sizes & Stack</div>
+                <div class="avatar-row" style="margin-bottom: 20px;">
+                    <div class="avatar avatar-sm">JS</div>
+                    <div class="avatar">JS</div>
+                    <div class="avatar avatar-lg">JS</div>
+                </div>
+                <div class="component-label">Avatar Stack</div>
+                <div class="avatar-stack">
+                    <div class="avatar" style="background: linear-gradient(135deg, #6366f1, #4f46e5);">A</div>
+                    <div class="avatar" style="background: linear-gradient(135deg, #3cb2ad, #2a9d99);">B</div>
+                    <div class="avatar" style="background: linear-gradient(135deg, #a855f7, #7c3aed);">C</div>
+                    <div class="avatar" style="background: var(--bg-surface); color: var(--text-muted);">+5</div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Built with the ReadSync Design System · <a href="/">Back to Dashboard</a></p>
+        </div>
+    </footer>
+
+    <script>
+        // Make tabs interactive
+        document.querySelectorAll('.tabs').forEach(tabGroup => {
+            const tabs = tabGroup.querySelectorAll('.tab');
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                });
+            });
+        });
+
+        // Make toast close buttons work
+        document.querySelectorAll('.toast-close').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.parentElement.style.animation = 'slideIn 0.3s ease reverse';
+                setTimeout(() => btn.parentElement.remove(), 300);
+            });
+        });
+    </script>
+</body>
+</html>
