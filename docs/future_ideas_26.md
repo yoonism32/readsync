@@ -4,6 +4,71 @@
 
 ---
 
+## Proposed Changes (2026-01-20 ~18:45)
+
+### Login Return URL Feature
+
+**Problem:** When you're on a specific page (e.g., `/mylist`, `/novel/some-id`) and get logged out, then log back in, it always redirects to dashboard (`/`) instead of returning you to where you were.
+
+**Solution:** Pass `returnUrl` query param when redirecting to login, then use it on successful login.
+
+#### Change 1: `server.js` - `requireAuth` middleware (~line 165)
+
+```javascript
+// BEFORE:
+    // Not authenticated - redirect to login
+    res.redirect('/login');
+}
+
+// AFTER:
+    // Not authenticated - redirect to login with return URL
+    const returnUrl = req.originalUrl;
+    res.redirect('/login?returnUrl=' + encodeURIComponent(returnUrl));
+}
+```
+
+#### Change 2: `server.js` - `redirectIfAuthenticated` middleware (~line 173)
+
+```javascript
+// BEFORE:
+function redirectIfAuthenticated(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        return res.redirect('/');
+    }
+    next();
+}
+
+// AFTER:
+function redirectIfAuthenticated(req, res, next) {
+    if (req.session && req.session.authenticated) {
+        // If there's a returnUrl, go there; otherwise go to dashboard
+        const returnUrl = req.query.returnUrl || '/';
+        return res.redirect(returnUrl);
+    }
+    next();
+}
+```
+
+#### Change 3: `public/login.html` - Login success redirect (~line 328-330)
+
+```javascript
+// BEFORE:
+                if (response.ok) {
+                    // Login successful - redirect to home
+                    window.location.href = '/';
+
+// AFTER:
+                if (response.ok) {
+                    // Login successful - redirect to return URL or home
+                    const params = new URLSearchParams(window.location.search);
+                    const returnUrl = params.get('returnUrl') || '/';
+                    window.location.href = returnUrl;
+```
+
+**Files affected:** `server.js`, `public/login.html`
+
+---
+
 ## 1. Visual Polish
 
 Make ReadSync feel premium with modern UI/UX patterns.
