@@ -530,6 +530,20 @@
             box-shadow: 0 0 8px rgba(34, 197, 94, 0.4);
         }
 
+        .reread-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1px 6px;
+            border-radius: 999px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(124, 58, 237, 0.2));
+            border: 1px solid rgba(139, 92, 246, 0.5);
+            color: #a78bfa;
+            margin-left: 6px;
+        }
+
         .meta-row {
             display: flex;
             align-items: center;
@@ -1007,6 +1021,13 @@
             return `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${getApiKey()}`;
         }
 
+        function formatReadThrough(n) {
+            if (n === 1) return '1st read';
+            if (n === 2) return '2nd read';
+            if (n === 3) return '3rd read';
+            return `${n}th read`;
+        }
+
         function safePercent(n) {
             const v = Number(n);
             if (!Number.isFinite(v)) return 0;
@@ -1283,6 +1304,7 @@
 
                 const titleText = novel.title || novel.novel_id;
                 const detailHref = `/novel/${encodeURIComponent(novel.novel_id)}`;
+                const readThrough = novel.current_read_through || 1;
 
                 const readCellClass = readEmpty ? 'time-chip empty' : 'time-chip';
                 const updCellClass = updatedEmpty ? 'time-chip empty' : 'time-chip';
@@ -1348,6 +1370,7 @@
               <div class="cell-title-main">
                 <a href="${detailHref}">${titleText}</a>
                 ${fav ? `<span class="${favClass}">★</span>` : ''}
+                ${readThrough > 1 ? `<span class="reread-badge">${formatReadThrough(readThrough)}</span>` : ''}
                 ${unread > 0 ? `<span class="unread-badge">+${unread}</span>` : ''}
               </div>
               <div class="cell-sub meta-row">

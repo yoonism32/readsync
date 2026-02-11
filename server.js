@@ -592,6 +592,7 @@ async function initDatabase() {
             'CREATE INDEX IF NOT EXISTS idx_user_novel_meta_status ON user_novel_meta (user_id, status, updated_at DESC)',
             'CREATE INDEX IF NOT EXISTS idx_novel_notes_user_novel ON novel_notes (user_id, novel_id, created_at DESC)',
             'CREATE INDEX IF NOT EXISTS idx_novel_categories_user ON novel_categories (user_id, category)',
+            'CREATE INDEX IF NOT EXISTS idx_progress_read_through ON progress_snapshots (user_id, novel_id, read_through_num, created_at DESC)',
         ];
 
         for (const indexQuery of indexes) {
@@ -603,6 +604,13 @@ async function initDatabase() {
                 // Continue with other indexes even if one fails
             }
         }
+
+        // Add reread support columns
+        await client.query(`
+            ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS current_read_through INTEGER DEFAULT 1;
+            ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS read_history JSONB DEFAULT '[]'::jsonb;
+            ALTER TABLE progress_snapshots ADD COLUMN IF NOT EXISTS read_through_num INTEGER DEFAULT 1;
+        `);
 
         // Insert demo user
         await client.query(`
@@ -661,25 +669,34 @@ function parseChapterFromUrl(url) {
     return { token: m[1], num: parseInt(m[2], DECIMAL_RADIX) };
 }
 
-async function getLatestStates(client, userId, novelId) {
+async function getLatestStates(client, userId, novelId, readThroughNum = null) {
+    // Auto-lookup current read-through if not provided
+    if (readThroughNum == null) {
+        const metaRow = await client.query(
+            `SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
+            [userId, novelId]
+        );
+        readThroughNum = metaRow.rows.length > 0 ? metaRow.rows[0].current_read_through : 1;
+    }
+
     // Get global latest state across all devices
     const globalResult = await client.query(`
     SELECT p.*, d.device_label, d.last_seen AS device_last_seen
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
-    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE AND p.read_through_num = $3
     ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
     LIMIT 1
-  `, [userId, novelId]);
+  `, [userId, novelId, readThroughNum]);
 
     // Get latest state per device
     const deviceResult = await client.query(`
     SELECT DISTINCT ON (p.device_id) p.*, d.device_label
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
-    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE AND p.read_through_num = $3
     ORDER BY p.device_id, p.created_at DESC
-  `, [userId, novelId]);
+  `, [userId, novelId, readThroughNum]);
 
     const latest_global = globalResult.rows.length > 0 ? {
         chapter_num: globalResult.rows[0].chapter_num,
@@ -905,14 +922,21 @@ app.post('/api/v1/progress',
                     ON CONFLICT (user_id, novel_id) DO NOTHING
                 `, [user_id, novel_id]);
 
-                // Check if we should update (max-progress policy)
+                // Fetch current read-through number
+                const metaResult = await client.query(
+                    `SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
+                    [user_id, novel_id]
+                );
+                const currentReadThrough = metaResult.rows.length > 0 ? metaResult.rows[0].current_read_through : 1;
+
+                // Check if we should update (max-progress policy, scoped to current read-through)
                 const lastProgress = await client.query(`
                     SELECT percent, chapter_num, created_at
                     FROM progress_snapshots
-                    WHERE user_id = $1 AND device_id = $2 AND novel_id = $3
+                    WHERE user_id = $1 AND device_id = $2 AND novel_id = $3 AND read_through_num = $4
                     ORDER BY created_at DESC
                     LIMIT 1
-                `, [user_id, device_id, novel_id]);
+                `, [user_id, device_id, novel_id, currentReadThrough]);
 
                 let shouldUpdate = true;
                 if (lastProgress.rows.length > 0) {
@@ -936,12 +960,12 @@ app.post('/api/v1/progress',
                 if (shouldUpdate) {
                     await client.query(`
                         INSERT INTO progress_snapshots
-                            (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                    `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page]);
+                            (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page, read_through_num)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    `, [user_id, device_id, novel_id, chapterInfo.token, chapterInfo.num, percentValue, novel_url, seconds_on_page, currentReadThrough]);
                 }
 
-                return await getLatestStates(client, user_id, novel_id);
+                return await getLatestStates(client, user_id, novel_id, currentReadThrough);
             });
 
             const response = {
@@ -1089,9 +1113,11 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                     m.notes,
                     m.started_at,
                     m.completed_at,
-                    -- Get global latest state
+                    COALESCE(m.current_read_through, 1) AS current_read_through,
+                    COALESCE(m.read_history, '[]'::jsonb) AS read_history,
+                    -- Get global latest state (scoped to current read-through)
                     (SELECT row_to_json(global_latest) FROM (
-                        SELECT 
+                        SELECT
                             p.chapter_num,
                             p.chapter_token,
                             p.percent,
@@ -1101,13 +1127,14 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                             p.created_at as ts
                         FROM progress_snapshots p
                         JOIN devices d ON p.device_id = d.id
-                        WHERE p.user_id = $1 
-                          AND p.novel_id = n.id 
+                        WHERE p.user_id = $1
+                          AND p.novel_id = n.id
                           AND d.active = TRUE
+                          AND p.read_through_num = COALESCE(m.current_read_through, 1)
                         ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
                         LIMIT 1
                     ) global_latest) as latest_global_json,
-                    -- Get per-device states
+                    -- Get per-device states (scoped to current read-through)
                     (SELECT json_object_agg(device_id, device_state) FROM (
                         SELECT DISTINCT ON (p.device_id)
                             p.device_id,
@@ -1121,9 +1148,10 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                             ) as device_state
                         FROM progress_snapshots p
                         JOIN devices d ON p.device_id = d.id
-                        WHERE p.user_id = $1 
-                          AND p.novel_id = n.id 
+                        WHERE p.user_id = $1
+                          AND p.novel_id = n.id
                           AND d.active = TRUE
+                          AND p.read_through_num = COALESCE(m.current_read_through, 1)
                         ORDER BY p.device_id, p.created_at DESC
                     ) per_device) as latest_per_device_json
                 FROM novels n
@@ -1190,6 +1218,8 @@ app.get('/api/v1/novels', requireAuthAPI, validateApiKey, validatePagination, as
                     started_at: novel.started_at,
                     completed_at: novel.completed_at,
                     last_activity: novel.last_activity,
+                    current_read_through: novel.current_read_through,
+                    read_history: novel.read_history,
                     latest_global: latest_global,
                     latest_per_device: latest_per_device
                 };
@@ -1244,31 +1274,68 @@ app.put('/api/v1/novels/:novelId/status', requireAuthAPI,
                     throw new Error('Novel not found for user');
                 }
 
-                // If marking as completed, create a 100% progress snapshot
+                // If marking as completed, archive read-through and create a 100% snapshot
                 if (status === 'completed') {
-                    // Get the latest progress to determine chapter info
+                    const meta = updateResult.rows[0];
+                    const currentRT = meta.current_read_through || 1;
+
+                    // Get max progress for this read-through
+                    const maxProgress = await client.query(`
+                        SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent
+                        FROM progress_snapshots
+                        WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+                    `, [req.user.id, novelId, currentRT]);
+
+                    const maxChapter = maxProgress.rows[0]?.max_chapter || 0;
+                    const maxPercent = parseFloat(maxProgress.rows[0]?.max_percent || 0);
+
+                    // Archive this read-through into read_history
+                    const archiveEntry = {
+                        read_through: currentRT,
+                        started_at: meta.started_at,
+                        completed_at: new Date().toISOString(),
+                        max_chapter: maxChapter,
+                        max_percent: maxPercent
+                    };
+
+                    // Only archive if not already archived for this read-through
+                    await client.query(`
+                        UPDATE user_novel_meta
+                        SET read_history = CASE
+                            WHEN NOT EXISTS (
+                                SELECT 1 FROM jsonb_array_elements(COALESCE(read_history, '[]'::jsonb)) elem
+                                WHERE (elem->>'read_through')::int = $3
+                            )
+                            THEN COALESCE(read_history, '[]'::jsonb) || $4::jsonb
+                            ELSE read_history
+                        END
+                        WHERE user_id = $1 AND novel_id = $2
+                    `, [req.user.id, novelId, currentRT, JSON.stringify(archiveEntry)]);
+
+                    // Get the latest progress to determine chapter info (scoped to read-through)
                     const latestProgress = await client.query(`
-                    SELECT chapter_num, chapter_token, url, novel_id
-                    FROM progress_snapshots
-                    WHERE user_id = $1 AND novel_id = $2
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                `, [req.user.id, novelId]);
+                        SELECT chapter_num, chapter_token, url, novel_id
+                        FROM progress_snapshots
+                        WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+                        ORDER BY created_at DESC
+                        LIMIT 1
+                    `, [req.user.id, novelId, currentRT]);
 
                     if (latestProgress.rows.length > 0) {
                         const latest = latestProgress.rows[0];
                         await client.query(`
-                        INSERT INTO progress_snapshots (
-                            user_id, device_id, novel_id, chapter_token, 
-                            chapter_num, percent, url, seconds_on_page
-                        )
-                        VALUES ($1, 'system', $2, $3, $4, 100, $5, 0)
-                    `, [
+                            INSERT INTO progress_snapshots (
+                                user_id, device_id, novel_id, chapter_token,
+                                chapter_num, percent, url, seconds_on_page, read_through_num
+                            )
+                            VALUES ($1, 'system', $2, $3, $4, 100, $5, 0, $6)
+                        `, [
                             req.user.id,
                             latest.novel_id,
                             latest.chapter_token,
                             latest.chapter_num,
-                            latest.url
+                            latest.url,
+                            currentRT
                         ]);
                     }
                 }
@@ -1283,6 +1350,90 @@ app.put('/api/v1/novels/:novelId/status', requireAuthAPI,
             });
         } catch (error) {
             handleDbError(res, error, 'Update novel status');
+        }
+    });
+
+// Reread endpoint - start a new read-through of a completed novel
+app.post('/api/v1/novels/:novelId/reread', requireAuthAPI,
+    [
+        param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage('Invalid novel ID format'),
+        handleValidationErrors
+    ],
+    validateApiKey,
+    validateNovelId,
+    async (req, res) => {
+        const { novelId } = req.params;
+
+        try {
+            const result = await withTransaction(async (client) => {
+                // Get current meta
+                const metaResult = await client.query(
+                    `SELECT * FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
+                    [req.user.id, novelId]
+                );
+
+                if (metaResult.rows.length === 0) {
+                    return { error: 'Novel not found', status: 404 };
+                }
+
+                const meta = metaResult.rows[0];
+                if (meta.status !== 'completed') {
+                    return { error: 'Novel must be completed to start a reread', status: 400 };
+                }
+
+                const currentRT = meta.current_read_through || 1;
+
+                // Archive current read-through if not already archived
+                const maxProgress = await client.query(`
+                    SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent
+                    FROM progress_snapshots
+                    WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+                `, [req.user.id, novelId, currentRT]);
+
+                const archiveEntry = {
+                    read_through: currentRT,
+                    started_at: meta.started_at,
+                    completed_at: meta.completed_at || new Date().toISOString(),
+                    max_chapter: maxProgress.rows[0]?.max_chapter || 0,
+                    max_percent: parseFloat(maxProgress.rows[0]?.max_percent || 0)
+                };
+
+                // Archive if not already present for this read-through
+                await client.query(`
+                    UPDATE user_novel_meta
+                    SET read_history = CASE
+                        WHEN NOT EXISTS (
+                            SELECT 1 FROM jsonb_array_elements(COALESCE(read_history, '[]'::jsonb)) elem
+                            WHERE (elem->>'read_through')::int = $3
+                        )
+                        THEN COALESCE(read_history, '[]'::jsonb) || $4::jsonb
+                        ELSE read_history
+                    END
+                    WHERE user_id = $1 AND novel_id = $2
+                `, [req.user.id, novelId, currentRT, JSON.stringify(archiveEntry)]);
+
+                // Increment read-through, reset dates, set status to reading
+                const newRT = currentRT + 1;
+                await client.query(`
+                    UPDATE user_novel_meta SET
+                        current_read_through = $3,
+                        started_at = CURRENT_TIMESTAMP,
+                        completed_at = NULL,
+                        status = 'reading',
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE user_id = $1 AND novel_id = $2
+                `, [req.user.id, novelId, newRT]);
+
+                return { success: true, current_read_through: newRT, status: 'reading' };
+            });
+
+            if (result.error) {
+                return res.status(result.status).json({ error: result.error });
+            }
+
+            res.json(result);
+        } catch (error) {
+            handleDbError(res, error, 'Start reread');
         }
     });
 
@@ -2370,7 +2521,9 @@ app.get('/api/v1/stats/novels/:novelId', validateApiKey, validateNovelId, async 
             const [novelInfo, progressStats, sessionStats, bookmarkStats] = await Promise.all([
                 client.query(`
           SELECT n.title, n.author, n.genre, m.status, m.favorite, m.rating,
-                 m.started_at, m.completed_at
+                 m.started_at, m.completed_at,
+                 COALESCE(m.current_read_through, 1) AS current_read_through,
+                 COALESCE(m.read_history, '[]'::jsonb) AS read_history
           FROM novels n
           LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
           WHERE n.id = $2
