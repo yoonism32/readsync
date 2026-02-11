@@ -70,6 +70,7 @@ const MAX_PERCENT = 100;
 const CHAPTER_RESTART_THRESHOLD_PERCENT = 1; // Consider <1% as restart
 const SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT = 10; // Progress >10% is significant
 const DEVICE_BEHIND_THRESHOLD_PERCENT = 20; // Device >20% behind is considered stale
+const AUTO_REREAD_CHAPTER_THRESHOLD = 50; // Auto-detect reread if 50+ chapters behind max
 
 // Time-based constants (in milliseconds)
 const MS_PER_SECOND = 1000;
@@ -924,10 +925,60 @@ app.post('/api/v1/progress',
 
                 // Fetch current read-through number
                 const metaResult = await client.query(
-                    `SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
+                    `SELECT current_read_through, started_at, completed_at, status FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
                     [user_id, novel_id]
                 );
-                const currentReadThrough = metaResult.rows.length > 0 ? metaResult.rows[0].current_read_through : 1;
+                let currentReadThrough = metaResult.rows.length > 0 ? metaResult.rows[0].current_read_through : 1;
+
+                // Auto-detect reread: if incoming chapter is 50+ behind the max for the current read-through
+                const maxChapterResult = await client.query(`
+                    SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent
+                    FROM progress_snapshots
+                    WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+                `, [user_id, novel_id, currentReadThrough]);
+
+                const maxChapter = maxChapterResult.rows[0]?.max_chapter || 0;
+
+                if (maxChapter - chapterInfo.num >= AUTO_REREAD_CHAPTER_THRESHOLD) {
+                    const oldRT = currentReadThrough;
+                    const meta = metaResult.rows[0];
+
+                    const archiveEntry = {
+                        read_through: currentReadThrough,
+                        started_at: meta.started_at,
+                        completed_at: meta.completed_at || new Date().toISOString(),
+                        max_chapter: maxChapter,
+                        max_percent: parseFloat(maxChapterResult.rows[0]?.max_percent || 0)
+                    };
+
+                    await client.query(`
+                        UPDATE user_novel_meta
+                        SET read_history = CASE
+                            WHEN NOT EXISTS (
+                                SELECT 1 FROM jsonb_array_elements(COALESCE(read_history, '[]'::jsonb)) elem
+                                WHERE (elem->>'read_through')::int = $3
+                            )
+                            THEN COALESCE(read_history, '[]'::jsonb) || $4::jsonb
+                            ELSE read_history
+                        END
+                        WHERE user_id = $1 AND novel_id = $2
+                    `, [user_id, novel_id, currentReadThrough, JSON.stringify(archiveEntry)]);
+
+                    // Increment read-through, reset dates, set status to reading
+                    const newRT = currentReadThrough + 1;
+                    await client.query(`
+                        UPDATE user_novel_meta SET
+                            current_read_through = $3,
+                            started_at = CURRENT_TIMESTAMP,
+                            completed_at = NULL,
+                            status = 'reading',
+                            updated_at = CURRENT_TIMESTAMP
+                        WHERE user_id = $1 AND novel_id = $2
+                    `, [user_id, novel_id, newRT]);
+
+                    currentReadThrough = newRT;
+                    console.log('Auto-detected reread:', { novel_id, oldRT, newRT: currentReadThrough, maxChapter, currentChapter: chapterInfo.num });
+                }
 
                 // Check if we should update (max-progress policy, scoped to current read-through)
                 const lastProgress = await client.query(`
@@ -1353,7 +1404,7 @@ app.put('/api/v1/novels/:novelId/status', requireAuthAPI,
         }
     });
 
-// Reread endpoint - start a new read-through of a completed novel
+// Reread endpoint - start a new read-through of a novel
 app.post('/api/v1/novels/:novelId/reread', requireAuthAPI,
     [
         param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }).withMessage('Invalid novel ID format'),
@@ -1377,9 +1428,6 @@ app.post('/api/v1/novels/:novelId/reread', requireAuthAPI,
                 }
 
                 const meta = metaResult.rows[0];
-                if (meta.status !== 'completed') {
-                    return { error: 'Novel must be completed to start a reread', status: 400 };
-                }
 
                 const currentRT = meta.current_read_through || 1;
 

@@ -772,12 +772,9 @@
                     document.getElementById('read-through-text').textContent = formatReadThrough(readThrough);
                 }
 
-                // Show reread button only when completed
-                if (status === 'completed') {
-                    document.getElementById('reread-btn').style.display = 'inline-flex';
-                } else {
-                    document.getElementById('reread-btn').style.display = 'none';
-                }
+                // Show reread button when there's any progress
+                const hasProgress = !!global;
+                document.getElementById('reread-btn').style.display = hasProgress ? 'inline-flex' : 'none';
 
                 // Read history
                 const readHistory = currentNovel.read_history || [];
@@ -855,10 +852,8 @@
                 // Update completed date
                 if (status === 'completed') {
                     document.getElementById('completed-at').textContent = new Date().toLocaleDateString();
-                    document.getElementById('reread-btn').style.display = 'inline-flex';
                 } else {
                     document.getElementById('completed-at').textContent = '-';
-                    document.getElementById('reread-btn').style.display = 'none';
                 }
 
                 toast('Status updated successfully!');
@@ -915,7 +910,16 @@
         }
 
         async function startReread() {
-            if (!confirm('Start a new reread? Your current progress will be archived and you\'ll start fresh from Chapter 1.')) {
+            const global = currentNovel?.latest_global;
+            const status = currentNovel?.status;
+            let msg;
+            if (status === 'completed') {
+                msg = 'Start a new reread? Your current progress will be archived and you\'ll start fresh from Chapter 1.';
+            } else {
+                const ch = global ? `ch. ${global.chapter_num}` : 'your current progress';
+                msg = `Start over from Chapter 1? Your current progress (${ch}) will be archived.`;
+            }
+            if (!confirm(msg)) {
                 return;
             }
 
