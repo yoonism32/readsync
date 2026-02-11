@@ -8,7 +8,8 @@
 1. [Implemented Features](#implemented-features)
 2. [Tailwind CSS Migration (Feb 2026 - Incomplete)](#tailwind-css-migration-feb-2026---incomplete)
 3. [Future Ideas (Jan 2026)](#future-ideas-jan-2026)
-4. [Resources & References](#resources--references)
+4. [Productivity & Power User (Feb 2026)](#5-productivity--power-user-feb-2026)
+5. [Resources & References](#resources--references)
 
 ---
 
@@ -338,6 +339,277 @@ readsync sync                # Force sync
 
 ---
 
+---
+
+## 5. Productivity & Power User (Feb 2026)
+
+### 9. Command Palette (Ctrl+K)
+**What:** VS Code / Spotlight-style quick launcher overlay
+**Builds on:** 10 pages, 60+ endpoints, lots of navigation already
+
+**Actions:**
+- Jump to any novel by typing its name (fuzzy match)
+- Quick-change novel status without opening the page
+- Navigate to any page: `/mylist`, `/admin`, `/settings`
+- Trigger actions: "refresh novels", "export backup", "run bot"
+- Search notes & bookmarks inline
+
+**Implementation:**
+```javascript
+// Keyboard listener
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+    e.preventDefault();
+    openCommandPalette();
+  }
+});
+
+// Fuzzy search against a unified action registry
+const actions = [
+  { type: 'novel', label: novel.title, action: () => navigate(`/novel/${id}`) },
+  { type: 'page', label: 'My List', action: () => navigate('/mylist') },
+  { type: 'command', label: 'Export Backup', action: () => exportData() },
+  // ...
+];
+```
+
+**UI:** Dark modal with input field, results list, keyboard navigation (arrow keys + Enter)
+**New endpoints:** None — fully frontend, pulls from existing `/api/v1/novels` + static action list
+
+---
+
+### 10. Dead Novel Detection & Auto-Triage
+**What:** Automatically flag novels that stopped updating and suggest cleanup actions
+**Builds on:** Bot already tracks `chapters_updated_at`, `/api/v1/admin/novels/stale` exists
+
+**Rules:**
+- **Likely abandoned:** No update in 90+ days → suggest moving to on-hold
+- **Confirmed dead:** No update in 180+ days → suggest dropping
+- **Source broken:** Bot gets repeated 404s → flag URL as dead
+- **Completed by author:** Detect "completed" / "end" in latest chapter title
+
+**API Endpoints:**
+- `GET /api/v1/novels/health` — Returns novels grouped by health status
+- `POST /api/v1/novels/triage` — Bulk apply suggested status changes
+
+**UI:** Banner on MyList: "3 novels may be abandoned — Review" → opens triage modal with one-click accept/dismiss per novel
+
+**Database:** Add column to `novels`:
+```sql
+ALTER TABLE novels ADD COLUMN health_status TEXT DEFAULT 'active';
+-- Values: active, stale, abandoned, source_dead
+ALTER TABLE novels ADD COLUMN consecutive_scrape_failures INTEGER DEFAULT 0;
+```
+
+---
+
+### 11. Unified Search (Notes, Bookmarks, Novels, Tags)
+**What:** One search bar that queries everything at once
+**Builds on:** Novels, notes, bookmarks, categories exist as separate entities with no cross-search
+
+**Search targets:**
+- Novel titles and authors
+- Note text (e.g. "find that note about the cultivation technique")
+- Bookmark notes
+- Category/tag names
+
+**API Endpoint:**
+- `GET /api/v1/search?q=dragon&types=novels,notes,bookmarks`
+
+**Response:**
+```json
+{
+  "results": [
+    { "type": "novel", "id": "novelbin:dragon-emperor", "title": "Dragon Emperor", "match": "title" },
+    { "type": "note", "novel_id": "novelbin:xyz", "snippet": "...MC gains dragon bloodline in ch 45...", "match": "note_text" },
+    { "type": "bookmark", "novel_id": "novelbin:abc", "note": "dragon fight scene", "match": "note" }
+  ]
+}
+```
+
+**Backend:** Single SQL query with `UNION ALL` across tables, `ILIKE '%query%'` with `ts_rank` for relevance
+**Frontend:** Search icon in header → dropdown results grouped by type
+
+---
+
+### 12. Theme Engine & Custom Accent Colors
+**What:** Full dark/light/custom theme system with live preview
+**Builds on:** `user_settings` table already has a `theme VARCHAR(50)` column (unused), `practice.html` has a full component library
+
+**Themes:**
+- **Midnight** (current default) — deep navy/slate
+- **AMOLED** — true black backgrounds for OLED screens
+- **Solarized Dark** — warm dark with amber accents
+- **Light** — clean white/gray for daytime reading
+
+**Custom accent color picker:** Replace the hardcoded `#6366f1` primary with any user-chosen color
+**Font size slider:** Scale base font from 14px to 20px
+
+**Implementation:**
+```javascript
+// CSS custom properties driven by user_settings.theme JSONB
+document.documentElement.style.setProperty('--color-primary', userTheme.accent);
+document.documentElement.style.setProperty('--bg-body', userTheme.bgBody);
+document.documentElement.style.setProperty('--font-size-base', userTheme.fontSize + 'px');
+```
+
+**API:** Extend existing settings endpoints:
+- `PUT /api/v1/settings/theme` — Save theme preferences
+- Theme stored as JSONB in `user_settings.theme`
+
+**Frontend:** New section in `/settings` page with live preview swatches
+
+---
+
+### 13. Batch Import from URLs
+**What:** Paste multiple NovelBin URLs at once to bulk-add novels
+**Builds on:** Single novel auto-detection via userscript, bot scraper can already extract metadata from any novel page
+
+**Flow:**
+1. User pastes 1-20 NovelBin URLs (textarea, one per line)
+2. Backend queues them for metadata scraping
+3. Progress bar shows: "Importing 3/10..."
+4. Each novel gets title, author, cover, chapter count auto-populated
+5. User confirms which to actually add to their library
+
+**API Endpoints:**
+- `POST /api/v1/novels/batch-import` — Accept array of URLs, return job ID
+- `GET /api/v1/novels/batch-import/:jobId` — Poll import progress
+
+**Implementation:** Reuse existing Puppeteer scraper logic from `chapter-update-bot-enhanced.js`:
+```javascript
+// Extract from bot's existing scrape logic
+async function scrapeNovelMetadata(url) {
+  // Same Puppeteer + stealth setup as bot
+  // Extract: title, author, genre, cover, latest chapter
+  // Respect existing throttle: 10s gap between requests
+}
+```
+
+**UI:** New button on `/manage` page: "Import Novels" → modal with URL textarea + progress
+
+---
+
+### 14. Chapter Highlights & Annotations (Userscript)
+**What:** Highlight text passages while reading and sync them to the server
+**Builds on:** Notes system exists (novel_notes table), userscript already modifies page DOM heavily
+
+**Flow:**
+1. Select text on NovelBin chapter page
+2. Small tooltip appears: "Highlight" / "Annotate"
+3. Highlight saves the text + position + optional user note
+4. All highlights visible in novel detail page under a "Highlights" tab
+
+**API Endpoints:**
+- `POST /api/v1/novels/:novelId/highlights` — Save highlight
+- `GET /api/v1/novels/:novelId/highlights` — Get all (filterable by chapter)
+- `DELETE /api/v1/highlights/:highlightId` — Remove highlight
+
+**Database:**
+```sql
+CREATE TABLE novel_highlights (
+    id BIGSERIAL PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    novel_id TEXT NOT NULL,
+    chapter_num INTEGER NOT NULL,
+    highlighted_text TEXT NOT NULL,
+    annotation TEXT,
+    text_offset INTEGER,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**Userscript addition:** `Selection` API listener + tooltip popup + highlight persistence via CSS `::highlight()` or `<mark>` wrapping
+
+---
+
+### 15. Offline Mode with Service Worker
+**What:** Read cached chapters and queue progress updates when offline
+**Builds on:** Userscript already caches some data in localStorage, progress sync infrastructure exists
+
+**Capabilities:**
+- Cache the last 5 read chapters per novel (HTML content)
+- Queue progress saves locally when offline
+- Auto-sync queued updates when connection restores
+- Show "Offline" banner with cached content indicator
+
+**Implementation:**
+```javascript
+// service-worker.js
+self.addEventListener('fetch', (event) => {
+  if (event.request.url.includes('/api/v1/progress')) {
+    event.respondWith(
+      fetch(event.request).catch(() => {
+        // Queue in IndexedDB for later sync
+        return queueForSync(event.request);
+      })
+    );
+  }
+});
+
+// Background sync
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-progress') {
+    event.waitUntil(flushProgressQueue());
+  }
+});
+```
+
+**New files:** `public/service-worker.js`, registration in `shared.js`
+**Storage:** IndexedDB for chapter cache + pending progress queue
+
+---
+
+### 16. Auto-Cleanup & Maintenance Mode
+**What:** One-click codebase health scan that finds and fixes data issues
+**Builds on:** Stale novels endpoint exists, export/import exists, orphaned data accumulates naturally
+
+**Scans for:**
+- **Stale novels:** No progress in 90+ days, still marked "reading"
+- **Broken URLs:** Novels whose `primary_url` returns 404
+- **Orphaned bookmarks:** Bookmarks for novels you've removed
+- **Orphaned notes:** Notes for removed novels
+- **Duplicate progress:** Multiple identical snapshots (same chapter/percent/timestamp)
+- **Empty categories:** Tags with 0 novels attached
+
+**API Endpoint:**
+- `GET /api/v1/maintenance/scan` — Returns issues grouped by type with counts
+- `POST /api/v1/maintenance/fix` — Apply selected fixes (body: `{ "actions": ["clean_orphaned_bookmarks", "archive_stale_novels"] }`)
+
+**UI:** New section on `/settings` page: "Maintenance" with scan results + checkboxes + "Fix Selected" button
+
+---
+
+### 17. Userscript Reading Modes
+**What:** Customizable reading experience injected into NovelBin pages
+**Builds on:** Userscript already injects UI overlays, keyboard shortcuts, progress bars, and modifies the DOM
+
+**Modes:**
+- **Night Mode** — True dark background with warm text (#faf3e0 on #1a1a1a)
+- **Sepia Mode** — Paper-like warm tones (#f4ecd8 background)
+- **Focus Mode** — Hide all site chrome (sidebar, ads, header, comments), just chapter text
+- **Custom** — User picks background, text color, font, size, line height, max-width
+
+**Persisted settings:** Sync via existing `/api/v1/settings` endpoint as JSONB
+```javascript
+// Userscript injection
+function applyReadingMode(mode) {
+  const chapterContent = document.querySelector('#chr-content, .chr-c');
+  const styles = READING_MODES[mode];
+  Object.assign(chapterContent.style, styles);
+  document.body.style.backgroundColor = styles.bgColor;
+}
+```
+
+**Keyboard shortcuts:** Add to existing shortcuts:
+- `Shift+T` — Cycle through reading modes
+- `+/-` — Increase/decrease font size
+- `Shift+W` — Toggle max-width (narrow/wide)
+
+**Settings panel:** Small gear icon in userscript's existing top bar → dropdown with sliders and color pickers
+
+---
+
 ## Priority Matrix
 
 | Feature | Effort | Impact | Portfolio Value |
@@ -350,6 +622,15 @@ readsync sync                # Force sync
 | Time Machine | High | High | High |
 | GraphQL | Medium | Low | High |
 | Tailwind Migration | Medium | Medium | Low |
+| **Command Palette** | **Low** | **High** | **Medium** |
+| **Dead Novel Detection** | **Low** | **High** | **Low** |
+| **Unified Search** | **Medium** | **High** | **Medium** |
+| **Theme Engine** | **Medium** | **Medium** | **Low** |
+| **Batch Import** | **Medium** | **Medium** | **Medium** |
+| **Chapter Highlights** | **High** | **Medium** | **High** |
+| **Offline Mode** | **High** | **Medium** | **Very High** |
+| **Auto-Cleanup** | **Low** | **Medium** | **Low** |
+| **Reading Modes** | **Low** | **High** | **Low** |
 
 ---
 
@@ -404,4 +685,4 @@ CREATE TABLE novel_categories (
 
 ---
 
-*Last updated: February 3, 2026*
+*Last updated: February 6, 2026*
