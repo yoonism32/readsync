@@ -49,3 +49,6 @@ secrets/
 
 # PM2 (if using)
 .pm2/
+
+# UI practice
+*.pen
