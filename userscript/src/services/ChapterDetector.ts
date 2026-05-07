@@ -84,22 +84,17 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
       const chapterLink = latestChapterElement.querySelector<HTMLAnchorElement>('.chapter-title');
       if (chapterLink) {
         const linkText = chapterLink.textContent?.trim() ?? '';
+
+        // URL is ground truth for chapter number — handles dual-numbered titles like
+        // "Chapter 808  Chapter 327: Title" where text regex picks the wrong number
+        const numFromUrl = chapterLink.href ? extractChapterFromUrl(chapterLink.href) : null;
         const textMatch = linkText.match(/Chapter\s+(\d+)\s*[-:]\s*(.+)/i);
-        if (textMatch) {
-          log('Found latest chapter via .l-chapter (text)', { num: textMatch[1], title: textMatch[2] });
-          return { latestChapterNum: parseInt(textMatch[1], 10), latestChapterTitle: textMatch[2].trim() };
-        }
-        const numFromText = extractChapterNum(linkText);
-        if (numFromText) {
-          log('Found latest chapter via .l-chapter (number pattern)', { num: numFromText, text: linkText });
-          return { latestChapterNum: numFromText, latestChapterTitle: linkText };
-        }
-        if (chapterLink.href) {
-          const numFromUrl = extractChapterFromUrl(chapterLink.href);
-          if (numFromUrl) {
-            log('Found latest chapter via .l-chapter (URL)', { num: numFromUrl, href: chapterLink.href });
-            return { latestChapterNum: numFromUrl, latestChapterTitle: linkText || null };
-          }
+        const chapterNum = numFromUrl ?? (textMatch ? parseInt(textMatch[1], 10) : extractChapterNum(linkText));
+        const chapterTitle = textMatch ? textMatch[2].trim() : (linkText || null);
+
+        if (chapterNum) {
+          log('Found latest chapter via .l-chapter', { num: chapterNum, title: chapterTitle, source: numFromUrl ? 'url' : 'text' });
+          return { latestChapterNum: chapterNum, latestChapterTitle: chapterTitle };
         }
       }
     }
