@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>MyList - ReadSync</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap"
+        rel="stylesheet" />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-[#020617] text-slate-200 font-['Inter'] antialiased min-h-screen;
+                background-image: 
+                    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.1) 0px, transparent 50%),
+                    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+            }
+        }
+        :root {
+            --glass-bg: rgba(15, 23, 42, 0.65);
+            --glass-border: rgba(255, 255, 255, 0.08);
+        }
+        .glass-card {
+            @apply backdrop-blur-xl bg-[var(--glass-bg)] border border-[var(--glass-border)] rounded-2xl;
+        }
+        .glass-header {
+            @apply backdrop-blur-md bg-[#020617]/80 border-b border-white/5 sticky top-0 z-50;
+        }
+        .progress-bar-container {
+            @apply h-1.5 w-full bg-slate-800 rounded-full overflow-hidden;
+        }
+        .progress-bar-fill {
+            @apply h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            @apply bg-transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            @apply bg-slate-700 rounded-full hover:bg-slate-600;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="glass-header">
+        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between gap-8">
+            <div class="flex items-center gap-3 shrink-0">
+                <div
+                    class="w-10 h-10 bg-gradient-to-tr from-indigo-600 to-emerald-500 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                    <span class="material-symbols-outlined text-white font-bold">auto_stories</span>
+                </div>
+                <h1
+                    class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400 tracking-tight">
+                    ReadSync</h1>
+            </div>
+            <div class="flex-1 max-w-2xl relative">
+                <span
+                    class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-xl">search</span>
+                <input
+                    class="w-full bg-slate-900/50 border-slate-800 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-full py-2.5 pl-12 pr-4 text-sm text-slate-200 placeholder:text-slate-500 transition-all"
+                    placeholder="Search your library..." type="text" />
+            </div>
+            <div class="flex items-center gap-4 shrink-0">
+                <button class="p-2.5 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
+                    <span class="material-symbols-outlined">notifications</span>
+                </button>
+                <div
+                    class="h-10 w-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center overflow-hidden">
+                    <img alt="User Avatar"
+                        src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnlUg1G23DE2Ez0jZ4tSmhMNSy4zwc34xYan9KR0KkFG0LplH_2_t7lacBLAX3pHSa-Bxg5psUDb16KJVGlp6KLA_TjoLkIU0ZTYCtAhuf9PKvroce5kHvZyjasvPNZNUxGus7lEH7o1adwY-BzCudW9eFb0cYE42f9LKb7k2U4pJTeq_OSEq7NjIFE-Am7jnrbaQw9xW2N_EnWiW0NPsHcMA6FEYL6kLFGrsV0OQHppiSva0xYynJWZXxcFw7u9McVUz87AQ3CZV_" />
+                </div>
+            </div>
+        </div>
+    </header>
+    <main class="max-w-7xl mx-auto px-6 py-8">
+        <div class="grid grid-cols-12 gap-6">
+            <aside class="col-span-12 lg:col-span-3 space-y-6">
+                <section class="glass-card p-5">
+                    <h3
+                        class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span class="material-symbols-outlined text-sm">filter_list</span> Filters
+                    </h3>
+                    <nav class="space-y-1">
+                        <a class="flex items-center justify-between p-2 rounded-lg bg-indigo-500/10 text-indigo-400 font-medium"
+                            href="#">
+                            <span class="flex items-center gap-3"><span
+                                    class="material-symbols-outlined text-[20px]">menu_book</span> Reading</span>
+                            <span class="text-xs bg-indigo-500/20 px-2 py-0.5 rounded-full">24</span>
+                        </a>
+                        <a class="flex items-center justify-between p-2 rounded-lg text-slate-400 hover:bg-white/5 transition-colors"
+                            href="#">
+                            <span class="flex items-center gap-3"><span
+                                    class="material-symbols-outlined text-[20px]">check_circle</span> Completed</span>
+                            <span class="text-xs bg-slate-800 px-2 py-0.5 rounded-full">156</span>
+                        </a>
+                        <a class="flex items-center justify-between p-2 rounded-lg text-slate-400 hover:bg-white/5 transition-colors"
+                            href="#">
+                            <span class="flex items-center gap-3"><span
+                                    class="material-symbols-outlined text-[20px]">pause_circle</span> On Hold</span>
+                            <span class="text-xs bg-slate-800 px-2 py-0.5 rounded-full">8</span>
+                        </a>
+                        <a class="flex items-center justify-between p-2 rounded-lg text-slate-400 hover:bg-white/5 transition-colors"
+                            href="#">
+                            <span class="flex items-center gap-3"><span
+                                    class="material-symbols-outlined text-[20px]">delete</span> Dropped</span>
+                            <span class="text-xs bg-slate-800 px-2 py-0.5 rounded-full">3</span>
+                        </a>
+                    </nav>
+                    <div class="mt-8">
+                        <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-widest mb-4">Sort By</h3>
+                        <select class="w-full bg-slate-900 border-slate-800 rounded-xl text-sm text-slate-300 py-2">
+                            <option>Last Updated</option>
+                            <option>Progress (%)</option>
+                            <option>Title (A-Z)</option>
+                            <option>Recently Added</option>
+                        </select>
+                    </div>
+                </section>
+                <section class="glass-card p-5 border-l-4 border-l-emerald-500">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-sm font-semibold text-slate-200">Smart Refresh</h3>
+                        <span class="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                    <div class="flex items-end justify-between mb-4">
+                        <div class="text-2xl font-mono font-bold text-emerald-400 tracking-tight">04:12:35</div>
+                        <div class="text-[10px] text-slate-500 uppercase font-medium">Until next sync</div>
+                    </div>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3 text-xs text-slate-400">
+                            <span class="material-symbols-outlined text-sm text-emerald-500">sync</span>
+                            <span>Checking Shadow Slave...</span>
+                        </div>
+                        <button
+                            class="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20">
+                            <span class="material-symbols-outlined text-[18px]">refresh</span> Force Sync Now
+                        </button>
+                    </div>
+                </section>
+            </aside>
+            <section class="col-span-12 lg:col-span-9 space-y-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center gap-2">
+                        <h2 class="text-xl font-bold text-white">Current Reading</h2>
+                        <span class="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] font-bold rounded uppercase">24
+                            Novels</span>
+                    </div>
+                    <div class="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800">
+                        <button class="p-1.5 rounded-md bg-slate-800 text-white"><span
+                                class="material-symbols-outlined text-[20px]">grid_view</span></button>
+                        <button class="p-1.5 rounded-md text-slate-500 hover:text-slate-300"><span
+                                class="material-symbols-outlined text-[20px]">view_list</span></button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="glass-card p-4 flex gap-6 hover:border-indigo-500/30 transition-all group">
+                        <div class="w-24 h-36 rounded-xl overflow-hidden shadow-2xl shrink-0 border border-white/10">
+                            <img alt="Novel Cover"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuB56vfaU4fSFUYuyK9KC7N3uh039HS6C9X_H_OpwJPO9NPhz0TqLUmlZb0nQLmss2h-SGduisoCDkZpW5IPKc0FA6Ij6XauISpm4GHOVTUIwx36vlW-cosPMYj0Z90-6vQlLQGLq5caGiuRK4KFKjx3SBjbOG8XsG7u41zqgeOAatg_RgOlIHzmvOBQiT4TtX2eARuraDrGYRznyQ7y6sHvxBbJ2bKjMU3dZPT3hAlIIMuSLWo-2mTyHG7-94x_kI_9zzEEfR-tkyNC" />
+                        </div>
+                        <div class="flex-1 flex flex-col py-1">
+                            <div class="flex justify-between items-start mb-1">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span
+                                            class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[10px] font-bold rounded uppercase tracking-wider">Reading</span>
+                                        <span
+                                            class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider">New
+                                            Chapter</span>
+                                    </div>
+                                    <h3
+                                        class="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors line-clamp-1">
+                                        Shadow Slave</h3>
+                                    <p class="text-xs text-slate-500">By Guiltythree • Updated 2 hours ago</p>
+                                </div>
+                                <button class="text-slate-500 hover:text-amber-400 transition-colors">
+                                    <span class="material-symbols-outlined fill-1 text-amber-400">star</span>
+                                </button>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="flex items-center justify-between mb-2 text-xs">
+                                    <span class="text-slate-400 font-medium">Chapter 1452 / 1850</span>
+                                    <span class="text-emerald-400 font-bold">78%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar-fill" style="width: 78%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col justify-center gap-3 shrink-0 px-4 border-l border-white/5">
+                            <a class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+                                href="#">
+                                Continue <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            </a>
+                            <div class="flex justify-center gap-4">
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">edit</span></button>
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">more_vert</span></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 flex gap-6 hover:border-indigo-500/30 transition-all group opacity-90">
+                        <div class="w-24 h-36 rounded-xl overflow-hidden shadow-2xl shrink-0 border border-white/10">
+                            <img alt="Novel Cover"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuC5UZ-hCVuiWyKLgAuSna8oYjTcUIFAtS7H_Og0XJFi_hxTfD-nqBBXmEVrIVqbW7duVKclaitnLSa63ZgulCOI_XTs1T4zBqKPETEywxsdyjaE580A2dFjMkfOh5keSUXKreLSfoBGIm_gusZhqOUN_22xqcUsV5Xzmmrel7iRuPjLkR4fRiUzwzT6Fv2NU-gwlzAP6EPhcEulMrAltOjutPfLAWKLF_AbZbnAqfAxOaKRqSjCz3GbExJfctO236I6PRmBAAKKAvjD" />
+                        </div>
+                        <div class="flex-1 flex flex-col py-1">
+                            <div class="flex justify-between items-start mb-1">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span
+                                            class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[10px] font-bold rounded uppercase tracking-wider">Reading</span>
+                                    </div>
+                                    <h3
+                                        class="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors line-clamp-1">
+                                        Lord of the Mysteries</h3>
+                                    <p class="text-xs text-slate-500">By Cuttlefish That Loves Diving • Updated 1 day
+                                        ago</p>
+                                </div>
+                                <button class="text-slate-500 hover:text-slate-400 transition-colors">
+                                    <span class="material-symbols-outlined">star</span>
+                                </button>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="flex items-center justify-between mb-2 text-xs">
+                                    <span class="text-slate-400 font-medium">Chapter 840 / 1432</span>
+                                    <span class="text-indigo-400 font-bold">59%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar-fill" style="width: 59%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col justify-center gap-3 shrink-0 px-4 border-l border-white/5">
+                            <a class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+                                href="#">
+                                Continue <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            </a>
+                            <div class="flex justify-center gap-4">
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">edit</span></button>
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">more_vert</span></button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="glass-card p-4 flex gap-6 hover:border-indigo-500/30 transition-all group">
+                        <div class="w-24 h-36 rounded-xl overflow-hidden shadow-2xl shrink-0 border border-white/10">
+                            <img alt="Novel Cover"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAtIWlnCuIELBWKBYTWsucZ0jkYMJr3GCjcb9EPLOPgyaXhmWg9lCsmiyZkEMP2-tIgps3Nh_OFMCi-qSNAD5jEFdUDotQd86kDITQGMH4fbkSG2UERNw-n9gAGpWnYzL_u5vTKH1a05Su2dpn7W-RH1AfkLt8avlEVMEZB6ZN2OX4ptLPLw-0AZCSEgHPWQqQE-5WsBjlD4WenlPSHaYu-hNsYGwhYcxzNpPLRquHT8iD4LWGRoeeoVjQGBMrX7ZJCnhn1KrWubadr" />
+                        </div>
+                        <div class="flex-1 flex flex-col py-1">
+                            <div class="flex justify-between items-start mb-1">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span
+                                            class="px-2 py-0.5 bg-indigo-500/20 text-indigo-400 text-[10px] font-bold rounded uppercase tracking-wider">Reading</span>
+                                        <span
+                                            class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded uppercase tracking-wider">+12
+                                            Chapters</span>
+                                    </div>
+                                    <h3
+                                        class="text-lg font-bold text-white group-hover:text-indigo-400 transition-colors line-clamp-1">
+                                        The Beginning After The End</h3>
+                                    <p class="text-xs text-slate-500">By TurtleMe • Updated 12 hours ago</p>
+                                </div>
+                                <button class="text-slate-500 hover:text-amber-400 transition-colors">
+                                    <span class="material-symbols-outlined fill-1 text-amber-400">star</span>
+                                </button>
+                            </div>
+                            <div class="mt-auto">
+                                <div class="flex items-center justify-between mb-2 text-xs">
+                                    <span class="text-slate-400 font-medium">Chapter 452 / 464</span>
+                                    <span class="text-emerald-400 font-bold">97%</span>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar-fill" style="width: 97%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex flex-col justify-center gap-3 shrink-0 px-4 border-l border-white/5">
+                            <a class="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 whitespace-nowrap"
+                                href="#">
+                                Continue <span class="material-symbols-outlined text-[18px]">play_arrow</span>
+                            </a>
+                            <div class="flex justify-center gap-4">
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">edit</span></button>
+                                <button class="text-slate-500 hover:text-white transition-colors"><span
+                                        class="material-symbols-outlined text-[20px]">more_vert</span></button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center justify-center py-8">
+                    <nav class="flex items-center gap-1 glass-card p-1">
+                        <button
+                            class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors rounded-lg"><span
+                                class="material-symbols-outlined">chevron_left</span></button>
+                        <button
+                            class="w-10 h-10 flex items-center justify-center bg-indigo-600 text-white rounded-lg font-bold text-sm">1</button>
+                        <button
+                            class="w-10 h-10 flex items-center justify-center text-slate-400 hover:bg-white/5 rounded-lg text-sm transition-colors">2</button>
+                        <button
+                            class="w-10 h-10 flex items-center justify-center text-slate-400 hover:bg-white/5 rounded-lg text-sm transition-colors">3</button>
+                        <span class="w-10 h-10 flex items-center justify-center text-slate-600">...</span>
+                        <button
+                            class="w-10 h-10 flex items-center justify-center text-slate-400 hover:bg-white/5 rounded-lg text-sm transition-colors">12</button>
+                        <button
+                            class="w-10 h-10 flex items-center justify-center text-slate-500 hover:text-white transition-colors rounded-lg"><span
+                                class="material-symbols-outlined">chevron_right</span></button>
+                    </nav>
+                </div>
+            </section>
+        </div>
+    </main>
+    <footer class="max-w-7xl mx-auto px-6 py-12 border-t border-white/5">
+        <div class="flex flex-col md:flex-row justify-between items-center gap-8">
+            <div class="flex items-center gap-2 opacity-50">
+                <span class="material-symbols-outlined text-indigo-500">auto_stories</span>
+                <span class="text-sm font-semibold tracking-tight">ReadSync Dashboard</span>
+            </div>
+            <p class="text-xs text-slate-600">© 2024 ReadSync Tracking System. Powered by NovelBin.</p>
+            <div class="flex gap-6">
+                <a class="text-slate-500 hover:text-slate-300 text-xs transition-colors" href="#">Settings</a>
+                <a class="text-slate-500 hover:text-slate-300 text-xs transition-colors" href="#">API Docs</a>
+                <a class="text-slate-500 hover:text-slate-300 text-xs transition-colors" href="#">Support</a>
+            </div>
+        </div>
+    </footer>
+
+</body>
+
+</html>

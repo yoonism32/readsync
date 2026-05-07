@@ -2,5 +2,6 @@ services:
   - type: web
     name: readsync
     env: node
-    buildCommand: npm install
-    startCommand: node server.js
+    buildCommand: npm install && npm run build:all
+    startCommand: node dist/server.js
+    healthCheckPath: /health

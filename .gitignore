@@ -8,6 +8,9 @@ yarn-error.log*
 .env
 .env.local
 .env.production
+.env.development
+.env.test
+.env.*.local
 
 # OS Files
 .DS_Store
@@ -21,7 +24,6 @@ Thumbs.db
 *~
 #   Other
 *.csv
-package-lock.json
 
 # Logs
 logs/
@@ -30,6 +32,9 @@ logs/
 # Build files
 dist/
 build/
+dist-bot/
+dist-userscript/
+public/app/
 
 # Temporary files
 tmp/

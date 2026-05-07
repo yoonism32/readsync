@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Pro MyList - ReadSync</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20,400,0,0&amp;display=swap"
+        rel="stylesheet" />
+    <style type="text/tailwindcss">
+        @layer base {
+            body {
+                @apply bg-[#020617] text-slate-200 font-['Inter'] antialiased;
+            }
+        }
+        :root {
+            --brand-primary: #6366f1;
+            --brand-accent: #a855f7;
+            --bg-deep: #020617;
+            --bg-surface: #0f172a;
+            --border-dim: #1e293b;
+            --border-bright: #334155;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            @apply bg-transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            @apply bg-slate-700 rounded-full hover:bg-slate-600;
+        }
+        .data-row {
+            @apply transition-colors duration-150 border-b border-[var(--border-dim)] hover:bg-[#1e293b]/50;
+        }
+        .cover-preview-trigger:hover .cover-large-preview {
+            @apply opacity-100 scale-100;
+        }
+        .pill-status {
+            @apply px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border;
+        }
+        .status-reading { @apply bg-blue-500/10 text-blue-400 border-blue-500/30; }
+        .status-completed { @apply bg-emerald-500/10 text-emerald-400 border-emerald-500/30; }
+        .status-on-hold { @apply bg-amber-500/10 text-amber-400 border-amber-500/30; }
+        .status-dropped { @apply bg-rose-500/10 text-rose-400 border-rose-500/30; }
+        .progress-ring {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 65;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+    <header
+        class="h-14 border-b border-[var(--border-dim)] bg-[var(--bg-deep)]/80 backdrop-blur-md sticky top-0 z-50 px-6 flex items-center justify-between">
+        <div class="flex items-center gap-6">
+            <div class="flex items-center gap-2">
+                <span class="material-symbols-outlined text-[var(--brand-primary)] text-2xl">sync_saved_locally</span>
+                <h1
+                    class="text-lg font-bold tracking-tight bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
+                    ReadSync <span class="text-slate-500 font-medium">Pro</span></h1>
+            </div>
+            <nav class="hidden md:flex items-center gap-4 text-sm font-medium text-slate-400">
+                <a class="text-white hover:text-indigo-400 transition-colors" href="#">MyList</a>
+                <a class="hover:text-white transition-colors" href="#">Discovery</a>
+                <a class="hover:text-white transition-colors" href="#">Stats</a>
+            </nav>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="relative hidden sm:block">
+                <span
+                    class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm">search</span>
+                <input
+                    class="bg-slate-900/50 border border-[var(--border-dim)] rounded-md pl-9 pr-4 py-1.5 text-xs w-64 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+                    placeholder="Global search..." type="text" />
+            </div>
+            <button class="p-2 hover:bg-slate-800 rounded-full transition-colors relative">
+                <span class="material-symbols-outlined text-slate-400">notifications</span>
+                <span
+                    class="absolute top-2 right-2 w-2 h-2 bg-indigo-500 rounded-full border-2 border-[var(--bg-deep)]"></span>
+            </button>
+            <div
+                class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-xs font-bold border border-white/10 cursor-pointer">
+                JD
+            </div>
+        </div>
+    </header>
+    <main class="flex-1 flex flex-col h-[calc(100vh-3.5rem)]">
+        <div
+            class="flex flex-col md:flex-row items-stretch md:items-center justify-between px-6 py-4 gap-4 bg-[var(--bg-deep)]">
+            <div class="flex items-center gap-2 overflow-x-auto pb-2 md:pb-0 custom-scrollbar">
+                <div class="flex items-center bg-slate-900 border border-[var(--border-dim)] rounded-lg p-1">
+                    <button
+                        class="px-3 py-1 text-xs font-semibold bg-indigo-600 text-white rounded-md shadow-sm">All</button>
+                    <button
+                        class="px-3 py-1 text-xs font-medium text-slate-400 hover:text-white rounded-md">Reading</button>
+                    <button
+                        class="px-3 py-1 text-xs font-medium text-slate-400 hover:text-white rounded-md">Hold</button>
+                    <button
+                        class="px-3 py-1 text-xs font-medium text-slate-400 hover:text-white rounded-md">Completed</button>
+                </div>
+                <div class="h-6 w-[1px] bg-slate-800 mx-2"></div>
+                <div class="flex items-center gap-2">
+                    <button
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 border border-[var(--border-dim)] hover:border-slate-700 rounded-md text-slate-300">
+                        <span class="material-symbols-outlined text-sm">filter_list</span> Filter
+                    </button>
+                    <button
+                        class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-slate-900 border border-[var(--border-dim)] hover:border-slate-700 rounded-md text-slate-300">
+                        <span class="material-symbols-outlined text-sm">sort</span> Sort
+                    </button>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 pl-4 border-l border-slate-800">
+                    <div class="flex flex-col items-end">
+                        <span class="text-[10px] text-slate-500 font-bold uppercase leading-none">Smart Sync</span>
+                        <span class="text-[11px] text-indigo-400 font-medium leading-tight">64 novels ready</span>
+                    </div>
+                    <div class="relative w-10 h-10 flex items-center justify-center group cursor-pointer">
+                        <svg class="w-full h-full -rotate-90">
+                            <circle class="text-slate-800" cx="20" cy="20" fill="transparent" r="18"
+                                stroke="currentColor" stroke-width="2"></circle>
+                            <circle class="text-indigo-500 progress-ring" cx="20" cy="20" fill="transparent" r="18"
+                                stroke="currentColor" stroke-linecap="round" stroke-width="2"></circle>
+                        </svg>
+                        <span
+                            class="material-symbols-outlined absolute text-lg text-indigo-400 group-hover:rotate-180 transition-transform duration-500">autorenew</span>
+                    </div>
+                </div>
+                <button
+                    class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-lg text-xs font-semibold shadow-lg shadow-indigo-500/10 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-sm">add</span> New Novel
+                </button>
+            </div>
+        </div>
+        <div class="flex-1 overflow-auto custom-scrollbar px-6">
+            <div
+                class="min-w-[1000px] bg-slate-900/30 border border-[var(--border-dim)] rounded-xl overflow-hidden shadow-2xl">
+                <table class="w-full text-left border-collapse">
+                    <thead class="sticky top-0 bg-[#0f172a] border-b border-[var(--border-strong)] z-10">
+                        <tr class="text-[11px] font-bold text-slate-500 uppercase tracking-[0.1em]">
+                            <th class="pl-5 py-3 w-12 text-center">
+                                <input class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                    type="checkbox" />
+                            </th>
+                            <th class="px-4 py-3 w-14">Cover</th>
+                            <th class="px-4 py-3 min-w-[300px]">Novel Title</th>
+                            <th class="px-4 py-3 w-40">Reading Progress</th>
+                            <th class="px-4 py-3 w-32">Status</th>
+                            <th class="px-4 py-3 w-32">Last Read</th>
+                            <th class="px-4 py-3 w-32">Updated</th>
+                            <th class="px-4 py-3 w-10 text-right pr-6"></th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <tr class="data-row">
+                            <td class="pl-5 py-3 text-center">
+                                <input class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                    type="checkbox" />
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="relative cover-preview-trigger">
+                                    <div
+                                        class="w-10 h-14 bg-slate-800 rounded-md overflow-hidden border border-slate-700 shadow-sm">
+                                        <img alt="Cover" class="w-full h-full object-cover"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBu_AC6m4CCnh-FhdtmRgeuORcpeRt9LJKVlESZiIaI1CoCdfcUjusvJD1uPOswSGOn0yLwNhjzPMoh-dlBov6yhGwgCr-4EVh28-s1t8Z_cJRAp4opnfYosuwLtAcgb-eVkiYLUEohqdrWaEGMYddoyBkyOafI8hZpHpq3rCyXoAN3P64aF6Ndhx7O08uby6v3TVd9Xaxcoo_3URF9iAncdUwXc9bcV17NrXJZGacOyq3LAxlF6ga3CZsJfUzaK1y6F1pL8OvSy77o" />
+                                    </div>
+                                    <div
+                                        class="cover-large-preview opacity-0 scale-95 pointer-events-none absolute left-12 top-0 z-50 w-48 h-64 bg-slate-900 rounded-xl border border-slate-700 shadow-2xl transition-all duration-200 p-1">
+                                        <img alt="Cover Large" class="w-full h-full object-cover rounded-lg"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuB0RpUvTEKpP5m6Us5G8GSiQOborpk4wF3VPlevm47BWFiAf6iUBzi6Q96FHbyUHOtixyY38XKp7KMpk4HBNzdPRAddEajVR0RjeCZWBo6PsZ8BH-VpCNYPnlj4_X-_n7TSDhEroye6sxTB7APQ3NtO67r0qiZkqsOofOvGxAaki97j-H6xJpkGg804QiIaw50r2f3bWHd1VYvG0sI2YmUFzYXEDHmZoXV_Q-EX8erP9iOXP4sIwignQ29BpUMkUFz_Nnp-ci-2yZZI" />
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-2">
+                                        <a class="font-bold text-slate-100 hover:text-indigo-400 truncate" href="#">The
+                                            Primal Hunter</a>
+                                        <span class="material-symbols-outlined text-amber-400 text-sm">star</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                        <span class="flex items-center gap-1"><span
+                                                class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online</span>
+                                        <span class="text-slate-700">•</span>
+                                        <span>Webnovel</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <span class="font-semibold text-indigo-300">Ch. 842 <span
+                                                class="text-slate-500">/ 950</span></span>
+                                        <span class="text-slate-500">88%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-indigo-500 h-full w-[88%]"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <button class="pill-status status-reading">Reading</button>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-slate-400">2h ago</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-indigo-400 font-medium">15m ago</span>
+                            </td>
+                            <td class="px-4 py-3 text-right pr-6">
+                                <button class="text-slate-500 hover:text-white transition-colors">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="pl-5 py-3 text-center">
+                                <input class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                    type="checkbox" />
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="relative cover-preview-trigger">
+                                    <div
+                                        class="w-10 h-14 bg-slate-800 rounded-md overflow-hidden border border-slate-700 shadow-sm">
+                                        <img alt="Cover" class="w-full h-full object-cover"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuCKjK_OaocrelfMArqSjny3fhAqVQkLItU1f2RP7biPFcVJikeq81ERLWzJ99Jx8f2LcZVXKyVl8tEdjZmPWE1zKFkP0ksRw19Cj0I3dEMFh7N7F3DbEOXAboSupEEZFhdzbLuVmOv73wWiNfBbj7b8HGVs2d6reDfNg_cW9TTdS253cQkQmDC4gf9EwnQ4xY1NmyT9N5f3npS5wXSyW7SEBFWF1nqkafvo3wStN8PW6Gw7Hwg480BGxdptpjamilY6G6qjSIErtHrv" />
+                                    </div>
+                                    <div
+                                        class="cover-large-preview opacity-0 scale-95 pointer-events-none absolute left-12 top-0 z-50 w-48 h-64 bg-slate-900 rounded-xl border border-slate-700 shadow-2xl transition-all duration-200 p-1">
+                                        <img alt="Cover Large" class="w-full h-full object-cover rounded-lg"
+                                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuDUo2jAZ9jyrJahIdWdnxE81knaGk8j8Uii5bzqbgAiUbfdndcTnNcjSHz5rWgEUCp4n-2khbrT7YXmR1bCUY-M9G3GOOpPfD7ytoPPgTZIn_ctKp0c7sN0AzTkfpuVMW0Zv6WayIipX7HeoFQlTJKCWgfQSWi3rJ2dvDeVu95_lPFEK9a-lcAfd5xyt08osGzj75-wK0caRPmw3zUjZHJUrWphvR3BgMslqBf8_mCPvcU3vFgf7nWGndXFnzX4_P4DJsuW9Jkz4VzA" />
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-2">
+                                        <a class="font-bold text-slate-100 hover:text-indigo-400 truncate"
+                                            href="#">Shadow Slave</a>
+                                        <span
+                                            class="bg-indigo-500/10 text-indigo-400 text-[9px] px-1 rounded border border-indigo-500/20">HOT</span>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                        <span class="flex items-center gap-1"><span
+                                                class="w-1.5 h-1.5 rounded-full bg-slate-600"></span> Hiatus</span>
+                                        <span class="text-slate-700">•</span>
+                                        <span>RoyalRoad</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <span class="font-semibold text-emerald-300">Ch. 1420 <span
+                                                class="text-slate-500">/ 1420</span></span>
+                                        <span
+                                            class="text-emerald-400 font-bold uppercase tracking-tighter text-[9px]">Caught
+                                            Up</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-emerald-500 h-full w-[100%]"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <button class="pill-status status-completed">Completed</button>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-slate-400">4d ago</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-slate-500">2w ago</span>
+                            </td>
+                            <td class="px-4 py-3 text-right pr-6">
+                                <button class="text-slate-500 hover:text-white transition-colors">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </td>
+                        </tr>
+                        <tr class="data-row">
+                            <td class="pl-5 py-3 text-center">
+                                <input class="rounded bg-slate-900 border-slate-700 text-indigo-600 focus:ring-0"
+                                    type="checkbox" />
+                            </td>
+                            <td class="px-4 py-3">
+                                <div
+                                    class="w-10 h-14 bg-slate-800 rounded-md overflow-hidden border border-slate-700 shadow-sm flex items-center justify-center">
+                                    <span class="material-symbols-outlined text-slate-600">auto_stories</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col">
+                                    <div class="flex items-center gap-2">
+                                        <a class="font-bold text-slate-100 hover:text-indigo-400 truncate" href="#">He
+                                            Who Fights With Monsters</a>
+                                    </div>
+                                    <div class="flex items-center gap-2 text-[11px] text-slate-500 mt-0.5">
+                                        <span class="flex items-center gap-1"><span
+                                                class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Online</span>
+                                        <span class="text-slate-700">•</span>
+                                        <span>LightNovelWorld</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex flex-col gap-1.5">
+                                    <div class="flex items-center justify-between text-[11px]">
+                                        <span class="font-semibold text-rose-300">Ch. 210 <span class="text-slate-500">/
+                                                850</span></span>
+                                        <span class="text-slate-500">24%</span>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div class="bg-rose-500 h-full w-[24%] shadow-[0_0_8px_rgba(239,68,68,0.4)]">
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <button class="pill-status status-on-hold">On Hold</button>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-slate-400">1mo ago</span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs text-indigo-400 font-medium">12h ago</span>
+                            </td>
+                            <td class="px-4 py-3 text-right pr-6">
+                                <button class="text-slate-500 hover:text-white transition-colors">
+                                    <span class="material-symbols-outlined">more_vert</span>
+                                </button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <footer
+            class="h-10 border-t border-[var(--border-dim)] bg-[var(--bg-deep)] px-6 flex items-center justify-between text-[10px] text-slate-500 font-medium">
+            <div class="flex items-center gap-4">
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-indigo-500"></span> 128 Active
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span> 42 Completed
+                </span>
+                <span class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span> 12 On Hold
+                </span>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <span>Rows per page:</span>
+                    <select
+                        class="bg-transparent border-none p-0 text-[10px] text-indigo-400 font-bold focus:ring-0 cursor-pointer">
+                        <option>25</option>
+                        <option selected="">50</option>
+                        <option>100</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-4">
+                    <span>1 - 50 of 182</span>
+                    <div class="flex items-center gap-2">
+                        <button class="material-symbols-outlined text-sm hover:text-white">chevron_left</button>
+                        <button class="material-symbols-outlined text-sm hover:text-white">chevron_right</button>
+                    </div>
+                </div>
+            </div>
+        </footer>
+    </main>
+    <div
+        class="fixed bottom-14 right-8 bg-slate-900/90 backdrop-blur-md border border-[var(--border-dim)] rounded-full px-4 py-2 flex items-center gap-3 shadow-2xl z-[100] text-[11px] text-slate-400 pointer-events-none">
+        <div class="flex items-center gap-1">
+            <span class="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800 font-mono text-slate-300">R</span>
+            <span>Refresh</span>
+        </div>
+        <div class="h-3 w-[1px] bg-slate-700"></div>
+        <div class="flex items-center gap-1">
+            <span class="px-1.5 py-0.5 rounded border border-slate-700 bg-slate-800 font-mono text-slate-300">S</span>
+            <span>Search</span>
+        </div>
+    </div>
+
+</body>
+
+</html>

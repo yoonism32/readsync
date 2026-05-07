@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>My Library - ReadSync</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <style type="text/tailwindcss">
+        :root {
+            --primary: #6366f1;
+            --accent: #a855f7;
+            --bg-deep: #020617;
+            --card-overlay: rgba(15, 23, 42, 0.7);
+        }
+        body {
+            background-color: var(--bg-deep);
+            color: #e5e7eb;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        .glass-nav {
+            background: rgba(2, 6, 23, 0.8);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .novel-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 24px;
+        }
+        .novel-card {
+            position: relative;
+            aspect-ratio: 2/3;
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: #1e293b;
+        }
+        .novel-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+        }
+        .novel-card:hover .quick-play-overlay {
+            opacity: 1;
+        }
+        .quick-play-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        .progress-bar-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(to right, var(--primary), var(--accent));
+        }
+        .unread-indicator {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--primary);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.5);
+        }
+        .sync-fab {
+            position: fixed;
+            bottom: 32px;
+            right: 32px;
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+            cursor: pointer;
+            z-index: 50;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: var(--bg-deep);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body class="custom-scrollbar">
+    <nav class="glass-nav fixed top-0 w-full z-40 px-6 py-4 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <span class="material-symbols-outlined text-[var(--primary)] text-3xl">auto_stories</span>
+            <h1
+                class="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">
+                ReadSync
+            </h1>
+        </div>
+        <div class="flex items-center gap-6">
+            <div class="relative group">
+                <span
+                    class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg group-focus-within:text-[var(--primary)]">search</span>
+                <input
+                    class="bg-slate-900/50 border-slate-800 rounded-full pl-10 pr-4 py-1.5 text-sm w-64 focus:ring-1 focus:ring-[var(--primary)] focus:border-[var(--primary)] transition-all outline-none text-slate-200"
+                    placeholder="Search library..." type="text" />
+            </div>
+            <div class="flex items-center gap-2 text-slate-400">
+                <span class="material-symbols-outlined text-xl">sync</span>
+                <span class="text-xs font-medium uppercase tracking-widest">Synced 2m ago</span>
+            </div>
+            <div class="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
+                <img alt="User"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDRN9siuI4o5Qmc7gXCReo8VkLFlFfFJBXiGcfjPXl2D6hoCfZv-OiacQbwHcru5niojJaWj-VsUXrmrXIBrJsQcNPLcZeGjFlNRaXptnIyVgqEx1awGcwS-a944ieAv84AtZsc4GlQ8KfuXsggbumcHII-8q6rfM7CcxAuU7GjX3or56WELFSZYNQ6FuZkNoevrJ49ugPBWx9XhM-3sXfzTms4ZUbG_uQTaT5osORUwBnFM8Hu-HR3bvABliEEpBSFS6SqURCTMXo8" />
+            </div>
+        </div>
+    </nav>
+    <main class="pt-28 pb-32 px-8 max-w-[1600px] mx-auto">
+        <header class="mb-10 flex items-end justify-between">
+            <div>
+                <h2 class="text-3xl font-bold text-white mb-2">My Library</h2>
+                <div class="flex items-center gap-4 text-slate-400 text-sm">
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-indigo-500"></span> 24
+                        Reading</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-emerald-500"></span> 128
+                        Completed</span>
+                    <span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-amber-500"></span> 5 On
+                        Hold</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-900/50 p-1 rounded-lg border border-slate-800">
+                <button
+                    class="px-3 py-1.5 rounded-md bg-slate-800 text-white text-sm font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">grid_view</span>
+                </button>
+                <button
+                    class="px-3 py-1.5 rounded-md hover:bg-slate-800 text-slate-400 text-sm font-medium flex items-center gap-2">
+                    <span class="material-symbols-outlined text-lg">list</span>
+                </button>
+            </div>
+        </header>
+        <div class="novel-grid">
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuBVo4cyLveo4Hjm8xavqDl71OqI86WlYD0sX5HXgqG_QGuqddxsVxQpiRedbvSvoOoJ2Zk7LpmbLs3EfLCLGFmKl5xeEUfCeaXpqMv5cPhsPqwVRg6LS1vapqiqqCDlKh6mj_NKbez9lZqVRdMJIIvwd4F9H2bwSdWPRQu21fNMQfH6LD3qDenF2vBwL0akkBJqxydFdRPuDAHaUQLT_eZLtJQzyUjhBcT403U2MTP8Ux9Xxt2t-nbSRO8OoFNYx2SYWyLxQ7DPAms2" />
+                <div class="unread-indicator">+12</div>
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Shadow Slave</h3>
+                    <p class="text-xs text-slate-300">Ch. 1432</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[85%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuB3s8XdOrMeHfI76MTLpOlYk9lLvOc9GETPcc6xgHwZDwWYzOaAybUPngJasa2ST6SuM4x75eum6LUH1EK-nKbsliWADeDTKYX4tJHjGapLTlU_wBbsffNslUn2ypQ1E7J7gDGt8GuMwhsgSM9HuDlNlAXMqQPJzhMTNtQ0SHecix8sCUoPvNIy4P35ln1QQSfVEyu9GK2PyEIOvk8ZnVuq5JBHMKF23mEmTr6FcGN9RxyEH7TDg8w9KtbTq4oCbEJe7f8RYtbGoPD-" />
+                <div class="unread-indicator">+3</div>
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Cradle: Waybound</h3>
+                    <p class="text-xs text-slate-300">Ch. 88</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[92%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDdh5-3hjoCs1MRimA6aRm1971WnLghuMJE_DgH5GQzRUYWuCwg0TPl9gTyeAVKKhzvQOwUXiAy6MR5PNfKVeZlCHHelAsTmw5osQ-T7RPAxnjBS2A_VGKhNWuDH51aTm_dw2W2S-OkKPZVIt3xl2jGpy3UnkL-a6xIo172VTt66lbnlwpPPflI3elwVdP6jU8g6hmUIyqdTlnTBwzCSVe44gL0fR8Q6vglUfS2oPg7Xr1BUUcA8CT1tLHr4I5rzaOO5V-E3k5SlvaR" />
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Lord of the Mysteries</h3>
+                    <p class="text-xs text-slate-300">Caught Up</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-full"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHQIMNAF07qQAAiNU-JunDf9FASDuEvmoMmwDhir0BThX8s_I0Zdol1ELv2h40stJloUCInIcqtAlAYl8x6AYHbbwQYO25QXPK3PAC0lx6DaTVmDREJbKf_7AIKIymxJa6SZDQAeMV36n3TAZ5PTdLBvnMQ02rleSQYOsq6OgMMj0conilUWrKAvKddCuglHhrNT4pB3Pe5itOi_9XjTPUPyddWFYeNTuedt6sOZoKJPoghX5-Dij4GT4mAEcezrOsTc9Raso8N-RF" />
+                <div class="unread-indicator">+28</div>
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">The Beginning After The End</h3>
+                    <p class="text-xs text-slate-300">Ch. 410</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[60%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7zeueetYD28401A7Ba6YBAaGEwgqD_D0dYase-lpVowSU5K5bZ8SuLrUhIphcTqSmMbojJxIZTk_ciWFK1D5ZWKiyAtCAfxqPObNGuTsUw1gdLd1m3kvRSoHSUpV5I2GkG010ycaey8iGP2dIEZVIjnmZTceR4S3W1oVoVJIquwLeEfCed1K2nOy_hf952OSL8p7OKzohklV9tN_pwzg976Z7THqL9DrzLceQIxb0XgFuVA4NLH8g04bgg_S3-gZm5G004aUHc9K8" />
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Mother of Learning</h3>
+                    <p class="text-xs text-slate-300">Ch. 102</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[98%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuDlVbYoXkxdB3SrcuhhZJRXWIvpQ_elCkaBx_VF-XZp6xH5QzKv7K0z-ajK00X82St3ISUbcXhi2tH_HHx2VWMwQMeQKFBOvW8KiqrLuZ93aHmngmGefvHnhoCeFW_u0Hq1qkvpsKo0-jADv-8aqV_yAzxCNdMX8zh1M9cakozRu9q1nvdOVIyJfOuTXRKF_UUJ6M0h_ZbPO_PDML0G7ZRNxQ6en39Q-u9anxOcPG1WrXdoWcINM_mdZuc67PKLHp4rG-B-WasOh7nr" />
+                <div class="unread-indicator">+1</div>
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Circle of Inevitability</h3>
+                    <p class="text-xs text-slate-300">Ch. 542</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[45%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuC6p6DEpYkVnY4QmX97OOZIiXACbna1e5C6oiwtCzGxsmjTZWdEkTFTryQEM892lW7Y6dJsfTRGGGIAiVaINY7P1LJwCNqqlsZeuxPvbJgsfpqFj_wOn83BxXLZ8yWkkXL61Tq3UTRJRNBDdNQN1_DrfOmjIPu8cfFBLZgy_IIauAFHribWsGhFSqg3bUPO16Qod1w36PAxbVh_Q27GLmuXgUMYWAj1KW0aNy0EXc-BqZK_k3CjlywQoEFLjl7V9DvsWTiQNk-RBbuQ" />
+                <div class="unread-indicator">+5</div>
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">He Who Fights With Monsters</h3>
+                    <p class="text-xs text-slate-300">Ch. 820</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[72%]"></div>
+                </div>
+            </div>
+            <div class="novel-card group">
+                <img alt="Novel Cover" class="w-full h-full object-cover"
+                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCM0jB4hquXxkDSuClAWmKJ-zFMRdOmiXfowkr4fVcBms7KbQiNsntDueOh_57lyRPGRwTy59d0935xAHbHai2RXIZpwQ9jUVhM4twXkl7qdydhCk2kkftjTRa2n3FfDNuvKle0GpmwrTyFBewu2UPOzE3QFg6zAFETCp_R3XuMv7WHdxbg7Y0ab6fe6vpuLAgsACph_vMzj2ooQhIDCLVEpQs49RBQZktwM_6wTrh-ugxrnJ5fHH4jPMefRv_afb3OR3PtWFqlcpnn" />
+                <div class="quick-play-overlay">
+                    <button
+                        class="w-14 h-14 rounded-full bg-white text-black flex items-center justify-center shadow-2xl hover:scale-110 transition-transform">
+                        <span class="material-symbols-outlined text-3xl fill-1">play_arrow</span>
+                    </button>
+                </div>
+                <div class="absolute bottom-0 inset-x-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent">
+                    <h3 class="text-white font-semibold line-clamp-1">Dungeon Crawler Carl</h3>
+                    <p class="text-xs text-slate-300">Ch. 120</p>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill w-[88%]"></div>
+                </div>
+            </div>
+        </div>
+        <div class="mt-16 flex justify-center">
+            <nav class="flex items-center gap-1 bg-slate-900/50 p-1.5 rounded-xl border border-slate-800">
+                <button class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                </button>
+                <button
+                    class="w-10 h-10 flex items-center justify-center rounded-lg bg-[var(--primary)] text-white font-bold">1</button>
+                <button
+                    class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 font-medium">2</button>
+                <button
+                    class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 font-medium">3</button>
+                <span class="px-2 text-slate-600">...</span>
+                <button
+                    class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400 font-medium">12</button>
+                <button class="w-10 h-10 flex items-center justify-center rounded-lg hover:bg-slate-800 text-slate-400">
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </nav>
+        </div>
+    </main>
+    <div class="sync-fab hover:scale-110 transition-transform active:scale-95">
+        <span class="material-symbols-outlined text-white text-3xl">sync</span>
+    </div>
+
+</body>
+
+</html>

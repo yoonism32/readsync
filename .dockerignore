@@ -1,0 +1,17 @@
+node_modules
+frontend/node_modules
+userscript/node_modules
+bot/node_modules
+.git
+.env
+.env.*
+dist
+dist-bot
+dist-userscript
+coverage
+*.log
+.next
+.cache
+docker-compose*.yml
+Dockerfile*
+README.md

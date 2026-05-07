@@ -11,6 +11,7 @@
 3. [Future Ideas (Jan 2026)](#future-ideas-jan-2026)
 4. [Productivity & Power User (Feb 2026)](#5-productivity--power-user-feb-2026)
 5. [Resources & References](#resources--references)
+6. [New Features](#new-features)
 
 ---
 
@@ -766,4 +767,19 @@ CREATE TABLE novel_categories (
 
 ---
 
-## Last updated: February 6, 2026
+## New Features
+
+google - <https://claude.ai/chat/057359ef-5bab-42aa-b04a-46a30f63de5f>
+
+00:50
+You want Google OAuth as a login method — so instead of (or alongside) your current admin password login, you can click "Login with Google", go through Google's consent screen, come back authenticated, and your session is set.
+
+The reason it's useful for you specifically is settings sync — once you're logged in via Google, your preferences (theme, UI, reading defaults) are tied to your Google account and stored in postgres. So if you open ReadSync on a different device or browser, you login with Google and your settings load automatically.
+
+That's it. Two things:
+
+Google as the login button — replaces typing a password, just click and authenticate with Google
+Settings persist per Google account — stored in your users table, loaded on every login
+Since it's just you, there's no signup flow, no user creation — Google login just links to your existing demo-user row and stamps it with your Google profile info (email, avatar) so the app knows it's you.
+
+## Last updated: April 1, 2026
