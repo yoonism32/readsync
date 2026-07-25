@@ -179,9 +179,11 @@ router.get('/api/v1/admin/bot/progress', validateApiKey, async (_req, res) => {
   }
 });
 
-// Auto-update endpoint called by Tampermonkey userscript
-router.post('/api/v1/admin/novels/auto-update', async (req, res) => {
-  const { user_key } = req.query as { user_key?: string };
+// Auto-update endpoint called by Tampermonkey userscript.
+// Auth via validateApiKey (per-user key in the users table), same as the
+// progress/compare routes the userscript already uses — not the unrelated
+// API_KEY env var, which isn't set in production.
+router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res) => {
   const {
     novel_id,
     chapter_num,
@@ -190,10 +192,6 @@ router.post('/api/v1/admin/novels/auto-update', async (req, res) => {
     author,
     update_time_raw,
   } = req.body as Record<string, unknown>;
-
-  if (user_key !== process.env.API_KEY) {
-    return res.status(HTTP_UNAUTHORIZED).json({ error: 'Invalid API key' });
-  }
 
   if (!novel_id || !chapter_num) {
     return res.status(HTTP_BAD_REQUEST).json({
@@ -215,7 +213,12 @@ router.post('/api/v1/admin/novels/auto-update', async (req, res) => {
     }
 
     const currentChapter = checkResult.rows[0].latest_chapter_num;
-    const parsed = parseTimeAgo(update_time_raw as string);
+    // NovelBin sent "2 hours ago" strings; NovelArrow sends ISO timestamps
+    let parsed = parseTimeAgo(update_time_raw as string);
+    if (!parsed && update_time_raw) {
+      const isoDate = new Date(update_time_raw as string);
+      if (!isNaN(isoDate.getTime())) parsed = isoDate;
+    }
     const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 
     const result = await pool.query(
