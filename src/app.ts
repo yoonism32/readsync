@@ -37,6 +37,9 @@ export function createApp(): {
   io: SocketServer;
 } {
   const app = express();
+  // Behind Render's TLS-terminating proxy: required for secure session
+  // cookies to be set and for req.ip to reflect the real client address.
+  app.set('trust proxy', 1);
   const httpServer = createServer(app);
 
   const io = new SocketServer(httpServer, {
