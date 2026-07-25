@@ -7,7 +7,7 @@
     "start": "node dist/server.js",
     "start:legacy": "node server.js",
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/",
     "build:all": "tsc && npm run build --prefix frontend && npm run build --prefix userscript && tsc -p bot/tsconfig.json",
     "bot": "node dist-bot/index.js",
     "test": "vitest run",
