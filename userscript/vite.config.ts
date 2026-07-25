@@ -14,10 +14,14 @@ function injectUserscriptHeader(header: string): Plugin {
 }
 
 const USERSCRIPT_HEADER = `// ==UserScript==
-// @name         ReadSync ++ NovelBin Enhanced Navigation Helper
+// @name         ReadSync ++ NovelArrow Enhanced Navigation Helper
 // @namespace    CustomNamespace
-// @version      5.0.6
+// @version      5.1.0
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT + PARENT WINDOW COMMUNICATION
+// @match        https://novelarrow.com/novel/*
+// @match        https://www.novelarrow.com/novel/*
+// @match        https://novelarrow.com/chapter/*/*
+// @match        https://www.novelarrow.com/chapter/*/*
 // @match        https://novelbin.com/b/*/*chapter-*
 // @match        https://www.novelbin.com/b/*/*chapter-*
 // @match        https://novelbin.me/b/*/*chapter-*

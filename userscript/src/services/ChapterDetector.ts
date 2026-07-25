@@ -16,7 +16,10 @@ export function normalizeUrl(href: string): string {
 }
 
 export function normalizeNovelId(url: string): string | null {
-  const match = url.match(/\/b\/([^/]+)/);
+  // NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...
+  // Slugs are identical across both sites, so both normalize to the same
+  // legacy "novelbin:" ID to preserve existing reading history.
+  const match = url.match(/\/(?:b|novel|chapter)\/([^/]+)/);
   return match ? `novelbin:${match[1].toLowerCase()}` : null;
 }
 
@@ -79,6 +82,23 @@ let realChapterCount: number | null = null;
 
 export function extractLatestChapterInfo(): LatestChapterInfo {
   try {
+    // Strategy 0: og:novel:latest_chapter_name meta — server-rendered on
+    // NovelArrow novel pages (name= attr) and NovelBin (property= attr).
+    // Content looks like "Chapter 3118 Dying City".
+    const latestMeta = document.querySelector<HTMLMetaElement>(
+      'meta[name="og:novel:latest_chapter_name"], meta[property="og:novel:latest_chapter_name"]',
+    );
+    if (latestMeta) {
+      const content = latestMeta.getAttribute('content')?.trim() ?? '';
+      const num = extractChapterNum(content);
+      if (num) {
+        const titleMatch = content.match(/Chapter\s+\d+\s*[-:]?\s*(.+)/i);
+        const title = titleMatch ? titleMatch[1].trim() : (content || null);
+        log('Found latest chapter via og:novel meta', { num, title });
+        return { latestChapterNum: num, latestChapterTitle: title };
+      }
+    }
+
     const latestChapterElement = document.querySelector('.l-chapter');
     if (latestChapterElement) {
       const chapterLink = latestChapterElement.querySelector<HTMLAnchorElement>('.chapter-title');
@@ -100,8 +120,9 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
     }
 
     const pathParts = location.pathname.split('/');
-    const novelSlugIndex = pathParts.indexOf('b') + 1;
-    const novelSlug = pathParts[novelSlugIndex] ?? '';
+    // Slug follows the /b/ (NovelBin), /novel/ or /chapter/ (NovelArrow) segment
+    const sectionIndex = pathParts.findIndex(p => p === 'b' || p === 'novel' || p === 'chapter');
+    const novelSlug = sectionIndex >= 0 ? (pathParts[sectionIndex + 1] ?? '') : '';
 
     let maxChapter = 0;
     let maxChapterTitle: string | null = null;
@@ -121,7 +142,7 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
 
     // Strategy 2: Links to same novel (catches number-prefix format)
     if (novelSlug) {
-      document.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"]`).forEach(link => {
+      document.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"], a[href*="/chapter/${novelSlug}/"]`).forEach(link => {
         const num = extractChapterFromUrl(link.href);
         if (num && num > maxChapter) {
           maxChapter = num;
@@ -149,13 +170,21 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
     if (maxChapter === 0 || maxChapter < 500) {
       log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
 
-      let novelMainUrl = location.href
-        .replace(/\/c*chapter-?\d+.*$/, '')
-        .replace(/\/\d+[-][^/]*$/, '');
+      let novelMainUrl = location.href;
 
-      if (novelMainUrl === location.href) {
-        const baseMatch = location.href.match(/(https?:\/\/[^/]+\/b\/[^/]+)\//);
-        if (baseMatch) novelMainUrl = baseMatch[1];
+      // NovelArrow: /chapter/<slug>/chapter-N-title → novel page is /novel/<slug>
+      const arrowMatch = location.href.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)\//);
+      if (arrowMatch) {
+        novelMainUrl = `${arrowMatch[1]}/novel/${arrowMatch[2]}`;
+      } else {
+        novelMainUrl = location.href
+          .replace(/\/c*chapter-?\d+.*$/, '')
+          .replace(/\/\d+[-][^/]*$/, '');
+
+        if (novelMainUrl === location.href) {
+          const baseMatch = location.href.match(/(https?:\/\/[^/]+\/(?:b|novel)\/[^/]+)\//);
+          if (baseMatch) novelMainUrl = baseMatch[1];
+        }
       }
 
       fetch(novelMainUrl)
@@ -164,6 +193,15 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
           const parser = new DOMParser();
           const mainPageDoc = parser.parseFromString(html, 'text/html');
           let mainPageMax = maxChapter;
+
+          // Meta tag is the most reliable source on the fetched novel page
+          const fetchedMeta = mainPageDoc.querySelector<HTMLMetaElement>(
+            'meta[name="og:novel:latest_chapter_name"], meta[property="og:novel:latest_chapter_name"]',
+          );
+          if (fetchedMeta) {
+            const metaNum = extractChapterNum(fetchedMeta.getAttribute('content') ?? '');
+            if (metaNum && metaNum > mainPageMax) mainPageMax = metaNum;
+          }
 
           mainPageDoc.querySelectorAll<HTMLAnchorElement>('a[href*="chapter"]').forEach(link => {
             const match = link.href.match(/chapter-?(\d+)/i);
@@ -174,7 +212,7 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
           });
 
           if (novelSlug) {
-            mainPageDoc.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"]`).forEach(link => {
+            mainPageDoc.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"], a[href*="/chapter/${novelSlug}/"]`).forEach(link => {
               const num = extractChapterFromUrl(link.href);
               if (num && num > mainPageMax) mainPageMax = num;
             });
@@ -301,7 +339,19 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   // Fallback to URL parsing
   log('Falling back to URL parsing for chapter detection');
 
-  // Strategy 1: Standard chapter format (chapter-31, cchapter31, etc.)
+  // Strategy 1a: NovelArrow format (/chapter/<slug>/chapter-N-title-slug)
+  const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(\d+)(?:-[^/]*)?\/?$/i);
+  if (arrowMatch) {
+    const res: ChapterInfo = {
+      token: 'chapter',
+      num: parseInt(arrowMatch[1], 10),
+      source: 'url-novelarrow',
+    };
+    log('Using chapter from URL (NovelArrow format):', res);
+    return res;
+  }
+
+  // Strategy 1b: NovelBin format (chapter-31, cchapter31, etc.)
   const standardMatch = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
   if (standardMatch) {
     const res: ChapterInfo = {
@@ -340,7 +390,12 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   return null;
 }
 
-/** Build next/prev path preserving token and slug */
+/**
+ * Build next/prev path preserving token and slug.
+ * NovelBin URLs only — NovelArrow chapter URLs require the title slug
+ * (/chapter/<slug>/chapter-N-<title> — numeric-only 404s), so callers must
+ * not use this for /chapter/ paths.
+ */
 export function buildChapterPath(pathname: string, _token: string, newNum: number): string {
   const hasHyphen = /chapter-\d+/i.test(pathname);
   const separator = hasHyphen ? '-' : '';
@@ -354,7 +409,7 @@ export function buildChapterPath(pathname: string, _token: string, newNum: numbe
 
 export function extractGenres(): string | null {
   try {
-    const metaGenre = document.querySelector<HTMLMetaElement>('meta[property="og:novel:genre"]');
+    const metaGenre = document.querySelector<HTMLMetaElement>('meta[property="og:novel:genre"], meta[name="og:novel:genre"]');
     if (metaGenre) return metaGenre.getAttribute('content');
 
     const genreElements = document.querySelectorAll('[class*="genre"], [class*="tag"], .categories');
@@ -375,7 +430,7 @@ export function extractGenres(): string | null {
 
 export function extractAuthor(): string | null {
   try {
-    const metaAuthor = document.querySelector<HTMLMetaElement>('meta[property="og:novel:author"]');
+    const metaAuthor = document.querySelector<HTMLMetaElement>('meta[property="og:novel:author"], meta[name="og:novel:author"]');
     if (metaAuthor) return metaAuthor.getAttribute('content');
 
     const authorSelectors = ['[class*="author"]', '.by-line', '[itemprop="author"]'];
@@ -396,6 +451,13 @@ export function extractAuthor(): string | null {
 
 export function extractUpdateTime(): string | null {
   try {
+    // NovelArrow serves an ISO timestamp in the og:novel:update_time meta
+    const metaTime = document.querySelector<HTMLMetaElement>(
+      'meta[name="og:novel:update_time"], meta[property="og:novel:update_time"]',
+    );
+    const metaContent = metaTime?.getAttribute('content')?.trim();
+    if (metaContent) return metaContent;
+
     const timeSelectors = ['.item-time', '[class*="update"]', '[class*="time"]', 'time'];
     for (const selector of timeSelectors) {
       const element = document.querySelector(selector);

@@ -526,7 +526,7 @@
 
                     <div class="actions">
                         ${global && hasUpdates ? `
-                        <a href="${novel.primary_url.replace(/\/c*chapter-?\d+.*$/, '')}/chapter-${latestChapter}" class="btn btn-primary" target="_blank">
+                        <a href="${novel.primary_url ? novel.primary_url.replace(/\/c*chapter-?\d+.*$/, '') : '#'}" class="btn btn-primary" target="_blank">
                             📚 Catch Up (${behind} new)
                         </a>
                     ` : ''}

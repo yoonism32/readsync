@@ -18,7 +18,7 @@ import {
   validateNovelId,
   validatePagination,
 } from '../middleware/validation.js';
-import { extractNovelTitle } from '../services/NovelService.js';
+import { deriveNovelMainUrl, extractNovelTitle } from '../services/NovelService.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -125,7 +125,7 @@ router.post(
           VALUES ($1, $2, $3)
           ON CONFLICT (id) DO NOTHING
         `,
-          [novel_id, extractNovelTitle(chapter_url as string), chapter_url],
+          [novel_id, extractNovelTitle(chapter_url as string), deriveNovelMainUrl(chapter_url as string)],
         );
 
         const insertResult = await client.query(

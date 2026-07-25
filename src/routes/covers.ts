@@ -30,7 +30,7 @@ async function fetchCoverWithRetry(
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://novelbin.com/',
+          Referer: 'https://novelarrow.com/',
         },
       });
 
@@ -89,7 +89,7 @@ router.get(
       }
 
       const slug = String(novelId).replace(/^novelbin:/, '');
-      const coverUrl = `https://images.novelbin.com/novel/${slug}.jpg`;
+      const coverUrl = `https://images.novelarrow.com/novel/${slug}.jpg`;
 
       logger.debug({ slug }, 'Fetching cover');
 

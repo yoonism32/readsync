@@ -13,15 +13,31 @@ import type {
   ProgressState,
 } from '../types/index.js';
 
+// NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...
+// Slugs are identical across both sites, so both normalize to the same legacy
+// "novelbin:" ID to preserve existing reading history.
+const NOVEL_SLUG_PATTERN = /\/(?:b|novel|chapter)\/([^/]+)/;
+
 export function normalizeNovelId(url: string): string | null {
-  const match = url.match(/\/b\/([^/]+)/);
+  const match = url.match(NOVEL_SLUG_PATTERN);
   return match ? `novelbin:${match[1].toLowerCase()}` : null;
 }
 
 export function extractNovelTitle(url: string): string {
-  const match = url.match(/\/b\/([^/]+)/);
+  const match = url.match(NOVEL_SLUG_PATTERN);
   if (!match) return 'Unknown Novel';
   return match[1].replace(/-/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase());
+}
+
+/**
+ * Derive the novel main-page URL from any novel/chapter URL on a supported site.
+ * NovelArrow: https://novelarrow.com/chapter/<slug>/chapter-N-title → https://novelarrow.com/novel/<slug>
+ * NovelBin:   https://novelbin.com/b/<slug>/chapter-N → https://novelbin.com/b/<slug>
+ */
+export function deriveNovelMainUrl(url: string): string {
+  const arrowChapter = url.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
+  if (arrowChapter) return `${arrowChapter[1]}/novel/${arrowChapter[2]}`;
+  return url.replace(/\/c*chapter-?\d+.*$/, '');
 }
 
 export function parseChapterFromUrl(url: string): ChapterInfo | null {

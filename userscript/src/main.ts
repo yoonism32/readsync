@@ -173,23 +173,41 @@ function navigate(direction: 'next' | 'previous'): void {
   let link: HTMLAnchorElement | HTMLButtonElement | null =
     document.querySelector(direction === 'next' ? '#next_chap' : '#prev_chap');
 
-  // Stage 2: rel="next"/"prev"
+  // Stage 2: NovelArrow — hydrated links to adjacent chapters of this novel.
+  // Chapter URLs are /chapter/<slug>/chapter-N-<title>, so find the anchor
+  // whose chapter number is exactly current±1 (numeric URL building 404s here).
+  if (!link) {
+    const arrowMatch = location.pathname.match(/^\/chapter\/([^/]+)\/chapter-?(\d+)/i);
+    if (arrowMatch) {
+      const slug = arrowMatch[1];
+      const currentNum = parseInt(arrowMatch[2], 10);
+      const targetNum = currentNum + (direction === 'next' ? 1 : -1);
+      link = [...document.querySelectorAll<HTMLAnchorElement>(`a[href*="/chapter/${slug}/"]`)]
+        .find(a => {
+          const m = a.href.match(/\/chapter-?(\d+)(?:-[^/]*)?\/?$/i);
+          return m !== null && parseInt(m[1], 10) === targetNum;
+        }) ?? null;
+    }
+  }
+
+  // Stage 3: rel="next"/"prev"
   if (!link) {
     link = document.querySelector(direction === 'next'
       ? 'a[rel="next"],link[rel="next"]'
       : 'a[rel="prev"],link[rel="prev"]');
   }
 
-  // Stage 3: Textual buttons
+  // Stage 4: Textual buttons (anchors with a real href first, then buttons)
   if (!link) {
     const rx = direction === 'next' ? /(next|›|»)/i : /(prev|previous|‹|«)/i;
-    link = [...document.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>('a,button')].find(el =>
-      rx.test((el.textContent ?? '').trim()),
-    ) ?? null;
+    const candidates = [...document.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>('a,button')]
+      .filter(el => rx.test((el.textContent ?? '').trim()));
+    link = candidates.find(el => Boolean((el as HTMLAnchorElement).href)) ?? candidates[0] ?? null;
   }
 
-  // Stage 4: Build numeric URL
-  if (!link) {
+  // Stage 5: Build numeric URL (NovelBin-shaped paths only — NovelArrow
+  // chapter URLs need the title slug, which we can't reconstruct)
+  if (!link && !location.pathname.startsWith('/chapter/')) {
     const info = parseChapterEnhanced(location.pathname);
     if (info) {
       const n = info.num + (direction === 'next' ? 1 : -1);
@@ -202,7 +220,7 @@ function navigate(direction: 'next' | 'previous'): void {
     }
   }
 
-  // Stage 5: Navigate using found link
+  // Stage 6: Navigate using found link
   const href = (link as HTMLAnchorElement | null)?.href;
   if (href) {
     console.log(`🧭 Using ${direction} link:`, href);
@@ -271,10 +289,7 @@ async function autoUpdateNovelInfo(): Promise<void> {
       }
     }
   } catch (error) {
-    const novelId = (() => {
-      const m = location.href.match(/\/b\/([^/]+)/);
-      return m ? `novelbin:${m[1].toLowerCase()}` : 'unknown';
-    })();
+    const novelId = normalizeNovelId(location.href) ?? 'unknown';
     console.warn(`[${LOG_TAG}] Auto-update error:`, error);
     if (isRefreshTab && window.opener && !(window.opener as Window & typeof globalThis).closed) {
       try {

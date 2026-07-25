@@ -18,6 +18,7 @@ import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { handleValidationErrors } from '../middleware/validation.js';
 import {
+  deriveNovelMainUrl,
   detectDeviceType,
   extractNovelTitle,
   getLatestStates,
@@ -57,10 +58,7 @@ export function createProgressRouter(io: SocketServer): Router {
 
       const novel_id = normalizeNovelId(novel_url as string);
       const novel_title = extractNovelTitle(novel_url as string);
-      const baseNovelUrl = (novel_url as string).replace(
-        /\/c*chapter-?\d+.*$/,
-        '',
-      );
+      const baseNovelUrl = deriveNovelMainUrl(novel_url as string);
 
       const chapterInfo = (req.body as Record<string, unknown>)
         .current_chapter_num

@@ -95,8 +95,13 @@ class NovelScraperClass {
 
     try {
       return await this.withBrowser(async (page) => {
-        // Extract base novel URL (remove chapter part)
-        const baseUrl = novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
+        // Extract base novel URL. NovelArrow chapter URLs are
+        // /chapter/<slug>/chapter-N-title → novel page is /novel/<slug>;
+        // NovelBin URLs just get the chapter suffix stripped.
+        const arrowChapter = novelUrl.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
+        const baseUrl = arrowChapter
+          ? `${arrowChapter[1]}/novel/${arrowChapter[2]}`
+          : novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
 
         // Set realistic viewport
         await page.setViewport({ width: 1920, height: 1080 });
@@ -134,7 +139,7 @@ class NovelScraperClass {
 
           const contentChecks = await page.evaluate(() => ({
             hasLChapter: !!document.querySelector('.l-chapter'),
-            hasMeta: !!document.querySelector('meta[property*="novel"]'),
+            hasMeta: !!document.querySelector('meta[property*="novel"], meta[name*="og:novel"]'),
             hasNovelTitle: !!document.querySelector('.novel-title, .book-title, h1'),
             bodySize: document.body.innerHTML.length,
             visibleText: document.body.textContent?.trim().substring(0, 100).replace(/\s+/g, ' ') ?? '',
