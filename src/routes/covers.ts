@@ -21,7 +21,6 @@ async function fetchCoverWithRetry(
   url: string,
   maxRetries = 3,
 ): Promise<Response> {
-  const fetch = (await import('node-fetch')).default;
   let lastError: Error = new Error('Unknown error');
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -35,8 +34,8 @@ async function fetchCoverWithRetry(
       });
 
       // Don't retry on definitive 404 — retrying won't help
-      if (response.status === 404) return response as unknown as Response;
-      if (response.ok) return response as unknown as Response;
+      if (response.status === 404) return response;
+      if (response.ok) return response;
 
       lastError = new Error(`HTTP ${response.status}`);
     } catch (err) {

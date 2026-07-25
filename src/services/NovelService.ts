@@ -40,6 +40,26 @@ export function deriveNovelMainUrl(url: string): string {
   return url.replace(/\/c*chapter-?\d+.*$/, '');
 }
 
+const DEAD_DOMAIN_PATTERN = /^https?:\/\/(www\.)?novelbin\.(com|me|net|org)\//i;
+
+/**
+ * Historic progress/bookmark URLs may point at dead novelbin domains.
+ * NovelArrow chapter URLs require a title slug we can't reconstruct from a
+ * chapter number, so the best stable target is the novel's NovelArrow page
+ * (derivable from the ID, since slugs are identical across both sites).
+ * Progress URLs self-heal to real deep links as chapters are read on the
+ * new site.
+ */
+export function healDeadSiteUrl(
+  url: string | null | undefined,
+  novelId: string,
+): string | null {
+  if (!url) return null;
+  if (!DEAD_DOMAIN_PATTERN.test(url)) return url;
+  const slug = novelId.replace(/^novelbin:/, '');
+  return `https://novelarrow.com/novel/${slug}`;
+}
+
 export function parseChapterFromUrl(url: string): ChapterInfo | null {
   const m = url.match(/\/(c*chapter)-(\d+)(?:-\d+)?/i);
   if (!m) return null;
@@ -130,7 +150,7 @@ export async function getLatestStates(
           percent: parseFloat(globalResult.rows[0].percent),
           device_id: globalResult.rows[0].device_id,
           device_label: globalResult.rows[0].device_label,
-          url: globalResult.rows[0].url,
+          url: healDeadSiteUrl(globalResult.rows[0].url, novelId),
           ts: globalResult.rows[0].created_at,
         }
       : null;
@@ -142,7 +162,7 @@ export async function getLatestStates(
       chapter_token: row.chapter_token,
       percent: parseFloat(row.percent),
       device_label: row.device_label,
-      url: row.url,
+      url: healDeadSiteUrl(row.url, novelId),
       ts: row.created_at,
     };
   }

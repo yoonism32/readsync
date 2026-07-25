@@ -8,6 +8,7 @@ import {
 import pool, { withTransaction } from '../db/pool.js';
 import { requireAuthAPI, validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
+import { healDeadSiteUrl } from '../services/NovelService.js';
 import {
   handleValidationErrors,
   validateNovelId,
@@ -98,8 +99,16 @@ router.get(
 
         const results = novelsResult.rows.map((novel) => {
           const latest_global = novel.latest_global_json ?? null;
+          if (latest_global) {
+            latest_global.url = healDeadSiteUrl(latest_global.url, novel.id);
+          }
           let latest_per_device: Record<string, unknown> =
             novel.latest_per_device_json ?? {};
+          for (const d of Object.values(
+            latest_per_device as Record<string, { url?: string | null }>,
+          )) {
+            d.url = healDeadSiteUrl(d.url, novel.id);
+          }
 
           if (latest_global && Object.keys(latest_per_device).length > 0) {
             const cleaned: Record<string, unknown> = {};

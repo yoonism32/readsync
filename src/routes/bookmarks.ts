@@ -18,7 +18,7 @@ import {
   validateNovelId,
   validatePagination,
 } from '../middleware/validation.js';
-import { deriveNovelMainUrl, extractNovelTitle } from '../services/NovelService.js';
+import { deriveNovelMainUrl, extractNovelTitle, healDeadSiteUrl } from '../services/NovelService.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -41,7 +41,12 @@ router.get(
         [user_id, req.params.novelId],
       );
 
-      res.json(result.rows);
+      res.json(
+        result.rows.map((row) => ({
+          ...row,
+          chapter_url: healDeadSiteUrl(row.chapter_url, String(req.params.novelId)),
+        })),
+      );
     } catch (error) {
       handleDbError(res, error, 'Get novel bookmarks');
     }
@@ -79,7 +84,10 @@ router.get(
       const result = await pool.query(query, params);
 
       res.json({
-        bookmarks: result.rows,
+        bookmarks: result.rows.map((row) => ({
+          ...row,
+          chapter_url: healDeadSiteUrl(row.chapter_url, row.novel_id),
+        })),
         pagination: { limit, offset, total: result.rows.length },
       });
     } catch (error) {

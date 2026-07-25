@@ -13,6 +13,7 @@ import { parseNovelInfoFromHTML } from '../../bot/src/parseNovelInfo.js';
 import {
   deriveNovelMainUrl,
   extractNovelTitle,
+  healDeadSiteUrl,
   normalizeNovelId,
   parseChapterFromUrl,
 } from '../../src/services/NovelService.js';
@@ -99,6 +100,26 @@ describe('parseChapterFromUrl — chapter number from both grammars', () => {
     ['https://novelarrow.com/chapter/shadow-slave/chapter-3118-dying-city', 3118],
   ])('%s -> chapter %i', (url, num) => {
     expect(parseChapterFromUrl(url)?.num).toBe(num);
+  });
+});
+
+describe('healDeadSiteUrl — dead novelbin URLs fall back to the novelarrow novel page', () => {
+  it.each([
+    ['https://novelbin.com/b/shadow-slave/chapter-100', 'https://novelarrow.com/novel/shadow-slave'],
+    ['https://www.novelbin.me/b/shadow-slave/chapter-5', 'https://novelarrow.com/novel/shadow-slave'],
+    ['https://novelbin.net/b/shadow-slave', 'https://novelarrow.com/novel/shadow-slave'],
+  ])('%s -> %s', (url, expected) => {
+    expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(expected);
+  });
+
+  it('leaves novelarrow URLs untouched (deep links preserved)', () => {
+    const url = 'https://novelarrow.com/chapter/shadow-slave/chapter-10-first-man-down';
+    expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(url);
+  });
+
+  it('passes through null/undefined as null', () => {
+    expect(healDeadSiteUrl(null, 'novelbin:x')).toBeNull();
+    expect(healDeadSiteUrl(undefined, 'novelbin:x')).toBeNull();
   });
 });
 
