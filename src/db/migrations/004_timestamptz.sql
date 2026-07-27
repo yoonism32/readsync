@@ -1,10 +1,12 @@
 -- All timestamp columns were created as TIMESTAMP (without time zone) by the
--- legacy schema; values are UTC wall-clock times written by NOW() on UTC
+-- legacy schema. Values are UTC wall-clock times written by NOW() on UTC
 -- servers. Timestamps serialized inside SQL (row_to_json/json_build_object in
 -- the novels list endpoint) therefore carried no offset marker, and browsers
 -- in non-UTC timezones parsed them as local time — e.g. "1h ago" shown for a
 -- 2-minute-old read in GMT+1. Converting to TIMESTAMPTZ (interpreting stored
 -- values as UTC) makes every serialization carry an explicit offset.
+-- NOTE: the migration runner splits on every semicolon, so comments must
+-- never contain one.
 
 ALTER TABLE bookmarks ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
 ALTER TABLE devices ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
