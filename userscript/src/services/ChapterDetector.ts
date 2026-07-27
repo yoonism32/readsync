@@ -449,6 +449,21 @@ export function extractAuthor(): string | null {
   }
 }
 
+export function extractCoverUrl(): string | null {
+  try {
+    // og:image on the novel page is the exact cover URL — the server can't
+    // reliably guess CDN paths (and its own fetches get bot-filtered).
+    const meta = document.querySelector<HTMLMetaElement>(
+      'meta[property="og:image"], meta[name="og:image"]',
+    );
+    const url = meta?.getAttribute('content')?.trim() ?? '';
+    return /^https:\/\/[^/]*\/.+/.test(url) ? url : null;
+  } catch (error) {
+    log('Error extracting cover URL:', error);
+    return null;
+  }
+}
+
 export function extractUpdateTime(): string | null {
   try {
     // NovelArrow serves an ISO timestamp in the og:novel:update_time meta

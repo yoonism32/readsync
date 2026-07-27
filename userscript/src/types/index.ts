@@ -49,6 +49,7 @@ export interface AutoUpdatePayload {
   genres: string | null;
   author: string | null;
   update_time_raw: string | null;
+  cover_url: string | null;
 }
 
 export interface NovelUpdateMessage {

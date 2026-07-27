@@ -190,7 +190,17 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
     genres,
     author,
     update_time_raw,
+    cover_url,
   } = req.body as Record<string, unknown>;
+
+  // og:image from the novel page. Only trust cover CDN hosts — the server
+  // can't fetch these itself (Cloudflare bot-filters datacenter IPs), so the
+  // URL is stored as-is for the browser to load directly.
+  const safeCoverUrl =
+    typeof cover_url === 'string' &&
+    /^https:\/\/images\.(novelarrow|novelbin)\.[a-z]+\//.test(cover_url)
+      ? cover_url
+      : null;
 
   if (!novel_id || !chapter_num) {
     return res.status(HTTP_BAD_REQUEST).json({
@@ -228,7 +238,11 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
           genre = COALESCE($4, genre),
           author = COALESCE($5, author),
           site_latest_chapter_time_raw = $6,
-          site_latest_chapter_time = $7
+          site_latest_chapter_time = $7,
+          cover_img = CASE
+            WHEN $8::text IS NOT NULL AND (cover_img IS NULL OR cover_img = 'failed')
+            THEN $8::text ELSE cover_img
+          END
       WHERE id = $1
       RETURNING *
     `,
@@ -240,6 +254,7 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
         author || null,
         update_time_raw || null,
         site_latest_chapter_time,
+        safeCoverUrl,
       ],
     );
 

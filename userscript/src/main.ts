@@ -5,7 +5,7 @@ import { generateDeviceId, getDeviceLabel } from './services/DeviceManager.js';
 import {
   normalizePath, normalizeNovelId,
   parseChapterEnhanced, buildChapterPath,
-  extractLatestChapterInfo, extractGenres, extractAuthor, extractUpdateTime,
+  extractLatestChapterInfo, extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl,
 } from './services/ChapterDetector.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup,
@@ -271,6 +271,7 @@ async function autoUpdateNovelInfo(): Promise<void> {
       genres: extractGenres(),
       author: extractAuthor(),
       update_time_raw: extractUpdateTime(),
+      cover_url: extractCoverUrl(),
     };
 
     log('📤 Sending novel info:', payload);
