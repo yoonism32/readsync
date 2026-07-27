@@ -366,9 +366,10 @@ document.onkeydown = (e: KeyboardEvent) => {
     return;
   }
 
-  switch (e.key) {
-    case 'a': case 'ArrowLeft': navigate('previous'); break;
-    case 'd': case 'ArrowRight': navigate('next'); break;
+  // e.key is uppercase while Shift is held, so match case-insensitively
+  switch (e.key.toLowerCase()) {
+    case 'a': case 'arrowleft': navigate('previous'); break;
+    case 'd': case 'arrowright': navigate('next'); break;
     case 'w': window.scrollBy(0, -STEP); break;
     case 's': if (e.shiftKey) toggleAuto(); else window.scrollBy(0, STEP); break;
     case 'h': if (e.shiftKey) toggleHelp(READSYNC_DEVICE_ID); break;
