@@ -190,14 +190,22 @@ function navigate(direction: 'next' | 'previous'): void {
     }
   }
 
-  // Stage 3: rel="next"/"prev"
+  // Stage 3: NovelArrow reader icon buttons — no href, no text, only aria-label/title
+  if (!link) {
+    link = document.querySelector(direction === 'next'
+      ? 'button[aria-label="Next chapter" i],button[title="Next chapter" i]'
+      : 'button[aria-label="Previous chapter" i],button[title="Previous chapter" i]');
+    if (link?.hasAttribute('disabled')) link = null;
+  }
+
+  // Stage 4: rel="next"/"prev"
   if (!link) {
     link = document.querySelector(direction === 'next'
       ? 'a[rel="next"],link[rel="next"]'
       : 'a[rel="prev"],link[rel="prev"]');
   }
 
-  // Stage 4: Textual buttons (anchors with a real href first, then buttons)
+  // Stage 5: Textual buttons (anchors with a real href first, then buttons)
   if (!link) {
     const rx = direction === 'next' ? /(next|›|»)/i : /(prev|previous|‹|«)/i;
     const candidates = [...document.querySelectorAll<HTMLAnchorElement | HTMLButtonElement>('a,button')]
@@ -205,7 +213,7 @@ function navigate(direction: 'next' | 'previous'): void {
     link = candidates.find(el => Boolean((el as HTMLAnchorElement).href)) ?? candidates[0] ?? null;
   }
 
-  // Stage 5: Build numeric URL (NovelBin-shaped paths only — NovelArrow
+  // Stage 6: Build numeric URL (NovelBin-shaped paths only — NovelArrow
   // chapter URLs need the title slug, which we can't reconstruct)
   if (!link && !location.pathname.startsWith('/chapter/')) {
     const info = parseChapterEnhanced(location.pathname);
@@ -220,11 +228,15 @@ function navigate(direction: 'next' | 'previous'): void {
     }
   }
 
-  // Stage 6: Navigate using found link
+  // Stage 7: Navigate — follow the href when there is one, otherwise click
+  // the element (NovelArrow's SPA buttons navigate via their React handler)
   const href = (link as HTMLAnchorElement | null)?.href;
   if (href) {
     console.log(`🧭 Using ${direction} link:`, href);
     location.href = href;
+  } else if (link) {
+    console.log(`🧭 Clicking ${direction} button:`, link);
+    link.click();
   } else {
     notify('No further chapters available.');
   }
