@@ -90,9 +90,11 @@ export const auth = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ username, password }),
-    }).then(r => r.json()) as Promise<{ success: boolean; error?: string }>,
+    }).then(r => r.json()) as Promise<{ success: boolean; error?: string; api_key?: string | null }>,
   logout: () =>
     fetch('/api/auth/logout', { method: 'POST' }).then(r => r.json()),
+  recoverApiKey: () =>
+    fetch('/api/auth/api-key').then(r => r.json()) as Promise<{ api_key: string | null }>,
 };
 
 // ── Novels ────────────────────────────────────────────────

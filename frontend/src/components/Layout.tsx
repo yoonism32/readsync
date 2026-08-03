@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
-import { auth } from '../api/client.js';
+import { auth, hasApiKey, setApiKey } from '../api/client.js';
 import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
@@ -27,6 +28,25 @@ const NAV: NavItem[] = [
 export function Layout({ children }: Props) {
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
+  const [keyMissing, setKeyMissing] = useState(false);
+
+  useEffect(() => {
+    if (hasApiKey()) return;
+    // Self-heal: the session is already authenticated at this point
+    // (RequireAuth gated the route), so recover the account's API key
+    // instead of leaving the app silently empty.
+    auth
+      .recoverApiKey()
+      .then(res => {
+        if (res.api_key) {
+          setApiKey(res.api_key);
+          void mutate(() => true);
+        } else {
+          setKeyMissing(true);
+        }
+      })
+      .catch(() => setKeyMissing(true));
+  }, [mutate]);
 
   async function handleLogout() {
     await auth.logout();
@@ -172,6 +192,27 @@ export function Layout({ children }: Props) {
           padding: '28px 28px 56px',
         }}
       >
+        {keyMissing && (
+          <div
+            className="glass"
+            style={{
+              borderRadius: 'var(--radius-lg)',
+              padding: '12px 16px',
+              marginBottom: 20,
+              border: '1px solid var(--color-danger)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+              flexWrap: 'wrap',
+              fontSize: 'var(--text-sm)',
+            }}
+          >
+            <span>Couldn't find your API key — your library won't load until it's set.</span>
+            <NavLink to="/settings" style={{ color: 'var(--color-accent-bright)', fontWeight: 600 }}>
+              Go to Settings →
+            </NavLink>
+          </div>
+        )}
         {children}
       </main>
     </div>

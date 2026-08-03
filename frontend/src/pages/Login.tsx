@@ -23,7 +23,6 @@ export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [apiKey, setApiKeyInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,7 +34,11 @@ export function Login() {
     try {
       const res = await auth.login(username, password);
       if (res.success) {
-        if (apiKey.trim()) setApiKey(apiKey.trim());
+        // The server hands back the account's API key on login now, so
+        // the app is never left in a signed-in-but-no-data state — it
+        // used to require pasting this manually, which was easy to get
+        // wrong or skip.
+        if (res.api_key) setApiKey(res.api_key);
         await mutate('auth-status');
         navigate('/mylist');
       } else {
@@ -151,26 +154,6 @@ export function Login() {
                   {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
                 </button>
               </div>
-            </label>
-
-            {/* API Key */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                API Key
-                <span style={{ marginLeft: 4, color: 'var(--color-text-faint)' }}>(optional)</span>
-              </span>
-              <input
-                type="text"
-                name="api-key"
-                autoComplete="off"
-                spellCheck={false}
-                value={apiKey}
-                onChange={e => setApiKeyInput(e.target.value)}
-                placeholder="Your device API key…"
-                style={{ ...inputStyle, fontFamily: 'var(--font-mono)' }}
-                onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
-              />
             </label>
 
             {/* Error */}

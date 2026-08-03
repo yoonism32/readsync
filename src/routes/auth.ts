@@ -6,6 +6,7 @@ import {
   HTTP_UNAUTHORIZED,
 } from '../config.js';
 import logger from '../logger.js';
+import pool from '../db/pool.js';
 import {
   redirectIfAuthenticated,
   requireAuth,
@@ -58,7 +59,24 @@ router.post('/api/auth/login', async (req, res) => {
       req.session.username = username;
       logger.info({ username, ip: clientIp }, 'Login successful');
       clearAttempts(clientIp);
-      return res.json({ success: true });
+
+      // Single-tenant app: the session login (admin credentials) and the
+      // API key (used by the SPA + userscript for /api/v1/* calls) are
+      // separate credentials with no link between them, which used to
+      // mean a successful session login could still leave the app
+      // silently broken until the user manually pasted the right key.
+      // Hand it back here so the client never has to ask.
+      let api_key: string | null = null;
+      try {
+        const result = await pool.query<{ api_key: string }>(
+          'SELECT api_key FROM users LIMIT 1',
+        );
+        api_key = result.rows[0]?.api_key ?? null;
+      } catch (err) {
+        logger.warn({ err }, 'Could not look up API key after login');
+      }
+
+      return res.json({ success: true, api_key });
     }
 
     recordAttempt(clientIp);
@@ -85,6 +103,21 @@ router.post('/api/auth/logout', (req, res) => {
     logger.info({ username }, 'Logout successful');
     res.json({ success: true });
   });
+});
+
+// Session-authenticated recovery route: lets the SPA self-heal if its
+// locally stored API key ever goes missing (cleared storage, a device
+// that only ever had the session cookie) without forcing a re-login.
+router.get('/api/auth/api-key', requireAuth, async (_req, res) => {
+  try {
+    const result = await pool.query<{ api_key: string }>(
+      'SELECT api_key FROM users LIMIT 1',
+    );
+    res.json({ api_key: result.rows[0]?.api_key ?? null });
+  } catch (error) {
+    logger.error({ error }, 'API key lookup error');
+    res.status(HTTP_INTERNAL_ERROR).json({ api_key: null });
+  }
 });
 
 router.get('/api/auth/status', (req, res) => {
