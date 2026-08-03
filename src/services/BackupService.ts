@@ -1,5 +1,8 @@
-// Scheduled JSON backups of each user's full export, stored in the
-// Supabase storage bucket alongside covers under a backups/ prefix.
+// Scheduled JSON backups of each user's full export, stored in their
+// own private Supabase storage bucket (separate from the public
+// novel-covers bucket, which only accepts image/* and would reject a
+// JSON upload outright — and backups are personal data that shouldn't
+// be world-readable like covers are).
 // Render restarts dynos freely, so scheduling is interval-checked
 // rather than clock-aligned: every check, any user whose newest backup
 // is older than BACKUP_MIN_AGE_HOURS gets a fresh one.
@@ -11,8 +14,7 @@ import { buildExport } from './ExportService.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? '';
-const BUCKET = 'novel-covers';
-const PREFIX = 'backups';
+const BUCKET = 'readsync-backups';
 
 export const BACKUPS_TO_KEEP = 30;
 const BACKUP_MIN_AGE_HOURS = 20;
@@ -34,7 +36,7 @@ export async function listBackups(userId: string): Promise<BackupFileInfo[]> {
   if (!supabase) return [];
   const { data, error } = await supabase.storage
     .from(BUCKET)
-    .list(`${PREFIX}/${userId}`, {
+    .list(userId, {
       limit: 100,
       sortBy: { column: 'name', order: 'desc' },
     });
@@ -55,7 +57,7 @@ export async function runBackup(userId: string): Promise<BackupFileInfo> {
   const data = await buildExport(userId);
   const stamp = new Date().toISOString().slice(0, 10);
   const name = `readsync-backup-${stamp}.json`;
-  const path = `${PREFIX}/${userId}/${name}`;
+  const path = `${userId}/${name}`;
   const body = JSON.stringify(data);
 
   const { error } = await supabase.storage
@@ -90,7 +92,7 @@ async function pruneOldBackups(userId: string): Promise<void> {
   if (stale.length === 0) return;
   const { error } = await supabase.storage
     .from(BUCKET)
-    .remove(stale.map((n) => `${PREFIX}/${userId}/${n}`));
+    .remove(stale.map((n) => `${userId}/${n}`));
   if (error) logger.warn({ error, userId }, 'Backup prune failed');
   else logger.info({ userId, removed: stale.length }, 'Old backups pruned');
 }

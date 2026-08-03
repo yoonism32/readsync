@@ -1,6 +1,7 @@
 import { Link, useParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { fetchNovels, formatTimestamp, coverUrl, resumeUrl } from '../api/client.js';
+import toast from 'react-hot-toast';
+import { fetchNovels, formatTimestamp, coverUrl, resumeUrl, novels as novelsApi } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -11,12 +12,24 @@ import { NotesPanel } from '../components/NotesPanel.js';
 import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
 import { EditProgress } from '../components/EditProgress.js';
+import { DeviceBadge } from '../components/DeviceBadge.js';
+import { StarIcon } from '../components/Icon.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
   const { novelId } = useParams<{ novelId: string }>();
-  const { data: novelsData, isLoading } = useSWR<Novel[]>('/novels', fetchNovels);
+  const { data: novelsData, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels);
   const novel = novelsData?.find(n => n.novel_id === novelId);
+
+  async function toggleFav() {
+    if (!novel) return;
+    try {
+      await novelsApi.setFavorite(novel.novel_id, !novel.favorite);
+      await mutate();
+    } catch {
+      toast.error('Failed to update favorite');
+    }
+  }
 
   if (isLoading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>;
@@ -60,6 +73,14 @@ export function NovelPage() {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
               <h1 style={{ fontSize: 'var(--text-xl)' }}>{novel.title}</h1>
+              <button
+                type="button"
+                onClick={() => { void toggleFav(); }}
+                aria-label={novel.favorite ? 'Remove from favorites' : 'Add to favorites'}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: novel.favorite ? 'var(--color-warning)' : 'var(--color-text-faint)', lineHeight: 1 }}
+              >
+                <StarIcon size={16} filled={novel.favorite} />
+              </button>
               <BehindBadge novel={novel} />
               <HiatusBadge novel={novel} />
             </div>
@@ -116,6 +137,25 @@ export function NovelPage() {
       )}
 
       <ChapterMap novel={novel} />
+
+      {novel.devices_reading.length > 1 && (
+        <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Device Progress</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[...novel.devices_reading]
+              .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+              .map(d => (
+                <div key={d.device_id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--text-sm)' }}>
+                  <DeviceBadge label={d.device_label} />
+                  <span className="tabular">Ch. {d.chapter_num} · {Math.round(d.percent)}%</span>
+                  <span style={{ flex: 1 }} />
+                  <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>{formatTimestamp(d.created_at)}</span>
+                </div>
+              ))}
+          </div>
+        </div>
+      )}
+
       <RereadPanel novel={novel} />
       <NotesPanel novelId={novel.novel_id} />
     </div>
