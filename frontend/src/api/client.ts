@@ -98,10 +98,28 @@ export const auth = {
 // ── Novels ────────────────────────────────────────────────
 
 import type { Novel, NovelStatus } from '../types/index.js';
+import { normalizeNovel } from './normalize.js';
+import type { RawNovel } from './normalize.js';
+
+/**
+ * SWR fetcher for /novels paths. The server returns a bare RawNovel[]
+ * (nested latest_global/latest_per_device); pages get the flat Novel[].
+ */
+export async function fetchNovels(path: string): Promise<Novel[]> {
+  const raw = await request<RawNovel[]>(path);
+  return raw.map(normalizeNovel);
+}
+
+/** Cover image URL for a novel — the endpoint requires the api key. */
+export function coverUrl(novelId: string): string {
+  return `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${encodeURIComponent(getApiKey())}`;
+}
 
 export const novels = {
-  list: (params?: { status?: string; search?: string }) =>
-    request<{ novels: Novel[] }>('/novels', { qs: params as Record<string, string> }),
+  list: (params?: { status?: string; search?: string }) => {
+    const qs = new URLSearchParams(params as Record<string, string>).toString();
+    return fetchNovels(`/novels${qs ? `?${qs}` : ''}`);
+  },
 
   setStatus: (novelId: string, status: NovelStatus) =>
     request(`/novels/${encodeURIComponent(novelId)}/status`, {

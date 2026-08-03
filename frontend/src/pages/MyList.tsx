@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { swrFetcher, novels as novelsApi, copyResumeLink, formatTimestamp } from '../api/client.js';
+import { fetchNovels, coverUrl, novels as novelsApi, copyResumeLink, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
@@ -25,13 +25,13 @@ export function MyList() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'title' | 'progress'>('recent');
 
-  const { data, isLoading, mutate } = useSWR<{ novels: Novel[] }>(
+  const { data, isLoading, mutate } = useSWR<Novel[]>(
     '/novels',
-    swrFetcher,
+    fetchNovels,
     { revalidateOnFocus: false }
   );
 
-  const novels = data?.novels ?? [];
+  const novels = data ?? [];
 
   const filtered = useMemo(() => {
     let list = novels.filter(n => n.status !== 'removed');
@@ -270,6 +270,7 @@ function NovelRow({ novel, animDelay, onSetStatus, onToggleFav, onCopyResume }: 
       >
         <div
           style={{
+            position: 'relative',
             width: 36,
             height: 50,
             borderRadius: 4,
@@ -278,27 +279,28 @@ function NovelRow({ novel, animDelay, onSetStatus, onToggleFav, onCopyResume }: 
             border: '1px solid var(--color-border)',
           }}
         >
-          {novel.cover_img && novel.cover_img !== 'failed' ? (
-            <img
-              src={`/api/v1/covers/${encodeURIComponent(novel.novel_id)}?user_key=${''}`}
-              alt=""
-              width={36}
-              height={50}
-              loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          ) : (
-            <div
-              style={{
-                width: '100%', height: '100%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 16, color: 'var(--color-text-faint)',
-              }}
-              aria-hidden="true"
-            >
-              📖
-            </div>
-          )}
+          <div
+            style={{
+              width: '100%', height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 16, color: 'var(--color-text-faint)',
+            }}
+            aria-hidden="true"
+          >
+            📖
+          </div>
+          <img
+            src={coverUrl(novel.novel_id)}
+            alt=""
+            width={36}
+            height={50}
+            loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+            style={{
+              position: 'absolute', inset: 0,
+              width: '100%', height: '100%', objectFit: 'cover',
+            }}
+          />
         </div>
       </a>
 

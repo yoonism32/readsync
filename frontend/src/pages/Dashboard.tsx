@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import { swrFetcher, formatTimestamp } from '../api/client.js';
+import { swrFetcher, fetchNovels, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -25,9 +25,9 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
 
 export function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
-  const { data: novelsData } = useSWR<{ novels: Novel[] }>('/novels', swrFetcher, { revalidateOnFocus: false });
+  const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
 
-  const recentNovels = (novelsData?.novels ?? [])
+  const recentNovels = (novelsData ?? [])
     .filter(n => n.status === 'reading' && n.latest_read_at)
     .sort((a, b) => new Date(b.latest_read_at!).getTime() - new Date(a.latest_read_at!).getTime())
     .slice(0, 8);

@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { swrFetcher, formatTimestamp } from '../api/client.js';
+import { fetchNovels, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -8,8 +8,8 @@ import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
   const { novelId } = useParams<{ novelId: string }>();
-  const { data: novelsData, isLoading } = useSWR<{ novels: Novel[] }>('/novels', swrFetcher);
-  const novel = novelsData?.novels.find(n => n.novel_id === novelId);
+  const { data: novelsData, isLoading } = useSWR<Novel[]>('/novels', fetchNovels);
+  const novel = novelsData?.find(n => n.novel_id === novelId);
 
   if (isLoading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>;

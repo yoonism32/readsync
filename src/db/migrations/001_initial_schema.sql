@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS progress_snapshots (
 CREATE TABLE IF NOT EXISTS user_novel_meta (
   user_id TEXT NOT NULL,
   novel_id TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'reading' CHECK (status IN ('reading', 'completed', 'on-hold', 'dropped', 'removed')),
+  status TEXT NOT NULL DEFAULT 'reading' CHECK (status IN ('reading', 'completed', 'on-hold', 'dropped', 'plan-to-read', 'removed')),
   favorite BOOLEAN DEFAULT FALSE,
   rating INTEGER CHECK (rating >= 1 AND rating <= 5),
   notes TEXT,
@@ -69,6 +69,18 @@ CREATE TABLE IF NOT EXISTS user_novel_meta (
   current_read_through INTEGER DEFAULT 1,
   read_history JSONB DEFAULT '[]'::jsonb,
   PRIMARY KEY (user_id, novel_id),
+  FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  novel_id TEXT NOT NULL,
+  type TEXT NOT NULL,
+  message TEXT NOT NULL,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
   FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
 );

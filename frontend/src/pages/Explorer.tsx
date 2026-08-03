@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import { swrFetcher, formatTimestamp } from '../api/client.js';
+import { fetchNovels, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { Spinner } from '../components/Spinner.js';
 import type { Novel } from '../types/index.js';
@@ -9,9 +9,9 @@ import type { Novel } from '../types/index.js';
 export function Explorer() {
   const [query, setQuery] = useState('');
 
-  const { data, isLoading } = useSWR<{ novels: Novel[] }>('/novels', swrFetcher, { revalidateOnFocus: false });
+  const { data, isLoading } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
 
-  const results = (data?.novels ?? []).filter(n => {
+  const results = (data ?? []).filter(n => {
     if (!query.trim()) return true;
     const q = query.toLowerCase();
     return (

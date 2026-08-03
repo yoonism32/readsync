@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { swrFetcher, novels as novelsApi } from '../api/client.js';
+import { fetchNovels, novels as novelsApi } from '../api/client.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import type { Novel, NovelStatus } from '../types/index.js';
@@ -9,12 +9,12 @@ import type { Novel, NovelStatus } from '../types/index.js';
 const STATUSES = ['reading', 'completed', 'on-hold', 'dropped', 'plan-to-read'] as const;
 
 export function Manage() {
-  const { data, isLoading, mutate } = useSWR<{ novels: Novel[] }>('/novels', swrFetcher, { revalidateOnFocus: false });
+  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const novels = (data?.novels ?? []).filter(n => {
+  const novels = (data ?? []).filter(n => {
     if (!query.trim()) return true;
     return n.title.toLowerCase().includes(query.toLowerCase());
   });

@@ -108,6 +108,7 @@ export type NovelStatus =
   | 'completed'
   | 'on-hold'
   | 'dropped'
+  | 'plan-to-read'
   | 'removed';
 export type BookmarkType = 'position' | 'highlight' | 'note' | 'favorite';
 export type SessionType = 'auto' | 'manual' | 'imported';

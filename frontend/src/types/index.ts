@@ -1,28 +1,33 @@
 // Shared frontend types — mirror server types/index.ts
 
-export type NovelStatus = 'reading' | 'completed' | 'on-hold' | 'dropped' | 'removed';
+export type NovelStatus = 'reading' | 'completed' | 'on-hold' | 'dropped' | 'plan-to-read' | 'removed';
 export type BookmarkType = 'position' | 'highlight' | 'note' | 'favorite';
 export type DeviceType = 'mobile' | 'desktop';
 
+// Flat view consumed by pages. The wire format has nested
+// latest_global/latest_per_device — see api/normalize.ts.
 export interface Novel {
   novel_id: string;
   title: string;
   primary_url: string | null;
-  cover_img: string | null;
   author: string | null;
   genre: string | null;
   status: NovelStatus;
   favorite: boolean;
-  rating: number | null;
+  /** 0 = unrated (server COALESCEs NULL to 0) */
+  rating: number;
   notes: string | null;
   latest_chapter_num: number | null;
   latest_chapter_title: string | null;
   chapters_updated_at: string | null;
+  site_latest_chapter_time: string | null;
+  site_latest_chapter_time_raw: string | null;
+  last_activity: string | null;
   started_at: string | null;
   completed_at: string | null;
   current_read_through: number;
   read_history: ReadThroughEntry[];
-  // progress fields from join
+  // flattened from latest_global / latest_per_device
   latest_chapter: number | null;
   latest_percent: number | null;
   latest_url: string | null;

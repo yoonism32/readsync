@@ -51,8 +51,13 @@ describe('migration files', () => {
     const files = fs.readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith('.sql'));
     for (const file of files) {
       const content = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-      // Must not contain bare TIMESTAMP without TZ
-      const bareTimestamp = content.match(/\bTIMESTAMP\b(?!\s*WITH\s*TIME\s*ZONE|\s*TZ)/gi);
+      // Must not contain bare TIMESTAMP without TZ. Only SQL counts — the
+      // word "timestamp" in -- comments is prose, not a column type.
+      const sqlOnly = content
+        .split('\n')
+        .filter((line) => !line.trimStart().startsWith('--'))
+        .join('\n');
+      const bareTimestamp = sqlOnly.match(/\bTIMESTAMP\b(?!\s*WITH\s*TIME\s*ZONE|\s*TZ)/gi);
       expect(bareTimestamp, `${file} contains bare TIMESTAMP — use TIMESTAMPTZ`).toBeNull();
     }
   });

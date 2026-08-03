@@ -15,7 +15,8 @@ ALTER TABLE notifications ALTER COLUMN created_at TYPE timestamptz USING created
 ALTER TABLE novel_categories ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
 ALTER TABLE novel_notes ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
 ALTER TABLE novel_notes ALTER COLUMN updated_at TYPE timestamptz USING updated_at AT TIME ZONE 'UTC';
-ALTER TABLE novel_notifications ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
+-- novel_notifications was a legacy-server table with no CREATE statement in
+-- this tree, its ALTER made every fresh-database migration run fail
 ALTER TABLE novels ALTER COLUMN chapters_updated_at TYPE timestamptz USING chapters_updated_at AT TIME ZONE 'UTC';
 ALTER TABLE novels ALTER COLUMN created_at TYPE timestamptz USING created_at AT TIME ZONE 'UTC';
 ALTER TABLE novels ALTER COLUMN site_latest_chapter_time TYPE timestamptz USING site_latest_chapter_time AT TIME ZONE 'UTC';
