@@ -213,6 +213,24 @@ export const notes = {
     request(`/notes/${id}`, { method: 'DELETE' }),
 };
 
+// ── Categories (tags) ─────────────────────────────────────
+
+import type { CategoryAssignment } from '../types/index.js';
+
+export const categories = {
+  all: () => request<CategoryAssignment[]>('/categories'),
+  add: (novelId: string, category: string) =>
+    request(`/novels/${encodeURIComponent(novelId)}/categories`, {
+      method: 'POST',
+      body: { category },
+    }),
+  remove: (novelId: string, category: string) =>
+    request(
+      `/novels/${encodeURIComponent(novelId)}/categories/${encodeURIComponent(category)}`,
+      { method: 'DELETE' },
+    ),
+};
+
 // ── Notifications ─────────────────────────────────────────
 
 import type { NotificationsResponse } from '../types/index.js';

@@ -83,6 +83,11 @@ export interface Note {
   updated_at: string;
 }
 
+export interface CategoryAssignment {
+  novel_id: string;
+  category: string;
+}
+
 export interface StatsSummary {
   total_novels: number;
   novels_by_status: Record<string, number>;

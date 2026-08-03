@@ -9,6 +9,7 @@ import { HiatusBadge } from '../components/HiatusBadge.js';
 import { ChapterMap } from '../components/ChapterMap.js';
 import { NotesPanel } from '../components/NotesPanel.js';
 import { RereadPanel } from '../components/RereadPanel.js';
+import { TagEditor } from '../components/TagEditor.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -78,6 +79,8 @@ export function NovelPage() {
               {novel.latest_read_at && <span>Last read {formatTimestamp(novel.latest_read_at)}</span>}
               {novel.started_at && <span>Started {new Date(novel.started_at).toLocaleDateString()}</span>}
             </div>
+
+            <TagEditor novelId={novel.novel_id} />
           </div>
         </div>
       </div>

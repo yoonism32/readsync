@@ -2,7 +2,9 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { fetchNovels, coverUrl, novels as novelsApi, copyResumeLink, formatTimestamp } from '../api/client.js';
+import { fetchNovels, coverUrl, novels as novelsApi, categories as categoriesApi, copyResumeLink, formatTimestamp } from '../api/client.js';
+import { SMART_FILTERS } from '../lib/smartFilters.js';
+import type { SmartFilterId } from '../lib/smartFilters.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
@@ -10,7 +12,7 @@ import { Spinner } from '../components/Spinner.js';
 import { StarIcon, CopyLinkIcon, MoreHorizIcon } from '../components/Icon.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
-import type { Novel, NovelStatus } from '../types/index.js';
+import type { CategoryAssignment, Novel, NovelStatus } from '../types/index.js';
 
 type Tab = 'all' | 'reading' | 'plan-to-read' | 'completed' | 'on-hold' | 'dropped';
 
@@ -27,18 +29,44 @@ export function MyList() {
   const [tab, setTab] = useState<Tab>('reading');
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'title' | 'progress'>('recent');
+  const [smartFilter, setSmartFilter] = useState<SmartFilterId | null>(null);
+  const [tagFilter, setTagFilter] = useState<string>('');
 
   const { data, isLoading, mutate } = useSWR<Novel[]>(
     '/novels',
     fetchNovels,
     { revalidateOnFocus: false }
   );
+  const { data: tagData } = useSWR<CategoryAssignment[]>(
+    'categories-all',
+    () => categoriesApi.all(),
+    { revalidateOnFocus: false }
+  );
 
   const novels = data ?? [];
 
+  const tagCounts = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const a of tagData ?? []) c.set(a.category, (c.get(a.category) ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [tagData]);
+
+  const taggedNovelIds = useMemo(() => {
+    if (!tagFilter) return null;
+    return new Set(
+      (tagData ?? []).filter(a => a.category === tagFilter).map(a => a.novel_id),
+    );
+  }, [tagData, tagFilter]);
+
   const filtered = useMemo(() => {
+    const now = new Date();
     let list = novels.filter(n => n.status !== 'removed');
     if (tab !== 'all') list = list.filter(n => n.status === tab);
+    if (smartFilter) {
+      const f = SMART_FILTERS.find(f => f.id === smartFilter);
+      if (f) list = list.filter(n => f.predicate(n, now));
+    }
+    if (taggedNovelIds) list = list.filter(n => taggedNovelIds.has(n.novel_id));
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(n => n.title.toLowerCase().includes(q));
@@ -49,7 +77,7 @@ export function MyList() {
       new Date(b.latest_read_at ?? 0).getTime() - new Date(a.latest_read_at ?? 0).getTime()
     );
     return list;
-  }, [novels, tab, search, sortBy]);
+  }, [novels, tab, search, sortBy, smartFilter, taggedNovelIds]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0 };
@@ -192,6 +220,61 @@ export function MyList() {
         ))}
       </div>
 
+      {/* Smart filters + tag filter */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+        {SMART_FILTERS.map(f => {
+          const active = smartFilter === f.id;
+          return (
+            <button
+              key={f.id}
+              onClick={() => setSmartFilter(active ? null : f.id)}
+              title={f.description}
+              aria-pressed={active}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 'var(--radius-full)',
+                border: active ? '1px solid var(--color-gold)' : '1px dashed var(--color-border)',
+                background: active ? 'var(--color-gold-glow)' : 'transparent',
+                color: active ? 'var(--color-gold)' : 'var(--color-text-faint)',
+                fontSize: 'var(--text-xs)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.15s',
+                touchAction: 'manipulation',
+              }}
+            >
+              {f.label}
+            </button>
+          );
+        })}
+
+        {tagCounts.length > 0 && (
+          <select
+            value={tagFilter}
+            onChange={e => setTagFilter(e.target.value)}
+            aria-label="Filter by tag"
+            style={{
+              marginLeft: 'auto',
+              background: 'var(--color-bg-input)',
+              border: tagFilter ? '1px solid var(--color-gold)' : '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-full)',
+              padding: '3px 10px',
+              color: tagFilter ? 'var(--color-gold)' : 'var(--color-text-muted)',
+              fontSize: 'var(--text-xs)',
+              cursor: 'pointer',
+              outline: 'none',
+            }}
+          >
+            <option value="">All tags</option>
+            {tagCounts.map(([tag, count]) => (
+              <option key={tag} value={tag}>
+                {tag} ({count})
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
       {/* Novel list */}
       {filtered.length === 0 ? (
         <div
@@ -203,7 +286,11 @@ export function MyList() {
             color: 'var(--color-text-muted)',
           }}
         >
-          {search ? `No novels matching "${search}"` : 'No novels here yet.'}
+          {search
+            ? `No novels matching "${search}"`
+            : smartFilter || tagFilter
+              ? 'No novels match the active filters.'
+              : 'No novels here yet.'}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
