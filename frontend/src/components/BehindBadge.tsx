@@ -6,6 +6,56 @@ export function behindCount(novel: Novel): number {
   return Math.max(0, novel.latest_chapter_num - novel.latest_chapter);
 }
 
+export type StatusTier = 'unknown' | 'caught-up' | 'new' | 'behind' | 'way-behind';
+
+/** Four-tier read status, by unread-chapter count. */
+export function statusTier(novel: Novel): StatusTier {
+  if (!novel.latest_chapter_num) return 'unknown';
+  const behind = behindCount(novel);
+  if (behind === 0) return 'caught-up';
+  if (behind <= 10) return 'new';
+  if (behind <= 50) return 'behind';
+  return 'way-behind';
+}
+
+const TIER_COLOR: Record<StatusTier, string> = {
+  unknown: 'var(--color-success)',
+  'caught-up': 'var(--color-info)',
+  new: 'var(--color-success)',
+  behind: 'var(--color-warning)',
+  'way-behind': 'var(--color-danger)',
+};
+
+const TIER_LABEL: Record<StatusTier, string> = {
+  unknown: 'No chapter data yet',
+  'caught-up': 'Caught up',
+  new: 'New chapters available',
+  behind: 'Behind',
+  'way-behind': 'Way behind',
+};
+
+/** Small colored status dot — green glow when caught up on new chapters,
+ *  blue caught up, amber behind, red way behind. */
+export function StatusDot({ novel }: { novel: Novel }) {
+  const tier = statusTier(novel);
+  const glow = tier === 'new' || tier === 'unknown';
+  return (
+    <span
+      title={TIER_LABEL[tier]}
+      aria-hidden="true"
+      style={{
+        display: 'inline-block',
+        width: 6,
+        height: 6,
+        borderRadius: 999,
+        background: TIER_COLOR[tier],
+        boxShadow: glow ? `0 0 6px ${TIER_COLOR[tier]}` : 'none',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
+
 interface Props {
   novel: Novel;
 }

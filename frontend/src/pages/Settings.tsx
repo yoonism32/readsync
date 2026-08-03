@@ -242,6 +242,22 @@ export function Settings() {
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>What the badges mean</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <LegendRow
+            swatch={<span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: 'var(--color-success)', boxShadow: '0 0 6px var(--color-success)' }} />}
+            text="New chapters, manageable — 1 to 10 unread."
+          />
+          <LegendRow
+            swatch={<span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: 'var(--color-info)' }} />}
+            text="Caught up — no new chapters since your last read."
+          />
+          <LegendRow
+            swatch={<span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: 'var(--color-warning)' }} />}
+            text="Behind — 11 to 50 unread chapters."
+          />
+          <LegendRow
+            swatch={<span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 999, background: 'var(--color-danger)' }} />}
+            text="Way behind — 50+ unread chapters."
+          />
+          <LegendRow
             swatch={<span className="tabular" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#07110f', background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>+8</span>}
             text="Unread chapters since your last read — the count on the site minus your bookmark."
           />

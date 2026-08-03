@@ -230,15 +230,20 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
     }
     const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 
+    // Chapter number, title, and site-update-time only ever advance
+    // together — a flaky scrape (e.g. a page widget the parser mistook for
+    // "latest chapter") must never be able to claw the stored count
+    // backwards. Genre/author/cover are independent facts and stay on
+    // COALESCE regardless.
     const result = await pool.query(
       `
       UPDATE novels
-      SET latest_chapter_num = $2,
-          latest_chapter_title = $3,
+      SET latest_chapter_num = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) THEN $2::int ELSE latest_chapter_num END,
+          latest_chapter_title = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) THEN $3 ELSE latest_chapter_title END,
           genre = COALESCE($4, genre),
           author = COALESCE($5, author),
-          site_latest_chapter_time_raw = $6,
-          site_latest_chapter_time = $7,
+          site_latest_chapter_time_raw = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) THEN $6 ELSE site_latest_chapter_time_raw END,
+          site_latest_chapter_time = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) THEN $7 ELSE site_latest_chapter_time END,
           cover_img = CASE
             WHEN $8::text IS NOT NULL AND (cover_img IS NULL OR cover_img = 'failed')
             THEN $8::text ELSE cover_img
@@ -264,26 +269,33 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
       latest_chapter_num: number;
     };
 
+    const rejectedRegression =
+      currentChapter !== null && Number(chapter_num) < currentChapter;
+
     logger.info(
       {
         novel_id,
         current_chapter: updated.latest_chapter_num,
         previous_chapter: currentChapter,
+        scraped_chapter: Number(chapter_num),
+        rejected_regression: rejectedRegression,
       },
-      'Auto-update received',
+      rejectedRegression
+        ? 'Auto-update received — backwards chapter count rejected'
+        : 'Auto-update received',
     );
 
     // New chapters found by the Update All flow — feed the bell. Fires only
     // on an actual increase, so repeat refreshes don't duplicate.
-    if (currentChapter !== null && Number(chapter_num) > currentChapter) {
-      const newCount = Number(chapter_num) - currentChapter;
+    if (currentChapter !== null && updated.latest_chapter_num > currentChapter) {
+      const newCount = updated.latest_chapter_num - currentChapter;
       await pool.query(
         `INSERT INTO notifications (user_id, novel_id, type, message)
          VALUES ($1, $2, 'new_chapters', $3)`,
         [
           (req as unknown as AuthenticatedRequest).user.id,
           updated.id,
-          `${updated.title}: ${newCount} new chapter${newCount === 1 ? '' : 's'} (${currentChapter} → ${chapter_num})`,
+          `${updated.title}: ${newCount} new chapter${newCount === 1 ? '' : 's'} (${currentChapter} → ${updated.latest_chapter_num})`,
         ],
       );
     }
@@ -294,7 +306,8 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
       previous_chapter: currentChapter,
       current_chapter: updated.latest_chapter_num,
       is_new_chapter:
-        currentChapter !== null && Number(chapter_num) > currentChapter,
+        currentChapter !== null && updated.latest_chapter_num > currentChapter,
+      rejected_regression: rejectedRegression,
       site_update_time: site_latest_chapter_time,
       updated_fields: {
         chapter: !!chapter_title,

@@ -1,7 +1,8 @@
+import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { swrFetcher, fetchNovels, formatTimestamp, resumeUrl } from '../api/client.js';
-import { BehindBadge } from '../components/BehindBadge.js';
+import { BehindBadge, behindCount } from '../components/BehindBadge.js';
 import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
@@ -37,6 +38,31 @@ export function Dashboard() {
   const totalHours = stats ? Math.round(stats.reading_sessions.total_time_seconds / 3600) : 0;
 
   const continueNovel = recentNovels.find(n => n.latest_url);
+
+  // Library-wide signals the legacy dashboards computed client-side from
+  // the same /novels payload — never ported to the stat grid.
+  const libraryStats = useMemo(() => {
+    const novels = novelsData ?? [];
+    const devices = new Set<string>();
+    let novelsBehind = 0;
+    let newChapters = 0;
+    let syncConflicts = 0;
+
+    for (const n of novels) {
+      const behind = behindCount(n);
+      if (behind > 0) {
+        novelsBehind++;
+        newChapters += behind;
+      }
+      for (const d of n.devices_reading) devices.add(d.device_id);
+      if (n.devices_reading.length > 1) {
+        const distinctChapters = new Set(n.devices_reading.map(d => d.chapter_num));
+        if (distinctChapters.size > 1) syncConflicts++;
+      }
+    }
+
+    return { totalDevices: devices.size, novelsBehind, newChapters, syncConflicts };
+  }, [novelsData]);
 
   return (
     <div className="animate-fade-in">
@@ -104,6 +130,14 @@ export function Dashboard() {
           <StatCard label="Reading Time" value={`${totalHours}h`} sub={`${stats?.reading_sessions.total ?? 0} sessions`} />
           <StatCard label="Avg Progress" value={`${Math.round(stats?.avg_progress ?? 0)}%`} />
           <StatCard label="Bookmarks" value={stats?.total_bookmarks ?? 0} />
+          <StatCard label="Novels Behind" value={libraryStats.novelsBehind} />
+          <StatCard label="New Chapters" value={libraryStats.newChapters} />
+          <StatCard label="Total Devices" value={stats?.active_devices ?? libraryStats.totalDevices} />
+          <StatCard
+            label="Sync Conflicts"
+            value={libraryStats.syncConflicts}
+            sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
+          />
         </div>
       )}
 

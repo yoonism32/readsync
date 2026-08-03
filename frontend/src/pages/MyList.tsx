@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { fetchNovels, coverUrl, resumeUrl, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
-import { behindCount } from '../components/BehindBadge.js';
+import { behindCount, StatusDot } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import { StarIcon } from '../components/Icon.js';
 import { Spinner } from '../components/Spinner.js';
@@ -75,7 +75,10 @@ export function MyList() {
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
+  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
+    revalidateOnFocus: false,
+    refreshInterval: 3 * 60_000,
+  });
   const { data: tagData } = useSWR<CategoryAssignment[]>('categories-all', () => categoriesApi.all(), { revalidateOnFocus: false });
   const refresh = useRefreshAll();
 
@@ -205,9 +208,11 @@ export function MyList() {
         <span style={{ flex: 1 }} />
         <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textAlign: 'right' }}>
           Last: {lastRefreshLabel(refresh.lastRefresh)}
-          {refresh.needsRefresh && (
-            <span style={{ display: 'block', color: 'var(--color-warning)' }}>🔔 Time to refresh!</span>
-          )}
+          {refresh.needsRefresh ? (
+            <span style={{ display: 'block', color: 'var(--color-warning)', fontWeight: 600 }}>🔔 Time to refresh!</span>
+          ) : refresh.minutesUntilDue != null ? (
+            <span style={{ display: 'block' }}>Next: {Math.floor(refresh.minutesUntilDue / 60)}h {refresh.minutesUntilDue % 60}m</span>
+          ) : null}
         </span>
       </div>
 
@@ -443,8 +448,8 @@ function Row({ novel: n, onSetStatus, onToggleFav }: {
           <HiatusBadge novel={n} />
         </span>
         {n.latest_chapter != null && (
-          <span className="text-muted" style={{ display: 'block', fontSize: 'var(--text-xs)', marginTop: 3 }}>
-            <span style={{ color: 'var(--color-accent)' }}>●</span> Last ch. {n.latest_chapter}
+          <span className="text-muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', marginTop: 3 }}>
+            <StatusDot novel={n} /> Last ch. {n.latest_chapter}
           </span>
         )}
       </td>

@@ -70,9 +70,13 @@ export interface RefreshAllState {
   progress: { done: number; total: number } | null;
   lastRefresh: string | null;
   needsRefresh: boolean;
+  /** Minutes remaining until due, or 0 once due. Ticks live. */
+  minutesUntilDue: number | null;
   summary: string | null;
   refreshAll: (novels: Novel[]) => Promise<void>;
 }
+
+const TICK_MS = 30_000;
 
 export function useRefreshAll(): RefreshAllState {
   const { mutate } = useSWRConfig();
@@ -80,14 +84,42 @@ export function useRefreshAll(): RefreshAllState {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
   const runningRef = useRef(false);
+  const notifiedRef = useRef(false);
 
   useEffect(() => {
     settings
       .getLastRefresh()
       .then(d => setLastRefresh(d.last_refresh))
       .catch(() => { /* non-fatal */ });
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      void Notification.requestPermission();
+    }
   }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(Date.now()), TICK_MS);
+    return () => clearInterval(id);
+  }, []);
+
+  const minutesUntilDue = lastRefresh
+    ? Math.max(
+        0,
+        Math.round(
+          (new Date(lastRefresh).getTime() + REFRESH_INTERVAL_HOURS * 3_600_000 - nowTick) / 60_000,
+        ),
+      )
+    : null;
+
+  useEffect(() => {
+    if (minutesUntilDue !== 0 || notifiedRef.current) return;
+    notifiedRef.current = true;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    new Notification('ReadSync — Time to Refresh!', {
+      body: "It's been 24h since your last refresh. Click Refresh All Novels to update your library.",
+    });
+  }, [minutesUntilDue]);
 
   const refreshAll = useCallback(
     async (novels: Novel[]) => {
@@ -116,6 +148,7 @@ export function useRefreshAll(): RefreshAllState {
         await settings.setLastRefresh(now);
       } catch { /* non-fatal */ }
       setLastRefresh(now);
+      notifiedRef.current = false;
       await mutate('/novels');
 
       setSummary(failed === 0 ? `Refreshed ${ok} novels` : `Refreshed ${ok}, ${failed} failed`);
@@ -126,9 +159,15 @@ export function useRefreshAll(): RefreshAllState {
     [mutate],
   );
 
-  const needsRefresh =
-    lastRefresh != null &&
-    Date.now() - new Date(lastRefresh).getTime() > REFRESH_INTERVAL_HOURS * 3_600_000;
+  const needsRefresh = minutesUntilDue === 0;
 
-  return { isRefreshing, progress, lastRefresh, needsRefresh, summary, refreshAll };
+  return {
+    isRefreshing,
+    progress,
+    lastRefresh,
+    needsRefresh,
+    minutesUntilDue,
+    summary,
+    refreshAll,
+  };
 }

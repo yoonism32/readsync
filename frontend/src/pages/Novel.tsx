@@ -100,6 +100,7 @@ export function NovelPage() {
               {novel.latest_chapter != null && <span>Ch. {novel.latest_chapter}{novel.latest_chapter_num ? ` / ${novel.latest_chapter_num}` : ''}</span>}
               {novel.latest_read_at && <span>Last read {formatTimestamp(novel.latest_read_at)}</span>}
               {novel.started_at && <span>Started {new Date(novel.started_at).toLocaleDateString()}</span>}
+              {novel.completed_at && <span>Completed {new Date(novel.completed_at).toLocaleDateString()}</span>}
               <EditProgress novel={novel} />
             </div>
 
@@ -140,18 +141,47 @@ export function NovelPage() {
 
       {novel.devices_reading.length > 1 && (
         <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
-          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Device Progress</h2>
+          <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>
+            Device Progress
+            <span className="text-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 400, marginLeft: 8 }}>
+              {novel.devices_reading.length}
+            </span>
+          </h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[...novel.devices_reading]
               .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-              .map(d => (
-                <div key={d.device_id} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 'var(--text-sm)' }}>
-                  <DeviceBadge label={d.device_label} />
-                  <span className="tabular">Ch. {d.chapter_num} · {Math.round(d.percent)}%</span>
-                  <span style={{ flex: 1 }} />
-                  <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>{formatTimestamp(d.created_at)}</span>
-                </div>
-              ))}
+              .map(d => {
+                const isLeader = novel.latest_device_id != null && d.device_id === novel.latest_device_id;
+                const isBehind =
+                  !isLeader &&
+                  novel.latest_chapter != null &&
+                  (d.chapter_num < novel.latest_chapter ||
+                    (d.chapter_num === novel.latest_chapter &&
+                      d.percent < (novel.latest_percent ?? 0) - 5));
+                return (
+                  <div
+                    key={d.device_id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      fontSize: 'var(--text-sm)',
+                      padding: '6px 10px',
+                      borderRadius: 'var(--radius-md)',
+                      background: isLeader ? 'var(--color-accent-glow)' : 'transparent',
+                      border: isLeader ? '1px solid var(--color-accent-border)' : '1px solid transparent',
+                    }}
+                  >
+                    {isLeader && <span title="Furthest along" aria-hidden="true">👑</span>}
+                    <DeviceBadge label={d.device_label} />
+                    <span className="tabular" style={{ color: isBehind ? 'var(--color-text-faint)' : 'var(--color-text)' }}>
+                      Ch. {d.chapter_num} · {Math.round(d.percent)}%
+                    </span>
+                    <span style={{ flex: 1 }} />
+                    <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>{formatTimestamp(d.created_at)}</span>
+                  </div>
+                );
+              })}
           </div>
         </div>
       )}
