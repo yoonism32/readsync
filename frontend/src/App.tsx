@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useSWR from 'swr';
-import { swrFetcher } from './api/client.js';
+import { auth } from './api/client.js';
 import { Layout } from './components/Layout.js';
 import { Login } from './pages/Login.js';
 import { Spinner } from './components/Spinner.js';
@@ -27,7 +27,9 @@ function PageFallback() {
 }
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { data, isLoading } = useSWR<AuthStatus>('/auth/status', swrFetcher, {
+  // Session check lives at /api/auth/status (cookie auth, no v1 prefix) —
+  // routing it through the v1 request helper 404s and locks out login.
+  const { data, isLoading } = useSWR<AuthStatus>('auth-status', () => auth.status(), {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   });

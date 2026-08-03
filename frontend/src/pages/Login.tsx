@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
 import { auth, setApiKey } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
 import { EyeIcon, EyeOffIcon } from '../components/Icon.js';
@@ -18,6 +19,7 @@ const inputStyle: React.CSSProperties = {
 
 export function Login() {
   const navigate = useNavigate();
+  const { mutate } = useSWRConfig();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,6 +36,7 @@ export function Login() {
       const res = await auth.login(username, password);
       if (res.success) {
         if (apiKey.trim()) setApiKey(apiKey.trim());
+        await mutate('auth-status');
         navigate('/mylist');
       } else {
         setError(res.error ?? 'Invalid credentials');

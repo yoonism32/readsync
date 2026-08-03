@@ -1,4 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom';
+import { useSWRConfig } from 'swr';
 import { auth } from '../api/client.js';
 import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
@@ -25,9 +26,11 @@ const NAV: NavItem[] = [
 
 export function Layout({ children }: Props) {
   const navigate = useNavigate();
+  const { mutate } = useSWRConfig();
 
   async function handleLogout() {
     await auth.logout();
+    await mutate('auth-status');
     navigate('/login');
   }
 
