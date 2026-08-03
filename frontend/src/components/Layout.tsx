@@ -1,6 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { auth } from '../api/client.js';
 import { NotificationBell } from './NotificationBell.js';
+import { CommandPalette } from './CommandPalette.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
   WrenchIcon, ShieldIcon, LogOutIcon, ClockIcon,
@@ -32,6 +33,7 @@ export function Layout({ children }: Props) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+      <CommandPalette />
       {/* Skip link — accessibility */}
       <a
         href="#main-content"
