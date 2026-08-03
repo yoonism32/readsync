@@ -72,6 +72,7 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
           completed: statusMap.completed ?? 0,
           'on-hold': statusMap['on-hold'] ?? 0,
           dropped: statusMap.dropped ?? 0,
+          'plan-to-read': statusMap['plan-to-read'] ?? 0,
         },
         avg_progress: Number(avgProgress.rows[0]?.avg_progress ?? 0),
         reading_sessions: {

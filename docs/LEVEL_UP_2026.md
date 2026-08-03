@@ -444,3 +444,74 @@ Chapter 45 ──────────●────────────
 ---
 
 *This isn't a todo app. This is a real system with real engineering.*
+
+---
+
+## Deferred Feature Specs — 2026-08-03 (F11–F14 from the SSS roadmap)
+
+> These four features were deliberately deferred during the August 2026 build run.
+> The infrastructure they need already exists — these are UI + light-endpoint projects.
+> All new UI goes in the React SPA (`frontend/`), never the legacy vanilla pages.
+
+### F11 — Full Stats Page (`/app/stats`)
+
+**What:** A dedicated analytics page: chapters per day/week/month, busiest reading hour,
+per-device split, session-length distribution.
+
+**Existing infra:**
+- `GET /api/v1/stats/summary` — totals, status counts, session aggregates (now includes `plan-to-read`).
+- `GET /api/v1/stats/daily?days=N` — per-day `snapshot_events`, `novels_touched`, `chapters_read`, `sessions`, `session_seconds`. The ActivityHeatmap already consumes this.
+- `reading_sessions` is now populated server-side on every accepted sync (commit `af00cfc`), so time-based stats are real data going forward.
+
+**Needs building:**
+- New endpoint `GET /api/v1/stats/breakdown` (follow `stats.ts` patterns):
+  - Busiest hour: `SELECT EXTRACT(HOUR FROM created_at) AS hour, COUNT(*) FROM progress_snapshots WHERE user_id = $1 GROUP BY hour`.
+  - Per-device split: join `progress_snapshots` → `devices`, group by `device_id`, count snapshots + sum session seconds.
+  - Weekday distribution: `EXTRACT(DOW FROM created_at)`.
+- `frontend/src/pages/Stats.tsx` + NAV entry in `Layout.tsx`. Reuse the heatmap; add simple SVG bar charts (no chart lib — hand-rolled bars match the design system and keep the bundle lean).
+- Week/month rollups can be computed client-side from `stats/daily` (fetch `days=365` once, group in JS).
+
+### F12 — Per-Novel Stats Page (`/app/novel/:id/stats`)
+
+**What:** Deep-dive for one novel: reading pace (chapters/day), total time, sessions,
+devices used, progress-over-time chart, read-through history.
+
+**Existing infra:**
+- `GET /api/v1/stats/novels/:novelId` — **already returns everything and is completely unused**: novel meta + `read_history` JSONB + `current_read_through`, snapshot stats (first/last read, max progress, devices used), session totals, bookmark count.
+
+**Needs building:**
+- `frontend/src/pages/NovelStats.tsx`, linked from a "Stats" button on the Novel page.
+- Progress-over-time sparkline: add optional `?series=1` to the endpoint returning `SELECT DATE(created_at), MAX(chapter_num) FROM progress_snapshots ... GROUP BY DATE(created_at) ORDER BY 1` — a ~15-line addition.
+- Pace = (max_chapter − first_chapter) / days between `first_read` and `last_read`; ETA to caught-up = behind ÷ pace. Render with the gold accent tokens.
+
+### F13 — Reading Goals
+
+**What:** User-set targets (e.g. "1,000 chapters this year", "30 min/day") with pace bars
+on the Dashboard.
+
+**Existing infra:**
+- `user_settings` is a per-user key/value store with GET/POST routes (`src/routes/settings.ts`) — store goals as one JSON value under key `reading_goals`, no migration needed:
+  ```json
+  { "chapters_per_year": 1000, "minutes_per_day": 30, "set_at": "2026-08-03" }
+  ```
+- Progress against goals comes from `stats/daily` (chapters) and `reading_sessions` (minutes).
+
+**Needs building:**
+- Goal editor in the Settings page (two numeric inputs, save via existing settings POST).
+- `GoalBar` component on Dashboard: expected-by-today vs actual, "ahead/behind by N" label. Year progress = `chapters_read` summed from `stats/daily?from=Jan 1`.
+- Keep it honest: if no goal set, render nothing (no nag UI).
+
+### F14 — Reading Wrapped (Year in Review)
+
+**What:** A Spotify-Wrapped-style annual recap: total chapters, total hours, busiest day,
+longest streak, top 5 novels, completion count — shareable card design.
+
+**Existing infra:**
+- Everything computable from `stats/daily?days=365`, `stats/summary`, `reading_sessions`, and `progress_snapshots`. `computeStreaks` (`frontend/src/lib/streaks.ts`) already gives longest streak.
+
+**Needs building:**
+- Endpoint `GET /api/v1/stats/wrapped?year=2026`: one query batch (top novels by distinct chapters, busiest single day, totals, completions where `completed_at` in year).
+- `frontend/src/pages/Wrapped.tsx`: full-screen stepped slides (scroll-snap sections), heavy use of `--font-display` + gold glow. Ship in December; a "Your 2026 Wrapped is ready" notification row can reuse the notifications table (`type: 'wrapped'`).
+- Export-as-image is optional; a print stylesheet is the cheap version.
+
+**Build order when picked up:** F12 (endpoint already done) → F11 → F13 → F14 (seasonal).
