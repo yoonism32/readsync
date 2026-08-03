@@ -96,22 +96,29 @@ export function Layout({ children }: Props) {
             maxWidth: 1280,
             margin: '0 auto',
             padding: '0 28px',
-            height: 52,
+            height: 64,
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 10,
           }}
         >
-          {/* Wordmark */}
+          {/* Logomark + wordmark */}
+          <img
+            src="/app/favicon.svg"
+            alt=""
+            width={32}
+            height={32}
+            style={{ flexShrink: 0, borderRadius: 8 }}
+          />
           <span
             style={{
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
-              fontSize: 'var(--text-lg)',
+              fontSize: 'var(--text-xl)',
               color: 'var(--color-gold)',
               letterSpacing: '-0.02em',
               userSelect: 'none',
-              marginRight: 8,
+              marginRight: 10,
               flexShrink: 0,
             }}
           >
@@ -130,11 +137,11 @@ export function Layout({ children }: Props) {
                 style={({ isActive }) => ({
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
-                  padding: '0 10px',
-                  height: 44,
+                  gap: 7,
+                  padding: '0 12px',
+                  height: 52,
                   borderRadius: 'var(--radius-md)',
-                  fontSize: 'var(--text-sm)',
+                  fontSize: 'var(--text-base)',
                   fontWeight: 500,
                   color: isActive ? 'var(--color-text)' : 'var(--color-text-muted)',
                   background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
@@ -144,7 +151,7 @@ export function Layout({ children }: Props) {
                   textDecoration: 'none',
                 })}
               >
-                <Icon size={14} />
+                <Icon size={16} />
                 <span className="nav-label">{label}</span>
               </NavLink>
             ))}
@@ -159,14 +166,14 @@ export function Layout({ children }: Props) {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
-              height: 44,
-              padding: '0 8px',
+              gap: 7,
+              height: 52,
+              padding: '0 10px',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
               color: 'var(--color-text-muted)',
-              fontSize: 'var(--text-sm)',
+              fontSize: 'var(--text-base)',
               borderRadius: 'var(--radius-md)',
               transition: 'color 0.15s',
               flexShrink: 0,
@@ -175,7 +182,7 @@ export function Layout({ children }: Props) {
             onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text)')}
             onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
-            <LogOutIcon size={14} />
+            <LogOutIcon size={16} />
             <span className="nav-label">Sign out</span>
           </button>
         </div>
