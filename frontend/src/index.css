@@ -1,31 +1,44 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Palette ─────────────────────────────────────────── */
+  /* ── Palette: abyssal black · crimson · teal ─────────── */
   --color-*: initial;
 
   /* Backgrounds */
-  --color-bg:           #080c12;
-  --color-bg-raised:    #0f1520;
+  --color-bg:           #07090c;
+  --color-bg-raised:    #0d1116;
   --color-bg-card:      rgba(255,255,255,0.04);
   --color-bg-input:     rgba(255,255,255,0.06);
   --color-bg-hover:     rgba(255,255,255,0.07);
 
-  /* Gold accent scale */
-  --color-gold-dim:     #7a6128;
-  --color-gold:         #c9a84c;
-  --color-gold-bright:  #e6c76e;
-  --color-gold-glow:    rgba(201,168,76,0.18);
-  --color-gold-border:  rgba(201,168,76,0.2);
+  /* Primary accent — refined crimson */
+  --color-accent-dim:    #6e2b31;
+  --color-accent:        #c94f57;
+  --color-accent-bright: #e0707a;
+  --color-accent-glow:   rgba(201,79,87,0.16);
+  --color-accent-border: rgba(201,79,87,0.24);
+
+  /* Secondary accent — the legacy refresh-button teal */
+  --color-teal:         #34d0ba;
+  --color-teal-bright:  #5fe3cf;
+  --color-teal-glow:    rgba(52,208,186,0.14);
+  --color-teal-border:  rgba(52,208,186,0.28);
+
+  /* Legacy aliases — older components reference the gold names */
+  --color-gold-dim:     var(--color-accent-dim);
+  --color-gold:         var(--color-accent);
+  --color-gold-bright:  var(--color-accent-bright);
+  --color-gold-glow:    var(--color-accent-glow);
+  --color-gold-border:  var(--color-accent-border);
 
   /* Text */
-  --color-text:         #e8e0d0;
-  --color-text-muted:   #8a8070;
-  --color-text-faint:   #4a4540;
+  --color-text:         #e4e8e6;
+  --color-text-muted:   #8e9a96;
+  --color-text-faint:   #4e5754;
 
   /* Semantic */
-  --color-success:      #4ade80;
-  --color-success-dim:  rgba(74,222,128,0.12);
+  --color-success:      #34d0ba;
+  --color-success-dim:  rgba(52,208,186,0.12);
   --color-warning:      #fbbf24;
   --color-warning-dim:  rgba(251,191,36,0.12);
   --color-danger:       #f87171;
@@ -35,23 +48,23 @@
 
   /* Borders */
   --color-border:       rgba(255,255,255,0.08);
-  --color-border-gold:  rgba(201,168,76,0.2);
+  --color-border-gold:  var(--color-accent-border);
 
   /* ── Typography ──────────────────────────────────────── */
   --font-*: initial;
-  --font-display: "Playfair Display", "Georgia", serif;
-  --font-body:    "Inter", system-ui, sans-serif;
+  --font-display: "Newsreader Variable", "Newsreader", "Georgia", serif;
+  --font-body:    "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", "Fira Code", monospace;
 
-  /* Type scale */
-  --text-xs:   0.75rem;
-  --text-sm:   0.8125rem;
-  --text-base: 0.9375rem;
-  --text-lg:   1.0625rem;
-  --text-xl:   1.25rem;
-  --text-2xl:  1.5rem;
-  --text-3xl:  1.875rem;
-  --text-4xl:  2.25rem;
+  /* Type scale — a notch larger across the board */
+  --text-xs:   0.78125rem;
+  --text-sm:   0.875rem;
+  --text-base: 1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.3125rem;
+  --text-2xl:  1.625rem;
+  --text-3xl:  2rem;
+  --text-4xl:  2.5rem;
 
   /* ── Motion ──────────────────────────────────────────── */
   --ease-*: initial;
@@ -91,7 +104,7 @@ body {
   color: var(--color-text);
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201,168,76,0.06) 0%, transparent 70%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(52,208,186,0.05) 0%, transparent 70%);
   background-attachment: fixed;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
@@ -122,7 +135,7 @@ p { margin: 0; }
   background: rgba(255,255,255,0.1);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.3); }
+::-webkit-scrollbar-thumb:hover { background: rgba(201,79,87,0.35); }
 
 /* ── Utilities ───────────────────────────────────────────── */
 
@@ -217,7 +230,7 @@ p { margin: 0; }
 
 .btn-gold {
   background: var(--color-gold);
-  color: #080c12;
+  color: #fff;
   border: none;
   border-radius: var(--radius-md);
   padding: 7px 14px;
@@ -246,3 +259,20 @@ p { margin: 0; }
 }
 .btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-border-gold); }
 .btn-ghost:disabled { opacity: 0.45; cursor: default; }
+
+.btn-accent {
+  background: var(--color-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 7px 14px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  touch-action: manipulation;
+}
+.btn-accent:hover:not(:disabled) { background: var(--color-accent-bright); }
+.btn-accent:active:not(:disabled) { transform: scale(0.97); }
+.btn-accent:disabled { opacity: 0.45; cursor: default; }

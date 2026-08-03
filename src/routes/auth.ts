@@ -105,7 +105,13 @@ router.get('/login', redirectIfAuthenticated, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
 });
 
-router.get('/', requireAuth, (_req, res) => {
+// The React SPA is the front door now; the legacy dashboard stays
+// reachable at /legacy-dashboard and its direct .html paths.
+router.get('/', (_req, res) => {
+  res.redirect('/app/');
+});
+
+router.get('/legacy-dashboard', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
 });
 

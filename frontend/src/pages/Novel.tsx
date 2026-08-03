@@ -87,9 +87,9 @@ export function NovelPage() {
         </div>
       </div>
 
-      {novel.latest_url && (
+      {(novel.latest_url ?? novel.primary_url) && (
         <a
-          href={resumeUrl(novel.latest_url, novel.latest_percent)}
+          href={novel.latest_url ? resumeUrl(novel.latest_url, novel.latest_percent) : novel.primary_url!}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -111,7 +111,7 @@ export function NovelPage() {
           onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.97)')}
           onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
         >
-          Continue Reading →
+          {novel.latest_url ? 'Continue Reading →' : 'Open on NovelArrow →'}
         </a>
       )}
 
