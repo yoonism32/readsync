@@ -12,12 +12,13 @@ import { BehindBadge } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import type { Novel, NovelStatus } from '../types/index.js';
 
-type Tab = 'all' | 'reading' | 'completed' | 'on-hold' | 'dropped';
+type Tab = 'all' | 'reading' | 'plan-to-read' | 'completed' | 'on-hold' | 'dropped';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'all',       label: 'All' },
   { id: 'reading',   label: 'Reading' },
   { id: 'completed', label: 'Completed' },
+  { id: 'plan-to-read', label: 'Plan to Read' },
   { id: 'on-hold',   label: 'On Hold' },
   { id: 'dropped',   label: 'Dropped' },
 ];
@@ -432,7 +433,7 @@ interface MenuProps {
   onClose: () => void;
 }
 
-const STATUS_OPTIONS: NovelStatus[] = ['reading', 'completed', 'on-hold', 'dropped', 'removed'];
+const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', 'on-hold', 'dropped', 'removed'];
 
 function StatusMenu({ current, onSelect, onClose }: MenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);

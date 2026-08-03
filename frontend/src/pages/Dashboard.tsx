@@ -99,6 +99,7 @@ export function Dashboard() {
           <StatCard label="Novels" value={stats?.total_novels ?? 0} />
           <StatCard label="Reading" value={stats?.novels_by_status?.reading ?? 0} />
           <StatCard label="Completed" value={stats?.novels_by_status?.completed ?? 0} />
+          <StatCard label="Plan to Read" value={stats?.novels_by_status?.['plan-to-read'] ?? 0} />
           <StatCard label="Reading Time" value={`${totalHours}h`} sub={`${stats?.reading_sessions.total ?? 0} sessions`} />
           <StatCard label="Avg Progress" value={`${Math.round(stats?.avg_progress ?? 0)}%`} />
           <StatCard label="Bookmarks" value={stats?.total_bookmarks ?? 0} />
