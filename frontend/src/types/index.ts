@@ -96,6 +96,21 @@ export interface StatsSummary {
   active_devices: number;
 }
 
+export interface AppNotification {
+  id: number;
+  novel_id: string;
+  novel_title: string | null;
+  type: string;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface NotificationsResponse {
+  notifications: AppNotification[];
+  unread_count: number;
+}
+
 export interface BotStatus {
   running: boolean;
   lastRun: string | null;

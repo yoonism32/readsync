@@ -9,6 +9,7 @@ import { DeviceBadge } from '../components/DeviceBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import { StarIcon, CopyLinkIcon, MoreHorizIcon } from '../components/Icon.js';
 import { BehindBadge } from '../components/BehindBadge.js';
+import { HiatusBadge } from '../components/HiatusBadge.js';
 import type { Novel, NovelStatus } from '../types/index.js';
 
 type Tab = 'all' | 'reading' | 'completed' | 'on-hold' | 'dropped';
@@ -335,6 +336,7 @@ function NovelRow({ novel, animDelay, onSetStatus, onToggleFav, onCopyResume }: 
             </span>
           )}
           <BehindBadge novel={novel} />
+          <HiatusBadge novel={novel} />
           <ProgressBar
             percent={novel.latest_percent ?? 0}
             size="sm"

@@ -1,5 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { auth } from '../api/client.js';
+import { NotificationBell } from './NotificationBell.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
   WrenchIcon, ShieldIcon, LogOutIcon,
@@ -122,6 +123,8 @@ export function Layout({ children }: Props) {
               </NavLink>
             ))}
           </nav>
+
+          <NotificationBell />
 
           {/* Logout */}
           <button

@@ -213,6 +213,21 @@ export const notes = {
     request(`/notes/${id}`, { method: 'DELETE' }),
 };
 
+// ── Notifications ─────────────────────────────────────────
+
+import type { NotificationsResponse } from '../types/index.js';
+
+export const notifications = {
+  list: (unreadOnly = false) =>
+    request<NotificationsResponse>('/notifications', {
+      qs: unreadOnly ? { unread_only: true } : {},
+    }),
+  markRead: (id: number) =>
+    request(`/notifications/${id}/read`, { method: 'POST' }),
+  markAllRead: () =>
+    request('/notifications/read-all', { method: 'POST' }),
+};
+
 // ── Settings ──────────────────────────────────────────────
 
 export const settings = {

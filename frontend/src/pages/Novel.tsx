@@ -5,6 +5,7 @@ import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import { BehindBadge } from '../components/BehindBadge.js';
+import { HiatusBadge } from '../components/HiatusBadge.js';
 import { ChapterMap } from '../components/ChapterMap.js';
 import type { Novel } from '../types/index.js';
 
@@ -56,6 +57,7 @@ export function NovelPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
               <h1 style={{ fontSize: 'var(--text-xl)' }}>{novel.title}</h1>
               <BehindBadge novel={novel} />
+              <HiatusBadge novel={novel} />
             </div>
             {novel.author && <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 8 }}>by {novel.author}</p>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>

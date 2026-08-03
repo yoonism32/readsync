@@ -15,7 +15,7 @@ import { handleDbError } from '../middleware/errorHandler.js';
 import { validateNovelId } from '../middleware/validation.js';
 import { getBotStatus } from '../services/BotService.js';
 import { parseTimeAgo } from '../services/NovelService.js';
-import type { BotStatus } from '../types/index.js';
+import type { AuthenticatedRequest, BotStatus } from '../types/index.js';
 
 export type BotModule = {
   triggerManualUpdate?: (novelId: string) => Promise<unknown>;
@@ -260,6 +260,7 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
 
     const updated = result.rows[0] as {
       id: string;
+      title: string;
       latest_chapter_num: number;
     };
 
@@ -271,6 +272,21 @@ router.post('/api/v1/admin/novels/auto-update', validateApiKey, async (req, res)
       },
       'Auto-update received',
     );
+
+    // New chapters found by the Update All flow — feed the bell. Fires only
+    // on an actual increase, so repeat refreshes don't duplicate.
+    if (currentChapter !== null && Number(chapter_num) > currentChapter) {
+      const newCount = Number(chapter_num) - currentChapter;
+      await pool.query(
+        `INSERT INTO notifications (user_id, novel_id, type, message)
+         VALUES ($1, $2, 'new_chapters', $3)`,
+        [
+          (req as unknown as AuthenticatedRequest).user.id,
+          updated.id,
+          `${updated.title}: ${newCount} new chapter${newCount === 1 ? '' : 's'} (${currentChapter} → ${chapter_num})`,
+        ],
+      );
+    }
 
     res.json({
       success: true,
