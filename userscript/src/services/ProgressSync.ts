@@ -66,10 +66,27 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
 
 export function debouncedSync(percent: number, ctx: SyncContext): void {
   if (syncTimeout) clearTimeout(syncTimeout);
+  const scheduledPath = location.pathname;
   syncTimeout = setTimeout(() => {
+    // The payload reads location.href at fire time; if an SPA navigation
+    // happened since scheduling, this percent belongs to the old chapter
+    // and must not be attributed to the new URL.
+    if (location.pathname !== scheduledPath) {
+      log('debouncedSync dropped — URL changed since scheduling', { scheduledPath, now: location.pathname });
+      return;
+    }
     log('debouncedSync fire', { percent });
     void syncProgress(percent, ctx);
   }, SYNC_DEBOUNCE_MS);
+}
+
+/**
+ * Cancel a pending debounced sync. Must be called on SPA chapter navigation:
+ * the debounce payload reads location.href at fire time, so a sync scheduled
+ * on the old chapter would attribute its percent to the new chapter's URL.
+ */
+export function cancelPendingSync(): void {
+  if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null; }
 }
 
 export function sendFinal(percent: number, ctx: SyncContext): void {
@@ -120,7 +137,7 @@ export function startConflictChecker(ctx: SyncContext): void {
 }
 
 export function cleanup(): void {
-  if (syncTimeout) clearTimeout(syncTimeout);
+  cancelPendingSync();
   if (compareInterval) clearInterval(compareInterval);
   log('beforeunload cleanup');
 }

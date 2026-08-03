@@ -329,17 +329,10 @@ function getCurrentChapterFromContent(): ChapterInfo | null {
 }
 
 export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
-  // First try to get chapter from page content
-  const contentChapter = getCurrentChapterFromContent();
-  if (contentChapter) {
-    log('Using chapter from content:', contentChapter);
-    return contentChapter;
-  }
-
-  // Fallback to URL parsing
-  log('Falling back to URL parsing for chapter detection');
-
-  // Strategy 1a: NovelArrow format (/chapter/<slug>/chapter-N-title-slug)
+  // NovelArrow (/chapter/<slug>/chapter-N-title-slug): the URL is ground
+  // truth. The SPA reader's DOM (sidebar widgets, stale title after
+  // client-side navigation) can carry a neighbouring chapter number, so
+  // content scanning must not run first on these routes.
   const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(\d+)(?:-[^/]*)?\/?$/i);
   if (arrowMatch) {
     const res: ChapterInfo = {
@@ -350,6 +343,16 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
     log('Using chapter from URL (NovelArrow format):', res);
     return res;
   }
+
+  // Other sites: try page content first
+  const contentChapter = getCurrentChapterFromContent();
+  if (contentChapter) {
+    log('Using chapter from content:', contentChapter);
+    return contentChapter;
+  }
+
+  // Fallback to URL parsing
+  log('Falling back to URL parsing for chapter detection');
 
   // Strategy 1b: NovelBin format (chapter-31, cchapter31, etc.)
   const standardMatch = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);

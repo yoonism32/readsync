@@ -8,7 +8,7 @@ import {
   extractLatestChapterInfo, extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl,
 } from './services/ChapterDetector.js';
 import {
-  syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup,
+  syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
 } from './services/ProgressSync.js';
 import {
   injectBadge, updateBadgeStatus, updatePill, notify,
@@ -63,22 +63,32 @@ function findScrollEl(): Element {
 }
 
 let page = findScrollEl();
-const recheckScrollEl = () => { page = findScrollEl(); log('Re-evaluated scroll element', page); };
+let scrollHandler: (() => void) | null = null;
+const recheckScrollEl = () => {
+  const prev = page;
+  page = findScrollEl();
+  // React can swap the scroll container on SPA navigation — move the
+  // element-level listener along with it (the window listener persists).
+  if (scrollHandler && prev !== page) {
+    prev.removeEventListener('scroll', scrollHandler);
+    page.addEventListener('scroll', scrollHandler, { passive: true });
+  }
+  log('Re-evaluated scroll element', page);
+};
 window.addEventListener('resize', recheckScrollEl, { passive: true });
 new MutationObserver(() => recheckScrollEl()).observe(document.body, { childList: true, subtree: true });
 
-/* ===== URL / path setup ===== */
-const normalizedPath = normalizePath(location.pathname);
-const storeKey = `nb_scrollpos:${normalizedPath}`;
+/* ===== Per-chapter state (reset by initForChapter on SPA navigation) ===== */
+let normalizedPath = normalizePath(location.pathname);
+let storeKey = `nb_scrollpos:${normalizedPath}`;
+let completionSynced = false;
 log('Normalization', { raw: location.pathname, normalizedPath, storeKey });
 
 /* ===== Shared sync context ===== */
-const pageLoadTime = Date.now();
-
 const syncCtx = {
   deviceId: READSYNC_DEVICE_ID,
   deviceLabel: READSYNC_DEVICE_LABEL,
-  pageLoadTime,
+  pageLoadTime: Date.now(),
   getScrollEl: () => page,
   updateBadgeStatus,
   showSyncBanner,
@@ -116,10 +126,12 @@ function addProgressBar(): void {
   updatePill(first);
   log('progress bar init', { first });
 
-  // iOS fix: always register an early heartbeat (even at 0%)
-  setTimeout(() => { log('early heartbeat', { first }); void syncProgress(first, syncCtx); }, 800);
-
   function onAnyScroll() {
+    // Detect SPA navigation before touching per-chapter state — the 500ms
+    // poll may not have ticked yet, and a scroll on the new chapter must
+    // not write under the old chapter's storeKey or reuse its flags.
+    checkUrlChange();
+
     const current = pctNow();
     bar.style.width = `${current}%`;
     updatePill(current);
@@ -129,6 +141,14 @@ function addProgressBar(): void {
     const prev = parseFloat(localStorage.getItem(storeKey) ?? '0');
 
     if (current >= RESTORE_LIMIT) {
+      // Sync immediately (not debounced) so the completion is recorded even
+      // if the user navigates away or closes the tab right after — the
+      // debounce would otherwise be cancelled by the SPA chapter reset.
+      if (!completionSynced) {
+        completionSynced = true;
+        log('completion threshold reached, syncing', { current });
+        void syncProgress(current, syncCtx);
+      }
       localStorage.removeItem(storeKey);
     } else {
       const candidate = Math.max(prev, current);
@@ -144,10 +164,62 @@ function addProgressBar(): void {
     }
   }
 
+  scrollHandler = onAnyScroll;
   window.addEventListener('scroll', onAnyScroll, { passive: true });
   page.addEventListener('scroll', onAnyScroll, { passive: true });
   log('scroll listeners attached');
 }
+
+/* ===== Per-chapter init (full page load AND SPA chapter navigation) ===== */
+let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+
+function initForChapter(reason: string): void {
+  cancelPendingSync(); // a stale debounce would read the NEW location.href
+  normalizedPath = normalizePath(location.pathname);
+  storeKey = `nb_scrollpos:${normalizedPath}`;
+  syncCtx.pageLoadTime = Date.now();
+  completionSynced = false;
+  recheckScrollEl();
+  clearRestored();
+  maybeShowRestore(storeKey, () => page, pctNow);
+  log('chapter init', { reason, normalizedPath, storeKey });
+
+  // iOS fix: always register an early heartbeat (even at 0%). One pending
+  // heartbeat at a time — rapid A/D presses must not stack syncs.
+  if (heartbeatTimer) clearTimeout(heartbeatTimer);
+  heartbeatTimer = setTimeout(() => {
+    heartbeatTimer = null;
+    const pct = pctNow();
+    log('early heartbeat', { reason, pct });
+    void syncProgress(pct, syncCtx);
+  }, 800);
+}
+
+/* ===== SPA route-change watcher =====
+ * NovelArrow is a Next.js App Router SPA: next/prev chapter navigation (and
+ * our own A/D keys, which click its React buttons) changes the URL without a
+ * page load, so none of the load-time hooks re-fire. Poll the pathname (plus
+ * popstate for back/forward) instead of monkey-patching history — robust
+ * regardless of Next.js internals or userscript sandboxing. */
+let lastSeenPath = location.pathname;
+let autoUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+
+function checkUrlChange(): void {
+  if (location.pathname === lastSeenPath) return;
+  const prevPath = lastSeenPath;
+  lastSeenPath = location.pathname;
+  log('SPA URL change', { from: prevPath, to: lastSeenPath });
+  if (normalizePath(location.pathname) !== normalizedPath) {
+    initForChapter('spa-nav');
+    // No-ops on chapter pages; covers SPA navigation onto novel main pages.
+    // Note: ChapterDetector's realChapterCount cache persists across SPA
+    // navs — correct while staying within one novel, the only SPA-nav path.
+    if (autoUpdateTimer) clearTimeout(autoUpdateTimer);
+    autoUpdateTimer = setTimeout(() => { autoUpdateTimer = null; void autoUpdateNovelInfo(); }, 2000);
+  }
+}
+setInterval(checkUrlChange, 500);
+window.addEventListener('popstate', () => setTimeout(checkUrlChange, 0));
 
 /* ===== Auto-scroll ===== */
 let autoOn = false;
@@ -323,8 +395,8 @@ function boot(): void {
   log('boot()');
   injectBadge(READSYNC_DEVICE_ID);
   applyHashResume();
-  maybeShowRestore(storeKey, () => page, pctNow);
   addProgressBar();
+  initForChapter('boot');
 
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
   const overlayPref = localStorage.getItem('nb_overlay');

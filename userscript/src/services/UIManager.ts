@@ -243,15 +243,23 @@ export function showRestoreButton(saved: number, _storeKey: string, getScrollEl:
   log('showRestoreButton', { saved });
 }
 
+let onScrollHide: (() => void) | null = null;
+
 export function maybeShowRestore(storeKey: string, getScrollEl: () => Element, pctNow: () => number): void {
+  // Called once per chapter (including SPA navigations): tear down the
+  // previous chapter's banner and hide-listener so they can't accumulate
+  // or restore a stale chapter's position.
+  if (onScrollHide) { window.removeEventListener('scroll', onScrollHide); onScrollHide = null; }
+  if (restoreBtn) { restoreBtn.remove(); restoreBtn = null; }
+
   const saved = parseFloat(localStorage.getItem(storeKey) ?? '0');
   log('maybeShowRestore', { saved, storeKey });
   if (saved > 0 && saved < RESTORE_LIMIT) {
     if (pctNow() <= BANNER_SHOW_MAX_PCT) showRestoreButton(saved, storeKey, getScrollEl);
-    const onScrollHide = () => {
+    onScrollHide = () => {
       if (pctNow() > BANNER_SHOW_MAX_PCT) {
         if (restoreBtn) { restoreBtn.remove(); restoreBtn = null; }
-        window.removeEventListener('scroll', onScrollHide);
+        if (onScrollHide) { window.removeEventListener('scroll', onScrollHide); onScrollHide = null; }
       }
     };
     window.addEventListener('scroll', onScrollHide, { passive: true });

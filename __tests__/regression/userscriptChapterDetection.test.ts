@@ -1,0 +1,99 @@
+/**
+ * Regression tests for userscript current-chapter detection.
+ *
+ * Bug: on NovelArrow the reader is a Next.js SPA whose DOM (sidebar widgets,
+ * stale React nodes, document.title lagging behind client-side navigation)
+ * can contain a *different* chapter number than the one being read. The old
+ * content-first strategy returned that number, so the backend recorded e.g.
+ * 213 while the user was on chapter 215. On NovelArrow chapter routes the
+ * URL is ground truth and must win over content scanning.
+ */
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { parseChapterEnhanced, normalizePath } from '../../userscript/src/services/ChapterDetector.js';
+
+type DocumentStub = { title: string; querySelectorAll: () => Element[] };
+
+const globalRef = globalThis as unknown as { document?: DocumentStub };
+const originalDocument = globalRef.document;
+
+function stubDocument(title: string): void {
+  globalRef.document = {
+    title,
+    querySelectorAll: () => [],
+  };
+}
+
+afterEach(() => {
+  globalRef.document = originalDocument;
+});
+
+describe('parseChapterEnhanced — NovelArrow routes are URL-first', () => {
+  beforeEach(() => {
+    // Misleading content: title still shows a stale chapter number
+    stubDocument('Chapter 213 – Dying City | NovelArrow');
+  });
+
+  it('uses the URL chapter number even when document.title disagrees', () => {
+    const info = parseChapterEnhanced('/chapter/shadow-slave/chapter-215-the-end');
+    expect(info).not.toBeNull();
+    expect(info?.num).toBe(215);
+    expect(info?.source).toBe('url-novelarrow');
+  });
+
+  it('handles trailing slash', () => {
+    const info = parseChapterEnhanced('/chapter/shadow-slave/chapter-215/');
+    expect(info?.num).toBe(215);
+    expect(info?.source).toBe('url-novelarrow');
+  });
+
+  it('handles no hyphen between "chapter" and the number', () => {
+    const info = parseChapterEnhanced('/chapter/shadow-slave/chapter215');
+    expect(info?.num).toBe(215);
+    expect(info?.source).toBe('url-novelarrow');
+  });
+
+  it('handles no title slug', () => {
+    const info = parseChapterEnhanced('/chapter/shadow-slave/chapter-215');
+    expect(info?.num).toBe(215);
+    expect(info?.source).toBe('url-novelarrow');
+  });
+});
+
+describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
+  it('NovelBin routes stay content-first', () => {
+    stubDocument('Chapter 31 – Something | NovelBin');
+    const info = parseChapterEnhanced('/b/shadow-slave/chapter-31');
+    expect(info?.num).toBe(31);
+    expect(info?.source).toBe('title');
+  });
+
+  it('NovelBin URL fallback still works when content has no chapter number', () => {
+    stubDocument('NovelBin');
+    const info = parseChapterEnhanced('/b/shadow-slave/chapter-31');
+    expect(info?.num).toBe(31);
+    expect(info?.source).toBe('url-standard');
+  });
+
+  it('number-prefix URL fallback still works', () => {
+    stubDocument('Some Site');
+    const info = parseChapterEnhanced('/b/shadow-slave/31-the-beginning');
+    expect(info?.num).toBe(31);
+    expect(info?.source).toBe('url-number-prefix');
+  });
+
+  it('returns null when nothing matches', () => {
+    stubDocument('Some Site');
+    expect(parseChapterEnhanced('/novel/shadow-slave')).toBeNull();
+  });
+});
+
+describe('normalizePath — storeKey derivation', () => {
+  it('normalizes cchapter variants to chapter-', () => {
+    expect(normalizePath('/b/slug/cchapter31')).toBe('/b/slug/chapter-31');
+    expect(normalizePath('/b/slug/chapter-31')).toBe('/b/slug/chapter-31');
+  });
+
+  it('leaves NovelArrow paths untouched', () => {
+    expect(normalizePath('/chapter/slug/chapter-215-the-end')).toBe('/chapter/slug/chapter-215-the-end');
+  });
+});
