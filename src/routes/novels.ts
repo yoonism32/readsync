@@ -170,6 +170,42 @@ router.get(
   },
 );
 
+// GET /api/v1/novels/:novelId/chapters-read
+// Distinct chapters visited in the current read-through — powers the
+// dashboard chapter map (read/unread/current markers).
+router.get(
+  '/api/v1/novels/:novelId/chapters-read',
+  validateApiKey,
+  validateNovelId,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const novelId = req.params.novelId;
+
+      const meta = await pool.query<{ rt: number }>(
+        `SELECT COALESCE(current_read_through, 1) AS rt
+         FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
+        [userId, novelId],
+      );
+      const readThrough = meta.rows[0]?.rt ?? 1;
+
+      const result = await pool.query<{ chapter_num: number }>(
+        `SELECT DISTINCT chapter_num FROM progress_snapshots
+         WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+         ORDER BY chapter_num`,
+        [userId, novelId, readThrough],
+      );
+
+      res.json({
+        read_through: readThrough,
+        chapters: result.rows.map((r) => r.chapter_num),
+      });
+    } catch (error) {
+      handleDbError(res, error, 'Get chapters read');
+    }
+  },
+);
+
 // PUT /api/v1/novels/:novelId/status
 router.put(
   '/api/v1/novels/:novelId/status',

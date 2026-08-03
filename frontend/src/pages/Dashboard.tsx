@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
-import { swrFetcher, fetchNovels, formatTimestamp } from '../api/client.js';
+import { swrFetcher, fetchNovels, formatTimestamp, resumeUrl } from '../api/client.js';
+import { BehindBadge } from '../components/BehindBadge.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -34,9 +35,53 @@ export function Dashboard() {
 
   const totalHours = stats ? Math.round(stats.reading_sessions.total_time_seconds / 3600) : 0;
 
+  const continueNovel = recentNovels.find(n => n.latest_url);
+
   return (
     <div className="animate-fade-in">
       <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 24 }}>Dashboard</h1>
+
+      {/* Continue Reading — resume the most recently read novel */}
+      {continueNovel?.latest_url && (
+        <a
+          href={resumeUrl(continueNovel.latest_url, continueNovel.latest_percent)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="glass"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            padding: '16px 20px',
+            marginBottom: 24,
+            borderRadius: 'var(--radius-lg)',
+            border: '1px solid var(--color-gold-border)',
+            background: 'var(--color-gold-glow)',
+            textDecoration: 'none',
+            transition: 'border-color 0.15s',
+          }}
+          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-gold)')}
+          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-gold-border)')}
+        >
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div
+              className="text-muted"
+              style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}
+            >
+              Continue Reading
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--color-text)' }}>
+              {continueNovel.title}
+            </div>
+            <div className="text-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 2 }}>
+              Ch. {continueNovel.latest_chapter ?? '?'} · {Math.round(continueNovel.latest_percent ?? 0)}%
+              {continueNovel.latest_read_at && ` · ${formatTimestamp(continueNovel.latest_read_at)}`}
+              {continueNovel.latest_device_label && ` on ${continueNovel.latest_device_label}`}
+            </div>
+          </div>
+          <span aria-hidden="true" style={{ fontSize: 24, color: 'var(--color-gold)' }}>→</span>
+        </a>
+      )}
 
       {/* Stats grid */}
       {statsLoading ? (
@@ -85,8 +130,9 @@ export function Dashboard() {
               onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
             >
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 6 }}>
-                  {n.title}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{n.title}</span>
+                  <BehindBadge novel={n} />
                 </div>
                 <ProgressBar percent={n.latest_percent ?? 0} showLabel size="sm" />
               </div>

@@ -1,9 +1,11 @@
 import { Link, useParams } from 'react-router-dom';
 import useSWR from 'swr';
-import { fetchNovels, formatTimestamp } from '../api/client.js';
+import { fetchNovels, formatTimestamp, coverUrl, resumeUrl } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
+import { BehindBadge } from '../components/BehindBadge.js';
+import { ChapterMap } from '../components/ChapterMap.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -40,7 +42,7 @@ export function NovelPage() {
           {/* Cover */}
           <div style={{ width: 80, height: 112, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}>
             <img
-              src={`/api/v1/covers/${encodeURIComponent(novel.novel_id)}`}
+              src={coverUrl(novel.novel_id)}
               alt=""
               width={80}
               height={112}
@@ -51,7 +53,10 @@ export function NovelPage() {
           </div>
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h1 style={{ fontSize: 'var(--text-xl)', marginBottom: 8 }}>{novel.title}</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+              <h1 style={{ fontSize: 'var(--text-xl)' }}>{novel.title}</h1>
+              <BehindBadge novel={novel} />
+            </div>
             {novel.author && <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 8 }}>by {novel.author}</p>}
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <StatusBadge status={novel.status} />
@@ -75,7 +80,7 @@ export function NovelPage() {
 
       {novel.latest_url && (
         <a
-          href={novel.latest_url}
+          href={resumeUrl(novel.latest_url, novel.latest_percent)}
           target="_blank"
           rel="noopener noreferrer"
           style={{
@@ -100,6 +105,8 @@ export function NovelPage() {
           Continue Reading →
         </a>
       )}
+
+      <ChapterMap novel={novel} />
     </div>
   );
 }

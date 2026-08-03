@@ -258,8 +258,13 @@ export function formatTimestamp(
   return d.toLocaleDateString();
 }
 
-export async function copyResumeLink(url: string, percent: number): Promise<void> {
+/** Chapter URL with the userscript's #nbp scroll-restore hash appended. */
+export function resumeUrl(url: string, percent: number | null | undefined): string {
   const clean = url.replace(/#.*$/, '');
-  const link = `${clean}#nbp=${Number(percent).toFixed(1)}`;
-  await navigator.clipboard.writeText(link);
+  const p = Number(percent);
+  return Number.isFinite(p) && p > 0 ? `${clean}#nbp=${p.toFixed(1)}` : clean;
+}
+
+export async function copyResumeLink(url: string, percent: number): Promise<void> {
+  await navigator.clipboard.writeText(resumeUrl(url, percent));
 }
