@@ -7,6 +7,8 @@ import { Spinner } from '../components/Spinner.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import { ChapterMap } from '../components/ChapterMap.js';
+import { NotesPanel } from '../components/NotesPanel.js';
+import { RereadPanel } from '../components/RereadPanel.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -109,6 +111,8 @@ export function NovelPage() {
       )}
 
       <ChapterMap novel={novel} />
+      <RereadPanel novel={novel} />
+      <NotesPanel novelId={novel.novel_id} />
     </div>
   );
 }

@@ -216,6 +216,7 @@ export function createProgressRouter(io: SocketServer): Router {
           );
           const maxChapter = maxChapterResult.rows[0]?.max_chapter ?? 0;
 
+          let autoReread = false;
           if (maxChapter - chapterInfo.num >= AUTO_REREAD_CHAPTER_THRESHOLD) {
             const meta = metaResult.rows[0];
             const archiveEntry = {
@@ -270,7 +271,21 @@ export function createProgressRouter(io: SocketServer): Router {
               },
               'Auto-detected reread',
             );
+
+            // An auto-reread rewrites the novel's bookmark state, so it must
+            // never be invisible — surface it in the notification bell.
+            await client.query(
+              `INSERT INTO notifications (user_id, novel_id, type, message)
+               VALUES ($1, $2, 'auto_reread', $3)`,
+              [
+                user_id,
+                novel_id,
+                `${novel_title}: re-read #${newRT} auto-started at ch. ${chapterInfo.num} (previous run reached ch. ${maxChapter})`,
+              ],
+            );
+
             currentReadThrough = newRT;
+            autoReread = true;
           }
 
           // Max-progress policy
@@ -359,7 +374,17 @@ export function createProgressRouter(io: SocketServer): Router {
             }
           }
 
-          return getLatestStates(client, user_id, novel_id, currentReadThrough);
+          const states = await getLatestStates(
+            client,
+            user_id,
+            novel_id,
+            currentReadThrough,
+          );
+          return {
+            ...states,
+            read_through: currentReadThrough,
+            auto_reread: autoReread,
+          };
         });
 
         if (!result) return; // early-exit (no progress)

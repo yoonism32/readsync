@@ -212,3 +212,37 @@ p { margin: 0; }
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Buttons ─────────────────────────────────────────────── */
+
+.btn-gold {
+  background: var(--color-gold);
+  color: #080c12;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 7px 14px;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  touch-action: manipulation;
+}
+.btn-gold:hover:not(:disabled) { background: var(--color-gold-bright); }
+.btn-gold:active:not(:disabled) { transform: scale(0.97); }
+.btn-gold:disabled { opacity: 0.45; cursor: default; }
+
+.btn-ghost {
+  background: none;
+  color: var(--color-text-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 6px 12px;
+  font-size: var(--text-sm);
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  touch-action: manipulation;
+}
+.btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-border-gold); }
+.btn-ghost:disabled { opacity: 0.45; cursor: default; }
