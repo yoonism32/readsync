@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
-import { fetchNovels, resumeUrl, copyResumeLink } from '../api/client.js';
+import useSWR, { useSWRConfig } from 'swr';
+import toast from 'react-hot-toast';
+import { fetchNovels, resumeUrl, copyResumeLink, novels as novelsApi } from '../api/client.js';
 import { rankItems } from '../lib/fuzzy.js';
-import type { Novel } from '../types/index.js';
+import type { Novel, NovelStatus } from '../types/index.js';
 
 interface PageCommand {
   kind: 'page';
@@ -28,12 +29,16 @@ const PAGES: PageCommand[] = [
   { kind: 'page', label: 'Go to Settings', to: '/settings' },
 ];
 
+const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', 'on-hold', 'dropped'];
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [cursor, setCursor] = useState(0);
+  const [statusFor, setStatusFor] = useState<Novel | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { mutate } = useSWRConfig();
 
   const { data } = useSWR<Novel[]>(open ? '/novels' : null, fetchNovels, {
     revalidateOnFocus: false,
@@ -72,6 +77,18 @@ export function CommandPalette() {
     setOpen(false);
     setQuery('');
     setCursor(0);
+    setStatusFor(null);
+  };
+
+  const applyStatus = async (novel: Novel, status: NovelStatus) => {
+    close();
+    try {
+      await novelsApi.setStatus(novel.novel_id, status);
+      await mutate('/novels');
+      toast.success(`${novel.title} → ${status}`);
+    } catch {
+      toast.error('Failed to update status');
+    }
   };
 
   const run = (cmd: Command, resume: boolean) => {
@@ -93,20 +110,46 @@ export function CommandPalette() {
 
   if (!open) return null;
 
-  const clamped = Math.min(cursor, Math.max(0, results.length - 1));
+  const listLength = statusFor ? STATUS_OPTIONS.length : results.length;
+  const clamped = Math.min(cursor, Math.max(0, listLength - 1));
 
   return (
     <div
       onClick={close}
       onKeyDown={e => {
-        if (e.key === 'Escape') close();
+        if (e.key === 'Escape') {
+          if (statusFor) { setStatusFor(null); setCursor(0); }
+          else close();
+          return;
+        }
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          setCursor(c => Math.min(c + 1, results.length - 1));
+          setCursor(c => Math.min(c + 1, listLength - 1));
         }
         if (e.key === 'ArrowUp') {
           e.preventDefault();
           setCursor(c => Math.max(c - 1, 0));
+        }
+        if (statusFor) {
+          if (e.key === 'Enter' && STATUS_OPTIONS[clamped]) {
+            e.preventDefault();
+            void applyStatus(statusFor, STATUS_OPTIONS[clamped]);
+          }
+          if (e.key === 'Backspace' && query === '') {
+            e.preventDefault();
+            setStatusFor(null);
+            setCursor(0);
+          }
+          return;
+        }
+        if (e.key === 'Tab') {
+          const cmd = results[clamped];
+          if (cmd?.kind === 'novel') {
+            e.preventDefault();
+            setStatusFor(cmd.novel);
+            setQuery('');
+            setCursor(0);
+          }
         }
         if (e.key === 'Enter' && results[clamped]) {
           e.preventDefault();
@@ -152,7 +195,7 @@ export function CommandPalette() {
           type="text"
           value={query}
           onChange={e => { setQuery(e.target.value); setCursor(0); }}
-          placeholder="Search novels or jump to a page…"
+          placeholder={statusFor ? `Set status for “${statusFor.title}”…` : 'Search novels or jump to a page…'}
           aria-label="Command palette search"
           style={{
             width: '100%',
@@ -168,7 +211,39 @@ export function CommandPalette() {
         />
 
         <div style={{ maxHeight: '50vh', overflowY: 'auto', padding: 6 }}>
-          {results.length === 0 ? (
+          {statusFor ? (
+            STATUS_OPTIONS.map((s, i) => {
+              const active = i === clamped;
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => { void applyStatus(statusFor, s); }}
+                  onMouseEnter={() => setCursor(i)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    width: '100%',
+                    textAlign: 'left',
+                    background: active ? 'var(--color-gold-glow)' : 'none',
+                    border: 'none',
+                    borderRadius: 'var(--radius-md)',
+                    padding: '9px 12px',
+                    cursor: 'pointer',
+                    color: active ? 'var(--color-gold)' : 'var(--color-text)',
+                    fontSize: 'var(--text-sm)',
+                  }}
+                >
+                  <span aria-hidden="true" style={{ opacity: 0.6, flexShrink: 0 }}>◆</span>
+                  <span style={{ flex: 1 }}>{s.charAt(0).toUpperCase() + s.slice(1)}</span>
+                  {statusFor.status === s && (
+                    <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>current</span>
+                  )}
+                </button>
+              );
+            })
+          ) : results.length === 0 ? (
             <p className="text-muted" style={{ fontSize: 'var(--text-sm)', padding: '16px 14px' }}>
               No matches.
             </p>
@@ -226,11 +301,22 @@ export function CommandPalette() {
             fontSize: 'var(--text-xs)',
           }}
         >
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>⇧↵ resume on site</span>
-          <span>^C copy resume link</span>
-          <span style={{ marginLeft: 'auto' }}>esc close</span>
+          {statusFor ? (
+            <>
+              <span>↑↓ navigate</span>
+              <span>↵ set status</span>
+              <span style={{ marginLeft: 'auto' }}>esc back</span>
+            </>
+          ) : (
+            <>
+              <span>↑↓ navigate</span>
+              <span>↵ open</span>
+              <span>⇧↵ resume</span>
+              <span>⇥ status</span>
+              <span>^C copy link</span>
+              <span style={{ marginLeft: 'auto' }}>esc close</span>
+            </>
+          )}
         </div>
       </div>
     </div>
