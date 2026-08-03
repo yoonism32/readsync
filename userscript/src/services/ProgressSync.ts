@@ -1,5 +1,6 @@
 import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC } from '../config.js';
 import { postProgress, beaconProgress, compareProgress } from '../api/client.js';
+import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
 import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId } from './ChapterDetector.js';
 import type { SyncPayload } from '../types/index.js';
 
@@ -58,10 +59,33 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
     if (result?.updated && !QUIET_SYNC) {
       ctx.updateBadgeStatus('📡 Synced');
     }
+    // Back online — drain anything queued while offline.
+    if (queueSize() > 0) {
+      const drained = await flushQueue();
+      if (drained > 0) ctx.updateBadgeStatus(`📡 Synced +${drained} queued`);
+    }
   } catch (error) {
-    console.warn(`[${LOG_TAG}] Failed to sync progress`, error);
-    ctx.updateBadgeStatus('⚠️ Sync Error', true);
+    // Server rejections (4xx) are policy, not connectivity — don't queue.
+    const msg = error instanceof Error ? error.message : '';
+    if (/^HTTP 4\d\d/.test(msg)) {
+      console.warn(`[${LOG_TAG}] Sync rejected`, error);
+      ctx.updateBadgeStatus('⚠️ Sync Error', true);
+      return;
+    }
+    const size = enqueue(payload);
+    console.warn(`[${LOG_TAG}] Offline — sync queued`, error);
+    ctx.updateBadgeStatus(`📴 ${size} queued`, true);
   }
+}
+
+/** Replay any offline-queued syncs; called on boot and when the browser
+ *  reports connectivity is back. */
+export async function drainOfflineQueue(ctx: SyncContext): Promise<void> {
+  if (queueSize() === 0) return;
+  const drained = await flushQueue();
+  if (drained > 0) ctx.updateBadgeStatus(`📡 Synced ${drained} queued`);
+  const remaining = queueSize();
+  if (remaining > 0) ctx.updateBadgeStatus(`📴 ${remaining} queued`, true);
 }
 
 export function debouncedSync(percent: number, ctx: SyncContext): void {

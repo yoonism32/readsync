@@ -9,6 +9,7 @@ import {
 } from './services/ChapterDetector.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
+  drainOfflineQueue,
 } from './services/ProgressSync.js';
 import {
   injectBadge, updateBadgeStatus, updatePill, notify,
@@ -409,6 +410,11 @@ function boot(): void {
   }
 
   startConflictChecker(syncCtx);
+
+  // Offline queue: replay anything stranded by a previous offline session,
+  // and again whenever the browser reports connectivity is back.
+  setTimeout(() => { void drainOfflineQueue(syncCtx); }, 2000);
+  window.addEventListener('online', () => { void drainOfflineQueue(syncCtx); });
 }
 
 if (document.readyState === 'loading') {
