@@ -297,22 +297,33 @@ export function createProgressRouter(io: SocketServer): Router {
             [user_id, device_id, novel_id, currentReadThrough],
           );
 
+          // Max-progress policy. rejected_reason distinguishes a quiet
+          // peek at an earlier chapter (bookmark stays safe) from mere
+          // same-chapter noise, so clients can offer "re-read from here".
           let shouldUpdate = true;
+          let rejectedReason: string | null = null;
           if (lastProgress.rows.length > 0) {
             const prev = lastProgress.rows[0];
             if (
               prev.chapter_num === chapterInfo.num &&
               percentValue <= parseFloat(prev.percent)
-            )
+            ) {
               shouldUpdate = false;
-            if (chapterInfo.num < prev.chapter_num) shouldUpdate = false;
+              rejectedReason = 'same_chapter_lower_percent';
+            }
+            if (chapterInfo.num < prev.chapter_num) {
+              shouldUpdate = false;
+              rejectedReason = 'behind_chapter';
+            }
             if (
               percentValue <= CHAPTER_RESTART_THRESHOLD_PERCENT &&
               parseFloat(prev.percent) >
                 SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT &&
               prev.chapter_num === chapterInfo.num
-            )
+            ) {
               shouldUpdate = false;
+              rejectedReason = 'chapter_restart_guard';
+            }
           }
 
           if (shouldUpdate) {
@@ -384,6 +395,8 @@ export function createProgressRouter(io: SocketServer): Router {
             ...states,
             read_through: currentReadThrough,
             auto_reread: autoReread,
+            updated: shouldUpdate,
+            rejected_reason: rejectedReason,
           };
         });
 
@@ -391,7 +404,6 @@ export function createProgressRouter(io: SocketServer): Router {
 
         const response = {
           status: 'success',
-          updated: true,
           novel_id,
           ...result,
         };

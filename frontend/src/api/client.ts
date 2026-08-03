@@ -144,6 +144,12 @@ export const novels = {
   startReread: (novelId: string) =>
     request(`/novels/${encodeURIComponent(novelId)}/reread`, { method: 'POST' }),
 
+  progressOverride: (novelId: string, chapter_num: number, percent = 0) =>
+    request(`/novels/${encodeURIComponent(novelId)}/progress-override`, {
+      method: 'POST',
+      body: { chapter_num, percent },
+    }),
+
   bulkStatus: (novelIds: string[], status: NovelStatus) =>
     request('/novels/bulk-status', { method: 'POST', body: { novel_ids: novelIds, status } }),
 
@@ -244,6 +250,18 @@ export const notifications = {
     request(`/notifications/${id}/read`, { method: 'POST' }),
   markAllRead: () =>
     request('/notifications/read-all', { method: 'POST' }),
+};
+
+// ── Backups ───────────────────────────────────────────────
+
+export interface BackupsStatus {
+  last_backup_at: string | null;
+  backups: { name: string; created_at: string; size: number }[];
+}
+
+export const backups = {
+  status: () => request<BackupsStatus>('/backups'),
+  run: () => request('/backups/run', { method: 'POST' }),
 };
 
 // ── Settings ──────────────────────────────────────────────

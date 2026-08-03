@@ -1,8 +1,14 @@
 import { READSYNC_API_BASE, READSYNC_API_KEY } from '../config.js';
 import type { SyncPayload, CompareResult, AutoUpdatePayload } from '../types/index.js';
 
+export interface ProgressResult {
+  updated: boolean;
+  rejected_reason?: string | null;
+  auto_reread?: boolean;
+}
+
 /** POST /api/v1/progress — sync scroll progress */
-export async function postProgress(payload: SyncPayload): Promise<{ updated: boolean } | null> {
+export async function postProgress(payload: SyncPayload): Promise<ProgressResult | null> {
   const res = await fetch(`${READSYNC_API_BASE}/progress`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -12,7 +18,7 @@ export async function postProgress(payload: SyncPayload): Promise<{ updated: boo
     const text = await res.text().catch(() => '');
     throw new Error(`HTTP ${res.status}: ${text}`);
   }
-  return res.json() as Promise<{ updated: boolean }>;
+  return res.json() as Promise<ProgressResult>;
 }
 
 /** Fire-and-forget via sendBeacon — used on page unload */
@@ -48,5 +54,15 @@ export async function postAutoUpdate(payload: AutoUpdatePayload): Promise<unknow
     const text = await res.text().catch(() => '');
     throw Object.assign(new Error(`HTTP ${res.status}: ${text}`), { status: res.status });
   }
+  return res.json();
+}
+
+/** POST /api/v1/novels/:novelId/reread — archive current run, start re-read */
+export async function postReread(novelId: string): Promise<unknown> {
+  const res = await fetch(
+    `${READSYNC_API_BASE}/novels/${encodeURIComponent(novelId)}/reread?user_key=${encodeURIComponent(READSYNC_API_KEY)}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

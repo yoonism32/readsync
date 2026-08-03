@@ -1,5 +1,6 @@
 import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC } from '../config.js';
-import { postProgress, beaconProgress, compareProgress } from '../api/client.js';
+import { postProgress, beaconProgress, compareProgress, postReread } from '../api/client.js';
+import { showPeekBanner } from './UIManager.js';
 import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
 import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId } from './ChapterDetector.js';
 import type { SyncPayload } from '../types/index.js';
@@ -58,6 +59,24 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
     log('Server JSON', result);
     if (result?.updated && !QUIET_SYNC) {
       ctx.updateBadgeStatus('📡 Synced');
+    }
+    if (result?.auto_reread) {
+      ctx.updateBadgeStatus('🔁 Re-read started');
+    }
+    // Quiet peek: the server kept the bookmark where it was because
+    // we're on an earlier chapter. Offer an explicit re-read instead.
+    if (result && !result.updated && result.rejected_reason === 'behind_chapter') {
+      const novelId = normalizeNovelId(location.href);
+      if (novelId) {
+        showPeekBanner(novelId, () => {
+          void postReread(novelId)
+            .then(() => {
+              ctx.updateBadgeStatus('🔁 Re-read started');
+              void syncProgress(percent, ctx);
+            })
+            .catch(() => ctx.updateBadgeStatus('⚠️ Re-read failed', true));
+        });
+      }
     }
     // Back online — drain anything queued while offline.
     if (queueSize() > 0) {

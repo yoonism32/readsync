@@ -10,6 +10,7 @@ import { ChapterMap } from '../components/ChapterMap.js';
 import { NotesPanel } from '../components/NotesPanel.js';
 import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
+import { EditProgress } from '../components/EditProgress.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -78,6 +79,7 @@ export function NovelPage() {
               {novel.latest_chapter != null && <span>Ch. {novel.latest_chapter}{novel.latest_chapter_num ? ` / ${novel.latest_chapter_num}` : ''}</span>}
               {novel.latest_read_at && <span>Last read {formatTimestamp(novel.latest_read_at)}</span>}
               {novel.started_at && <span>Started {new Date(novel.started_at).toLocaleDateString()}</span>}
+              <EditProgress novel={novel} />
             </div>
 
             <TagEditor novelId={novel.novel_id} />

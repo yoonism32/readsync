@@ -8,7 +8,8 @@ import {
 import pool, { withTransaction } from '../db/pool.js';
 import { requireAuthAPI, validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
-import { healDeadSiteUrl } from '../services/NovelService.js';
+import { buildExport } from '../services/ExportService.js';
+import { getLatestStates, healDeadSiteUrl } from '../services/NovelService.js';
 import {
   handleValidationErrors,
   validateNovelId,
@@ -308,10 +309,92 @@ router.put(
   },
 );
 
+// POST /api/v1/novels/:novelId/progress-override
+// Manual bookmark edit: writes a snapshot directly, bypassing the
+// max-progress policy — the whole point is correcting the record.
+router.post(
+  '/api/v1/novels/:novelId/progress-override',
+  requireAuthAPI,
+  [
+    param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }),
+    body('chapter_num').isInt({ min: 0 }),
+    body('percent').optional().isFloat({ min: 0, max: 100 }),
+    handleValidationErrors,
+  ],
+  validateApiKey,
+  validateNovelId,
+  async (req: Request, res: Response) => {
+    const novelId = String(req.params.novelId);
+    const userId = (req as AuthenticatedRequest).user.id;
+    const { chapter_num, percent = 0 } = req.body as {
+      chapter_num: number;
+      percent?: number;
+    };
+
+    try {
+      const result = await withTransaction(async (client) => {
+        const meta = await client.query<{
+          current_read_through: number | null;
+        }>(
+          'SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2',
+          [userId, novelId],
+        );
+        if (meta.rows.length === 0)
+          return { error: 'Novel not found', status: 404 };
+        const readThrough = meta.rows[0].current_read_through ?? 1;
+
+        await client.query(
+          `INSERT INTO devices (id, user_id, device_label, device_type)
+           VALUES ('manual', $1, 'Manual edit', 'unknown')
+           ON CONFLICT (id) DO NOTHING`,
+          [userId],
+        );
+
+        const novelUrl = await client.query<{ primary_url: string | null }>(
+          'SELECT primary_url FROM novels WHERE id = $1',
+          [novelId],
+        );
+
+        await client.query(
+          `INSERT INTO progress_snapshots (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page, read_through_num)
+           VALUES ($1, 'manual', $2, 'chapter', $3, $4, $5, 0, $6)`,
+          [
+            userId,
+            novelId,
+            chapter_num,
+            percent,
+            novelUrl.rows[0]?.primary_url ?? null,
+            readThrough,
+          ],
+        );
+
+        await client.query(
+          'UPDATE user_novel_meta SET updated_at = CURRENT_TIMESTAMP WHERE user_id = $1 AND novel_id = $2',
+          [userId, novelId],
+        );
+
+        return {
+          success: true,
+          states: await getLatestStates(client, userId, novelId, readThrough),
+        };
+      });
+
+      if ('error' in result)
+        return res
+          .status(result.status as number)
+          .json({ error: result.error });
+      res.json(result);
+    } catch (error) {
+      handleDbError(res, error, 'Progress override');
+    }
+  },
+);
+
 // POST /api/v1/novels/:novelId/reread
+// API-key auth only (no session) so the userscript's "re-read from
+// here" banner can call it — same trust level as progress writes.
 router.post(
   '/api/v1/novels/:novelId/reread',
-  requireAuthAPI,
   [
     param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }),
     handleValidationErrors,
@@ -575,38 +658,7 @@ router.get(
   async (req: Request, res: Response) => {
     const userId = (req as AuthenticatedRequest).user.id;
     try {
-      const [novels, progress, bookmarks, notes, categories] =
-        await Promise.all([
-          pool.query(
-            `SELECT n.*, m.status, m.favorite, m.rating, m.notes, m.started_at, m.completed_at FROM novels n LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1 WHERE EXISTS (SELECT 1 FROM progress_snapshots p WHERE p.novel_id = n.id AND p.user_id = $1) ORDER BY n.title`,
-            [userId],
-          ),
-          pool.query(
-            'SELECT DISTINCT ON (novel_id) * FROM progress_snapshots WHERE user_id = $1 ORDER BY novel_id, created_at DESC',
-            [userId],
-          ),
-          pool.query(
-            'SELECT * FROM bookmarks WHERE user_id = $1 ORDER BY created_at DESC',
-            [userId],
-          ),
-          pool.query(
-            'SELECT * FROM novel_notes WHERE user_id = $1 ORDER BY created_at DESC',
-            [userId],
-          ),
-          pool.query(
-            'SELECT * FROM novel_categories WHERE user_id = $1 ORDER BY category',
-            [userId],
-          ),
-        ]);
-      res.json({
-        export_date: new Date().toISOString(),
-        user_id: userId,
-        novels: novels.rows,
-        progress: progress.rows,
-        bookmarks: bookmarks.rows,
-        notes: notes.rows,
-        categories: categories.rows,
-      });
+      res.json(await buildExport(userId));
     } catch (error) {
       handleDbError(res, error, 'Export data');
     }

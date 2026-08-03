@@ -20,6 +20,7 @@ import authRouter from './routes/auth.js';
 import bookmarksRouter from './routes/bookmarks.js';
 import coversRouter from './routes/covers.js';
 import devicesRouter from './routes/devices.js';
+import backupsRouter from './routes/backups.js';
 import categoriesRouter from './routes/categories.js';
 import historyRouter from './routes/history.js';
 import notesRouter from './routes/notes.js';
@@ -119,6 +120,7 @@ export function createApp(): {
   app.use(notificationsRouter);
   app.use(categoriesRouter);
   app.use(historyRouter);
+  app.use(backupsRouter);
   app.use(statsRouter);
   app.use(settingsRouter);
   app.use(coversRouter);

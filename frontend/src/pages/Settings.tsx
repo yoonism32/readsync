@@ -1,15 +1,35 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { swrFetcher, devices as devicesApi, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
+import { swrFetcher, devices as devicesApi, backups as backupsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
+import type { BackupsStatus } from '../api/client.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import type { Device } from '../types/index.js';
 
 export function Settings() {
   const { data: deviceList, isLoading, mutate } = useSWR<Device[]>('/devices', swrFetcher);
+  const { data: backupStatus, mutate: mutateBackups } = useSWR<BackupsStatus>(
+    'backups-status',
+    () => backupsApi.status(),
+    { revalidateOnFocus: false },
+  );
   const [apiKeyInput, setApiKeyInput] = useState(getApiKey);
   const [saving, setSaving] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
+
+  async function handleBackupNow() {
+    setBackingUp(true);
+    try {
+      await backupsApi.run();
+      await mutateBackups();
+      toast.success('Backup complete');
+    } catch {
+      toast.error('Backup failed');
+    } finally {
+      setBackingUp(false);
+    }
+  }
 
   async function handleSaveKey(e: { preventDefault(): void }): Promise<void> {
     e.preventDefault();
@@ -80,6 +100,31 @@ export function Settings() {
             Save API Key
           </button>
         </form>
+      </section>
+
+      {/* Backups */}
+      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
+          <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>Backups</h2>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => { void handleBackupNow(); }}
+            disabled={backingUp}
+          >
+            {backingUp ? 'Backing up…' : 'Back up now'}
+          </button>
+        </div>
+        <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
+          A daily snapshot of your full library (novels, progress, bookmarks, notes,
+          tags) is stored automatically; the last 30 are kept.
+        </p>
+        <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 8 }}>
+          {backupStatus?.last_backup_at
+            ? `Last backup ${formatTimestamp(backupStatus.last_backup_at)} · ${backupStatus.backups.length} stored`
+            : 'No backups yet.'}
+        </p>
       </section>
 
       {/* Devices */}

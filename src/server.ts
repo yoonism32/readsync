@@ -3,6 +3,7 @@ import { PORT } from './config.js';
 import { runMigrations } from './db/migrate.js';
 import pool from './db/pool.js';
 import logger from './logger.js';
+import { startBackupScheduler } from './services/BackupService.js';
 
 async function main(): Promise<void> {
   await runMigrations();
@@ -12,6 +13,8 @@ async function main(): Promise<void> {
   httpServer.listen(PORT, '0.0.0.0', () => {
     logger.info({ port: PORT }, 'ReadSync API server running');
   });
+
+  startBackupScheduler();
 
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');

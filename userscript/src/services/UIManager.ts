@@ -420,3 +420,74 @@ export function toggleHelp(deviceId: string): void {
     localStorage.setItem('nb_overlay', 'true');
   }
 }
+
+/* ===== Quiet-peek banner (viewing an older chapter) ===== */
+
+let peekBanner: HTMLElement | null = null;
+const peekShownFor = new Set<string>();
+
+/**
+ * Shown when the server rejects backwards progress: the user is peeking
+ * at an old chapter and their bookmark is untouched. Offers an explicit
+ * "re-read from here" that archives the current run and starts over.
+ */
+export function showPeekBanner(novelId: string, onReread: () => void): void {
+  if (peekShownFor.has(novelId)) return;
+  peekShownFor.add(novelId);
+
+  if (peekBanner) peekBanner.remove();
+
+  injectStyles('peek-banner-styles', `
+    .nb-peek-banner{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#15130c;color:#e8e2d0;border:1px solid rgba(201,168,76,0.45);padding:0;border-radius:12px;z-index:100000;box-shadow:0 8px 32px rgba(0,0,0,0.5);animation:peekSlideUp 0.3s ease;max-width:420px;width:92%}
+    .peek-content{display:flex;align-items:center;gap:14px;padding:14px 18px}
+    .peek-icon{font-size:1.3rem;flex-shrink:0}
+    .peek-text{flex:1;font-size:.9rem;line-height:1.4}
+    .peek-text strong{color:#c9a84c}
+    .peek-actions{display:flex;flex-direction:column;gap:6px}
+    .peek-btn{padding:7px 14px;border:none;border-radius:6px;font-size:.8rem;font-weight:600;cursor:pointer;transition:all .2s ease;white-space:nowrap}
+    .peek-reread{background:#c9a84c;color:#15130c}
+    .peek-reread:hover{background:#e0c06a}
+    .peek-ok{background:rgba(255,255,255,0.08);color:#e8e2d0;border:1px solid rgba(255,255,255,0.2)}
+    .peek-ok:hover{background:rgba(255,255,255,0.15)}
+    @keyframes peekSlideUp{from{transform:translateX(-50%) translateY(16px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+  `);
+
+  const banner = document.createElement('div');
+  banner.className = 'nb-peek-banner';
+
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'peek-content';
+
+  const iconDiv = document.createElement('div');
+  iconDiv.className = 'peek-icon';
+  iconDiv.textContent = '👀';
+
+  const textDiv = document.createElement('div');
+  textDiv.className = 'peek-text';
+  const strong = document.createElement('strong');
+  strong.textContent = 'Viewing an older chapter.';
+  textDiv.appendChild(strong);
+  textDiv.appendChild(document.createTextNode(' Your bookmark is safe and won’t move.'));
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'peek-actions';
+
+  const rereadBtn = document.createElement('button');
+  rereadBtn.className = 'peek-btn peek-reread';
+  rereadBtn.textContent = 'Re-read from here';
+
+  const okBtn = document.createElement('button');
+  okBtn.className = 'peek-btn peek-ok';
+  okBtn.textContent = 'Just peeking';
+
+  actionsDiv.append(rereadBtn, okBtn);
+  contentDiv.append(iconDiv, textDiv, actionsDiv);
+  banner.appendChild(contentDiv);
+  peekBanner = banner;
+  document.body.appendChild(peekBanner);
+
+  const close = () => { peekBanner?.remove(); peekBanner = null; };
+  rereadBtn.onclick = () => { close(); onReread(); };
+  okBtn.onclick = close;
+  setTimeout(close, 15000);
+}
