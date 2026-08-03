@@ -16,6 +16,7 @@ const Explorer  = lazy(() => import('./pages/Explorer.js').then(m => ({ default:
 const Settings  = lazy(() => import('./pages/Settings.js').then(m => ({ default: m.Settings })));
 const Admin     = lazy(() => import('./pages/Admin.js').then(m => ({ default: m.Admin })));
 const Manage    = lazy(() => import('./pages/Manage.js').then(m => ({ default: m.Manage })));
+const History   = lazy(() => import('./pages/History.js').then(m => ({ default: m.History })));
 
 function PageFallback() {
   return (
@@ -78,6 +79,7 @@ export default function App() {
                     <Route path="mylist" element={<MyList />} />
                     <Route path="novel/:novelId" element={<NovelPage />} />
                     <Route path="explorer" element={<Explorer />} />
+                    <Route path="history" element={<History />} />
                     <Route path="manage" element={<Manage />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="admin" element={<Admin />} />

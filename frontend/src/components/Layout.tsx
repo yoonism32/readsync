@@ -3,7 +3,7 @@ import { auth } from '../api/client.js';
 import { NotificationBell } from './NotificationBell.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
-  WrenchIcon, ShieldIcon, LogOutIcon,
+  WrenchIcon, ShieldIcon, LogOutIcon, ClockIcon,
 } from './Icon.js';
 
 interface Props {
@@ -16,6 +16,7 @@ const NAV: NavItem[] = [
   { to: '/mylist',   label: 'My List',   Icon: BookOpenIcon },
   { to: '/dashboard',label: 'Dashboard', Icon: DashboardIcon },
   { to: '/explorer', label: 'Explorer',  Icon: SearchIcon },
+  { to: '/history',  label: 'History',   Icon: ClockIcon },
   { to: '/manage',   label: 'Manage',    Icon: WrenchIcon },
   { to: '/settings', label: 'Settings',  Icon: GearIcon },
   { to: '/admin',    label: 'Admin',     Icon: ShieldIcon },

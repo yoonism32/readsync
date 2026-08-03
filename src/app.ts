@@ -21,6 +21,7 @@ import bookmarksRouter from './routes/bookmarks.js';
 import coversRouter from './routes/covers.js';
 import devicesRouter from './routes/devices.js';
 import categoriesRouter from './routes/categories.js';
+import historyRouter from './routes/history.js';
 import notesRouter from './routes/notes.js';
 import notificationsRouter from './routes/notifications.js';
 import novelsRouter from './routes/novels.js';
@@ -117,6 +118,7 @@ export function createApp(): {
   app.use(notesRouter);
   app.use(notificationsRouter);
   app.use(categoriesRouter);
+  app.use(historyRouter);
   app.use(statsRouter);
   app.use(settingsRouter);
   app.use(coversRouter);
