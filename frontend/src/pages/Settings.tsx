@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { swrFetcher, devices as devicesApi, backups as backupsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
+import { swrFetcher, devices as devicesApi, backups as backupsApi, novels as novelsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
 import type { BackupsStatus } from '../api/client.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -17,6 +18,9 @@ export function Settings() {
   const [apiKeyInput, setApiKeyInput] = useState(getApiKey);
   const [saving, setSaving] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleBackupNow() {
     setBackingUp(true);
@@ -28,6 +32,40 @@ export function Settings() {
       toast.error('Backup failed');
     } finally {
       setBackingUp(false);
+    }
+  }
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const data = await novelsApi.export();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `readsync-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Export downloaded');
+    } catch {
+      toast.error('Export failed');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      await novelsApi.import(parsed);
+      toast.success('Import complete');
+    } catch {
+      toast.error('Import failed — check the file is a ReadSync export');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -83,23 +121,45 @@ export function Settings() {
             onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
             onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
           />
-          <button
-            type="submit"
-            style={{
-              background: 'var(--color-gold)',
-              color: '#080c12',
-              border: 'none',
-              borderRadius: 'var(--radius-md)',
-              padding: '8px 16px',
-              fontWeight: 600,
-              fontSize: 'var(--text-sm)',
-              cursor: 'pointer',
-              touchAction: 'manipulation',
-            }}
-          >
+          <button type="submit" className="btn-accent">
             Save API Key
           </button>
         </form>
+      </section>
+
+      {/* Export / Import */}
+      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 4 }}>Backup &amp; Restore</h2>
+        <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>
+          Export your reading data to a JSON file for a manual backup, or import from a
+          previous one.
+        </p>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="btn-accent" onClick={() => { void handleExport(); }} disabled={exporting}>
+            {exporting ? 'Exporting…' : '⬇ Export Data'}
+          </button>
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+          >
+            {importing ? 'Importing…' : '⬆ Import Data'}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json"
+            style={{ display: 'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (file) void handleImportFile(file);
+            }}
+          />
+        </div>
+        <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 12 }}>
+          What gets exported: all novels, progress history, bookmarks, notes, and tags.
+        </p>
       </section>
 
       {/* Backups */}
@@ -176,6 +236,49 @@ export function Settings() {
           </div>
         )}
       </section>
+
+      {/* Badge legend */}
+      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
+        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>What the badges mean</h2>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <LegendRow
+            swatch={<span className="tabular" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#07110f', background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>+8</span>}
+            text="Unread chapters since your last read — the count on the site minus your bookmark."
+          />
+          <LegendRow
+            swatch={<span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', background: 'rgba(251,191,36,0.14)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>hiatus?</span>}
+            text="No new chapter on the site in 90+ days while you're still marked Reading."
+          />
+          <LegendRow
+            swatch={<span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', background: 'var(--color-accent-glow)', border: '1px solid var(--color-accent-border)', borderRadius: 'var(--radius-full)', padding: '0 8px' }}>2nd read</span>}
+            text="You're on a re-read — the novel page keeps every past run in its history."
+          />
+          <LegendRow
+            swatch={<span style={{ color: 'var(--color-warning)' }}>★</span>}
+            text="Favorited — click the star on any row to toggle it."
+          />
+        </div>
+      </section>
+
+      {/* Quick links */}
+      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
+        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>Quick Links</h2>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <Link to="/mylist" className="btn-ghost" style={{ textDecoration: 'none' }}>📚 My Library</Link>
+          <Link to="/dashboard" className="btn-ghost" style={{ textDecoration: 'none' }}>📊 Dashboard</Link>
+          <Link to="/history" className="btn-ghost" style={{ textDecoration: 'none' }}>🕐 History</Link>
+          <Link to="/admin" className="btn-ghost" style={{ textDecoration: 'none' }}>🤖 Bot Admin</Link>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function LegendRow({ swatch, text }: { swatch: React.ReactNode; text: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <span style={{ flexShrink: 0, minWidth: 64, textAlign: 'center' }}>{swatch}</span>
+      <span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>{text}</span>
     </div>
   );
 }

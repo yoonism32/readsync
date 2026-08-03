@@ -22,7 +22,7 @@ export function ProgressBar({ percent, showLabel = false, size = 'sm', className
           flex: 1,
           borderRadius: 9999,
           overflow: 'hidden',
-          background: 'rgba(201,168,76,0.12)',
+          background: 'rgba(255,255,255,0.08)',
         }}
       >
         <div

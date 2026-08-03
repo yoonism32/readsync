@@ -19,12 +19,13 @@ function level(chapters: number): number {
   return 4;
 }
 
+// Single hue, rising intensity — no color mixing between levels.
 const LEVEL_BG = [
   'rgba(255,255,255,0.05)',
-  'rgba(201,168,76,0.25)',
-  'rgba(201,168,76,0.45)',
-  'rgba(201,168,76,0.7)',
-  'var(--color-gold-bright)',
+  'rgba(52,208,186,0.35)',
+  'rgba(52,208,186,0.6)',
+  'rgba(52,208,186,0.85)',
+  'var(--color-teal-bright)',
 ];
 
 export function ActivityHeatmap() {
@@ -66,7 +67,7 @@ export function ActivityHeatmap() {
           {totalChapters} chapters this year
         </span>
         <span style={{ flex: 1 }} />
-        <span className="tabular" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-gold)' }}>
+        <span className="tabular" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 700 }}>
           🔥 {streaks.current} day streak
         </span>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>

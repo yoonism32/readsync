@@ -94,6 +94,9 @@
 html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
+  /* Default zoom: at 100% browser zoom this reads like 110% did before —
+     matches the scale the app was actually designed to be viewed at. */
+  zoom: 1.1;
 }
 
 body {
@@ -276,3 +279,16 @@ p { margin: 0; }
 .btn-accent:hover:not(:disabled) { background: var(--color-accent-bright); }
 .btn-accent:active:not(:disabled) { transform: scale(0.97); }
 .btn-accent:disabled { opacity: 0.45; cursor: default; }
+
+/* ── Native form controls ────────────────────────────────── */
+/* color-scheme:dark on html isn't always enough to darken a <select>'s
+   native option popup — set it explicitly on the control itself. */
+
+select {
+  color-scheme: dark;
+}
+
+select option {
+  background: var(--color-bg-raised);
+  color: var(--color-text);
+}

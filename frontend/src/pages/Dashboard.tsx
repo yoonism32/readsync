@@ -109,49 +109,52 @@ export function Dashboard() {
 
       <ActivityHeatmap />
 
-      {/* Currently reading */}
-      <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Currently Reading</h2>
-      {recentNovels.length === 0 ? (
-        <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Nothing in progress.</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {recentNovels.map((n, i) => (
-            <Link
-              key={n.novel_id}
-              to={`/novel/${encodeURIComponent(n.novel_id)}`}
-              className="animate-fade-in glass"
-              style={{
-                animationDelay: `${i * 40}ms`,
-                borderRadius: 'var(--radius-lg)',
-                padding: '12px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-                transition: 'border-color 0.15s',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-border-gold)')}
-              onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
-            >
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{n.title}</span>
-                  <BehindBadge novel={n} />
-                </div>
-                <ProgressBar percent={n.latest_percent ?? 0} showLabel size="sm" />
-              </div>
-              <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                <StatusBadge status={n.status} />
-                {n.latest_read_at && (
-                  <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>
-                    {formatTimestamp(n.latest_read_at)}
+      {/* Currently reading — scaled up further: this is the section you
+          actually act on every day, so it gets extra visual weight. */}
+      <div style={{ zoom: 1.25 }}>
+        <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Currently Reading</h2>
+        {recentNovels.length === 0 ? (
+          <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Nothing in progress.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {recentNovels.map((n, i) => (
+              <Link
+                key={n.novel_id}
+                to={`/novel/${encodeURIComponent(n.novel_id)}`}
+                className="animate-fade-in glass"
+                style={{
+                  animationDelay: `${i * 40}ms`,
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '12px 16px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  transition: 'border-color 0.15s',
+                  textDecoration: 'none',
+                }}
+                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-accent-border)')}
+                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
+              >
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{n.title}</span>
+                    <BehindBadge novel={n} />
                   </div>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+                  <ProgressBar percent={n.latest_percent ?? 0} showLabel size="sm" />
+                </div>
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <StatusBadge status={n.status} />
+                  {n.latest_read_at && (
+                    <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>
+                      {formatTimestamp(n.latest_read_at)}
+                    </div>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
