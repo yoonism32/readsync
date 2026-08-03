@@ -10,6 +10,7 @@ import {
   MAX_DEVICE_LABEL_LENGTH,
   MAX_PERCENT,
   MIN_PERCENT,
+  SESSION_IDLE_SECONDS,
   SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT,
 } from '../config.js';
 import pool, { withTransaction } from '../db/pool.js';
@@ -314,6 +315,48 @@ export function createProgressRouter(io: SocketServer): Router {
                 currentReadThrough,
               ],
             );
+
+            // Server-managed reading sessions: one sitting per novel+device.
+            // Every accepted sync first closes any of the user's sessions
+            // idle past the threshold, then touches (or opens) the current
+            // one. start_time + time_spent_seconds is the last-touch marker.
+            await client.query(
+              `UPDATE reading_sessions
+               SET end_time = start_time + time_spent_seconds * interval '1 second'
+               WHERE user_id = $1 AND end_time IS NULL
+                 AND NOW() - (start_time + time_spent_seconds * interval '1 second') > $2 * interval '1 second'`,
+              [user_id, SESSION_IDLE_SECONDS],
+            );
+
+            const openSession = await client.query<{ id: string }>(
+              `SELECT id FROM reading_sessions
+               WHERE user_id = $1 AND novel_id = $2 AND device_id = $3 AND end_time IS NULL
+               ORDER BY start_time DESC LIMIT 1`,
+              [user_id, novel_id, device_id],
+            );
+
+            if (openSession.rows.length > 0) {
+              await client.query(
+                `UPDATE reading_sessions
+                 SET time_spent_seconds = GREATEST(time_spent_seconds, EXTRACT(EPOCH FROM (NOW() - start_time))::int),
+                     end_percent = $2
+                 WHERE id = $1`,
+                [openSession.rows[0].id, percentValue],
+              );
+            } else {
+              await client.query(
+                `INSERT INTO reading_sessions (user_id, novel_id, device_id, session_type, start_percent, end_percent, time_spent_seconds)
+                 VALUES ($1, $2, $3, 'auto', $4, $4, LEAST(GREATEST($5::int, 0), $6::int))`,
+                [
+                  user_id,
+                  novel_id,
+                  device_id,
+                  percentValue,
+                  Number(seconds_on_page) || 0,
+                  SESSION_IDLE_SECONDS,
+                ],
+              );
+            }
           }
 
           return getLatestStates(client, user_id, novel_id, currentReadThrough);

@@ -115,7 +115,8 @@ router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
         SELECT
           DATE(created_at) AS date,
           COUNT(*) AS snapshot_events,
-          COUNT(DISTINCT novel_id) AS novels_touched
+          COUNT(DISTINCT novel_id) AS novels_touched,
+          COUNT(DISTINCT (novel_id, chapter_num)) AS chapters_read
         FROM progress_snapshots
         WHERE user_id = $1
           AND created_at >= $2
@@ -138,6 +139,7 @@ router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
         dr.date,
         COALESCE(ds.snapshot_events, 0) AS snapshot_events,
         COALESCE(ds.novels_touched, 0) AS novels_touched,
+        COALESCE(ds.chapters_read, 0) AS chapters_read,
         COALESCE(sess.sessions, 0) AS sessions,
         COALESCE(sess.session_seconds, 0) AS session_seconds
       FROM date_range dr

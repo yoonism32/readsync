@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { swrFetcher, fetchNovels, formatTimestamp, resumeUrl } from '../api/client.js';
 import { BehindBadge } from '../components/BehindBadge.js';
+import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -105,6 +106,8 @@ export function Dashboard() {
           <StatCard label="Bookmarks" value={stats?.total_bookmarks ?? 0} />
         </div>
       )}
+
+      <ActivityHeatmap />
 
       {/* Currently reading */}
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Currently Reading</h2>

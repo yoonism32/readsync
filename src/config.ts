@@ -37,6 +37,9 @@ export const MAX_PERCENT = 100;
 
 // ── Progress thresholds ──────────────────────────────────────────────────────
 export const CHAPTER_RESTART_THRESHOLD_PERCENT = 1;
+// A reading session (one sitting on a novel+device) closes after this
+// much inactivity — the Kavita model.
+export const SESSION_IDLE_SECONDS = 1800;
 export const SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT = 10;
 export const DEVICE_BEHIND_THRESHOLD_PERCENT = 20;
 export const AUTO_REREAD_CHAPTER_THRESHOLD = 50;
