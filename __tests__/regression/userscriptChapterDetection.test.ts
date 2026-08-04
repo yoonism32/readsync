@@ -9,7 +9,7 @@
  * URL is ground truth and must win over content scanning.
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { parseChapterEnhanced, normalizePath } from '../../userscript/src/services/ChapterDetector.js';
+import { parseChapterEnhanced, normalizePath, isChapterPath } from '../../userscript/src/services/ChapterDetector.js';
 
 type DocumentStub = { title: string; querySelectorAll: () => Element[] };
 
@@ -84,6 +84,43 @@ describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
   it('returns null when nothing matches', () => {
     stubDocument('Some Site');
     expect(parseChapterEnhanced('/novel/shadow-slave')).toBeNull();
+  });
+});
+
+/**
+ * Bug: the numeric-prefix heuristic (`/^\d+/` on the last path segment) exists
+ * to catch NovelBin chapter URLs like /b/slug/31-the-beginning. It was applied
+ * to the whole path, so a novel whose *slug* starts with digits —
+ * "100x-rebate-sharing-system-retired-incubus-wants-to-marry-have-kids" — was
+ * classified as a chapter page. Two consequences on its novel page: auto-update
+ * bailed at the chapter guard (no refresh, ever), and progress sync ran and
+ * recorded scroll position as reading progress.
+ */
+describe('isChapterPath — a chapter lives below the slug', () => {
+  it('does not treat a digit-leading novel slug as a chapter', () => {
+    expect(
+      isChapterPath('/novel/100x-rebate-sharing-system-retired-incubus-wants-to-marry-have-kids'),
+    ).toBe(false);
+  });
+
+  it('handles a trailing slash on such a slug', () => {
+    expect(isChapterPath('/novel/100x-rebate-sharing-system/')).toBe(false);
+  });
+
+  it('treats an ordinary novel page as a novel page', () => {
+    expect(isChapterPath('/novel/immortality-through-array-formations')).toBe(false);
+    expect(isChapterPath('/b/shadow-slave')).toBe(false);
+  });
+
+  it('still recognises NovelArrow chapter routes', () => {
+    expect(isChapterPath('/chapter/shadow-slave/chapter-215-the-end')).toBe(true);
+    expect(isChapterPath('/chapter/100x-rebate-sharing-system/chapter-5')).toBe(true);
+  });
+
+  it('still recognises NovelBin chapter routes', () => {
+    expect(isChapterPath('/b/shadow-slave/chapter-31')).toBe(true);
+    expect(isChapterPath('/b/shadow-slave/31-the-beginning')).toBe(true);
+    expect(isChapterPath('/b/shadow-slave/cchapter31')).toBe(true);
   });
 });
 

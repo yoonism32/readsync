@@ -2,7 +2,7 @@ import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC } from
 import { postProgress, beaconProgress, compareProgress, postReread } from '../api/client.js';
 import { showPeekBanner } from './UIManager.js';
 import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
-import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId } from './ChapterDetector.js';
+import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId, isChapterPath } from './ChapterDetector.js';
 import type { SyncPayload } from '../types/index.js';
 
 const LOG_TAG = 'ReadSync';
@@ -22,9 +22,7 @@ let compareInterval: ReturnType<typeof setInterval> | null = null;
 
 /** Check whether the current page is a chapter page (vs novel main page) */
 function isChapterPage(): boolean {
-  const pathname = location.pathname;
-  const lastSegment = pathname.split('/').pop() ?? '';
-  return !!(pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment));
+  return isChapterPath(location.pathname);
 }
 
 export async function syncProgress(percent: number, ctx: SyncContext): Promise<void> {

@@ -75,6 +75,26 @@ export function extractChapterFromUrl(href: string): number | null {
   return null;
 }
 
+/**
+ * Is this path a chapter page rather than a novel page?
+ *
+ * A chapter always lives *below* the novel slug: /chapter/<slug>/<chapter> on
+ * NovelArrow, /b/<slug>/<chapter> on NovelBin. /novel/<slug> and /b/<slug> are
+ * novel pages regardless of what the slug looks like.
+ *
+ * That depth check matters because the numeric-prefix heuristic below exists
+ * for NovelBin URLs like /b/slug/31-the-beginning, and without it a novel whose
+ * slug merely *starts* with digits ("100x-rebate-sharing-system…") is misread
+ * as a chapter — which silently disabled auto-update on that novel and let
+ * progress sync record scroll position on its main page.
+ */
+export function isChapterPath(pathname: string): boolean {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length <= 2) return false;
+  const lastSegment = parts[parts.length - 1];
+  return !!(pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment));
+}
+
 /* ===== Latest chapter detection ===== */
 
 // Module-level cache for the real chapter count fetched from the main novel page

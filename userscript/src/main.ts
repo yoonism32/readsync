@@ -3,7 +3,7 @@
 import { STEP, AUTO_PIX, AUTO_MS, PCT_DECIMALS, RESTORE_LIMIT, IGNORE_LOW_PCT } from './config.js';
 import { generateDeviceId, getDeviceLabel } from './services/DeviceManager.js';
 import {
-  normalizePath, normalizeNovelId,
+  normalizePath, normalizeNovelId, isChapterPath,
   parseChapterEnhanced, buildChapterPath,
   extractLatestChapterInfo, extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl,
 } from './services/ChapterDetector.js';
@@ -334,12 +334,11 @@ async function autoUpdateNovelInfo(): Promise<void> {
 
   try {
     const pathname = location.pathname;
-    const lastSegment = pathname.split('/').pop() ?? '';
 
     // Both guards below used to return in silence, stranding Refresh All for
     // the full 30s timeout and mislabelling a deliberate skip as a hang.
-    if (pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment)) {
-      log('Skipping auto-update on chapter page', { pathname, lastSegment });
+    if (isChapterPath(pathname)) {
+      log('Skipping auto-update on chapter page', { pathname });
       if (openerNovelId) notifyOpener({ novelId: openerNovelId, success: false, reason: 'chapter_page' });
       return;
     }
