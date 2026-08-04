@@ -5,6 +5,8 @@ import { fetchNovels, coverUrl, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { Spinner } from '../components/Spinner.js';
 import { SearchIcon } from '../components/Icon.js';
+import { FilterPopover } from '../components/FilterPopover.js';
+import { TriCheckbox } from '../components/TriCheckbox.js';
 import { SORT_OPTIONS, DEFAULT_SORT_ID, sortNovels } from '../lib/novelSort.js';
 import {
   DEFAULT_FILTERS,
@@ -13,6 +15,9 @@ import {
   activeFilterCount,
   applyExplorerFilters,
   collectGenres,
+  genreSummary,
+  genresInState,
+  nextTriState,
 } from '../lib/explorerFilters.js';
 import type { ExplorerFilters } from '../lib/explorerFilters.js';
 import type { Novel } from '../types/index.js';
@@ -68,6 +73,20 @@ export function Explorer() {
 
   const set = <K extends keyof ExplorerFilters>(key: K, value: ExplorerFilters[K]) =>
     setFilters(f => ({ ...f, [key]: value }));
+
+  // Cycles unset → include → exclude → unset, dropping the key entirely once
+  // it returns to unset so the filter object stays a record of real choices.
+  const cycleGenre = (genre: string) =>
+    setFilters(f => {
+      const next = nextTriState(f.genres[genre] ?? 'off');
+      const genres = { ...f.genres };
+      if (next === 'off') delete genres[genre];
+      else genres[genre] = next;
+      return { ...f, genres };
+    });
+
+  const genreActive =
+    genresInState(filters, 'include').length > 0 || genresInState(filters, 'exclude').length > 0;
 
   return (
     <div className="animate-fade-in">
@@ -142,20 +161,68 @@ export function Explorer() {
             }}
           >
             <div>
-              <label style={labelStyle} htmlFor="f-status">Status</label>
-              <select id="f-status" value={filters.status} style={fieldStyle}
-                onChange={e => set('status', e.target.value as ExplorerFilters['status'])}>
-                {STATUS_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
+              <span style={labelStyle}>Genres</span>
+              <FilterPopover label={genreSummary(filters)} active={genreActive} panelWidth={420}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <span style={{ ...labelStyle, marginBottom: 0 }}>Inclusion mode</span>
+                  {(['all', 'any'] as const).map(mode => (
+                    <label key={mode} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="genre-mode"
+                        checked={filters.genreMode === mode}
+                        onChange={() => set('genreMode', mode)}
+                      />
+                      {mode === 'all' ? 'All' : 'Any'}
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '2px 10px' }}>
+                  {genres.map(g => (
+                    <TriCheckbox
+                      key={g}
+                      label={g}
+                      state={filters.genres[g] ?? 'off'}
+                      onCycle={() => cycleGenre(g)}
+                    />
+                  ))}
+                </div>
+
+                {genres.length === 0 && (
+                  <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>No genres recorded yet.</p>
+                )}
+              </FilterPopover>
             </div>
 
             <div>
-              <label style={labelStyle} htmlFor="f-genre">Genre</label>
-              <select id="f-genre" value={filters.genre} style={fieldStyle}
-                onChange={e => set('genre', e.target.value)}>
-                <option value="any">Any genre</option>
-                {genres.map(g => <option key={g} value={g}>{g}</option>)}
-              </select>
+              <span style={labelStyle}>Status</span>
+              <FilterPopover
+                label={filters.statuses.length === 0
+                  ? 'Any'
+                  : filters.statuses.length === 1
+                    ? (STATUS_OPTIONS.find(o => o.id === filters.statuses[0])?.label ?? 'Any')
+                    : `${filters.statuses.length} selected`}
+                active={filters.statuses.length > 0}
+                panelWidth={220}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  {STATUS_OPTIONS.map(o => (
+                    <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', padding: '4px 2px', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={filters.statuses.includes(o.id)}
+                        onChange={e =>
+                          set('statuses', e.target.checked
+                            ? [...filters.statuses, o.id]
+                            : filters.statuses.filter(s => s !== o.id))
+                        }
+                      />
+                      {o.label}
+                    </label>
+                  ))}
+                </div>
+              </FilterPopover>
             </div>
 
             <div>
@@ -173,19 +240,49 @@ export function Explorer() {
             </div>
 
             <div>
-              <label style={labelStyle} htmlFor="f-updated">Site updated</label>
-              <select id="f-updated" value={filters.updatedWithin} style={fieldStyle}
-                onChange={e => set('updatedWithin', e.target.value as ExplorerFilters['updatedWithin'])}>
-                {UPDATED_WITHIN_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
+              <span style={labelStyle}>Site updated</span>
+              <FilterPopover
+                label={UPDATED_WITHIN_OPTIONS.find(o => o.id === filters.updatedWithin)?.label ?? 'Any time'}
+                active={filters.updatedWithin !== 'any'}
+                panelWidth={220}
+              >
+                {close => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {UPDATED_WITHIN_OPTIONS.map(o => (
+                      <RadioRow
+                        key={o.id}
+                        name="updated-within"
+                        label={o.label}
+                        checked={filters.updatedWithin === o.id}
+                        onSelect={() => { set('updatedWithin', o.id); close(); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </FilterPopover>
             </div>
 
             <div>
-              <label style={labelStyle} htmlFor="f-sort">Sort</label>
-              <select id="f-sort" value={sortId} style={fieldStyle}
-                onChange={e => setSortId(e.target.value)}>
-                {SORT_OPTIONS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-              </select>
+              <span style={labelStyle}>Sort</span>
+              <FilterPopover
+                label={SORT_OPTIONS.find(o => o.id === sortId)?.label ?? 'Last read'}
+                active={sortId !== DEFAULT_SORT_ID}
+                panelWidth={250}
+              >
+                {close => (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {SORT_OPTIONS.map(o => (
+                      <RadioRow
+                        key={o.id}
+                        name="sort"
+                        label={o.label}
+                        checked={sortId === o.id}
+                        onSelect={() => { setSortId(o.id); close(); }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </FilterPopover>
             </div>
           </div>
 
@@ -238,6 +335,36 @@ export function Explorer() {
         </div>
       )}
     </div>
+  );
+}
+
+function RadioRow({
+  name,
+  label,
+  checked,
+  onSelect,
+}: {
+  name: string;
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <label
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '5px 2px',
+        fontSize: 'var(--text-sm)',
+        color: checked ? 'var(--color-gold)' : 'var(--color-text)',
+        fontWeight: checked ? 600 : 400,
+        cursor: 'pointer',
+      }}
+    >
+      <input type="radio" name={name} checked={checked} onChange={onSelect} />
+      {label}
+    </label>
   );
 }
 

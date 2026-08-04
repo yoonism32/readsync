@@ -5,7 +5,9 @@ import {
   activeFilterCount,
   applyExplorerFilters,
   collectGenres,
+  genreSummary,
   novelGenres,
+  nextTriState,
 } from './explorerFilters.js';
 import { SORT_OPTIONS, sortNovels, sortValue } from './novelSort.js';
 
@@ -103,9 +105,9 @@ describe('other filters', () => {
     expect(out.map(n => n.title)).toEqual(['a']);
   });
 
-  it('matches any one of a novel\'s genres', () => {
+  it('matches a novel that carries the included genre', () => {
     const library = [novel({ title: 'a', genre: 'FANTASY,HAREM' }), novel({ title: 'b', genre: 'ROMANCE' })];
-    const out = applyExplorerFilters(library, { ...DEFAULT_FILTERS, genre: 'HAREM' }, NOW);
+    const out = applyExplorerFilters(library, { ...DEFAULT_FILTERS, genres: { HAREM: 'include' } }, NOW);
     expect(out.map(n => n.title)).toEqual(['a']);
   });
 
@@ -125,14 +127,88 @@ describe('other filters', () => {
       novel({ title: 'genre only', genre: 'FANTASY', latest_chapter_num: 100 }),
       novel({ title: 'length only', genre: 'ROMANCE', latest_chapter_num: 2000 }),
     ];
-    const out = applyExplorerFilters(library, { ...DEFAULT_FILTERS, genre: 'FANTASY', minChapters: '1000' }, NOW);
+    const out = applyExplorerFilters(
+      library,
+      { ...DEFAULT_FILTERS, genres: { FANTASY: 'include' }, minChapters: '1000' },
+      NOW,
+    );
     expect(out.map(n => n.title)).toEqual(['both']);
   });
 
-  it('counts only the filters that are actually narrowing', () => {
+  it('keeps a novel whose status is among those selected', () => {
+    const library = [
+      novel({ title: 'reading', status: 'reading' }),
+      novel({ title: 'dropped', status: 'dropped' }),
+      novel({ title: 'held', status: 'on-hold' }),
+    ];
+    const out = applyExplorerFilters(library, { ...DEFAULT_FILTERS, statuses: ['reading', 'on-hold'] }, NOW);
+    expect(out.map(n => n.title)).toEqual(['reading', 'held']);
+  });
+
+  it('counts each narrowing group once', () => {
     expect(activeFilterCount(DEFAULT_FILTERS)).toBe(0);
     expect(activeFilterCount({ ...DEFAULT_FILTERS, author: '  ' })).toBe(0);
-    expect(activeFilterCount({ ...DEFAULT_FILTERS, genre: 'FANTASY', minChapters: '10', favouritesOnly: true })).toBe(3);
+    expect(activeFilterCount({
+      ...DEFAULT_FILTERS,
+      genres: { FANTASY: 'include', HAREM: 'exclude' },
+      minChapters: '10',
+      favouritesOnly: true,
+    })).toBe(3);
+  });
+});
+
+describe('tri-state genres', () => {
+  it('cycles unset → include → exclude → unset', () => {
+    expect(nextTriState('off')).toBe('include');
+    expect(nextTriState('include')).toBe('exclude');
+    expect(nextTriState('exclude')).toBe('off');
+  });
+
+  const library = [
+    novel({ title: 'fh', genre: 'FANTASY,HAREM' }),
+    novel({ title: 'f', genre: 'FANTASY' }),
+    novel({ title: 'r', genre: 'ROMANCE' }),
+  ];
+
+  it('demands every included genre in "all" mode', () => {
+    const out = applyExplorerFilters(
+      library,
+      { ...DEFAULT_FILTERS, genreMode: 'all', genres: { FANTASY: 'include', HAREM: 'include' } },
+      NOW,
+    );
+    expect(out.map(n => n.title)).toEqual(['fh']);
+  });
+
+  it('accepts any included genre in "any" mode', () => {
+    const out = applyExplorerFilters(
+      library,
+      { ...DEFAULT_FILTERS, genreMode: 'any', genres: { HAREM: 'include', ROMANCE: 'include' } },
+      NOW,
+    );
+    expect(out.map(n => n.title)).toEqual(['fh', 'r']);
+  });
+
+  it('removes novels carrying an excluded genre', () => {
+    const out = applyExplorerFilters(library, { ...DEFAULT_FILTERS, genres: { HAREM: 'exclude' } }, NOW);
+    expect(out.map(n => n.title)).toEqual(['f', 'r']);
+  });
+
+  it('lets exclusion beat inclusion on the same novel', () => {
+    // "Fantasy, but nothing with harem" must drop the novel that has both.
+    const out = applyExplorerFilters(
+      library,
+      { ...DEFAULT_FILTERS, genres: { FANTASY: 'include', HAREM: 'exclude' } },
+      NOW,
+    );
+    expect(out.map(n => n.title)).toEqual(['f']);
+  });
+
+  it('summarises the trigger label for none, one and several', () => {
+    expect(genreSummary(DEFAULT_FILTERS)).toBe('Any');
+    expect(genreSummary({ ...DEFAULT_FILTERS, genres: { FANTASY: 'include' } })).toBe('FANTASY');
+    expect(genreSummary({ ...DEFAULT_FILTERS, genres: { HAREM: 'exclude' } })).toBe('Not HAREM');
+    expect(genreSummary({ ...DEFAULT_FILTERS, genres: { FANTASY: 'include', HAREM: 'exclude' } }))
+      .toBe('FANTASY +1');
   });
 });
 
