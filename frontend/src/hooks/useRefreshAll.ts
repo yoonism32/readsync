@@ -18,26 +18,32 @@ interface UpdateSignal {
   type: string;
   novelId: string;
   success: boolean;
+  reason?: string;
+  status?: number;
+  error?: string;
 }
+
+/** Why a single novel did not refresh. `ok` carries no reason. */
+type RefreshOutcome = { ok: true } | { ok: false; reason: string };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-function refreshSingleNovel(novel: Novel): Promise<boolean> {
+function refreshSingleNovel(novel: Novel): Promise<RefreshOutcome> {
   return new Promise(resolve => {
     const url = novel.primary_url;
-    if (!url) return resolve(false);
+    if (!url) return resolve({ ok: false, reason: 'no_url' });
 
     const tab = window.open(url, `_novel_${novel.novel_id}`);
-    if (!tab) return resolve(false); // popup blocked
+    if (!tab) return resolve({ ok: false, reason: 'popup_blocked' });
 
     let settled = false;
-    const finish = (ok: boolean) => {
+    const finish = (outcome: RefreshOutcome) => {
       if (settled) return;
       settled = true;
       window.removeEventListener('message', onMessage);
       clearInterval(watcher);
       clearTimeout(timeout);
-      resolve(ok);
+      resolve(outcome);
     };
 
     // The userscript posts from the novelarrow tab with target '*';
@@ -48,21 +54,34 @@ function refreshSingleNovel(novel: Novel): Promise<boolean> {
       if (data.novelId !== novel.novel_id) return;
       setTimeout(() => {
         try { tab.close(); } catch { /* */ }
-        finish(Boolean(data.success));
+        if (data.success) return finish({ ok: true });
+        // The userscript already classifies the failure — keep its word, and
+        // fold the HTTP status in so an api_error says which status.
+        const reason = data.status
+          ? `${data.reason ?? 'api_error'}:${data.status}`
+          : (data.reason ?? 'unknown');
+        finish({ ok: false, reason });
       }, TAB_CLOSE_GRACE_MS);
     };
 
     // Fallbacks: the tab closing itself counts as success; timeout fails.
     const watcher = setInterval(() => {
-      if (tab.closed) finish(true);
+      if (tab.closed) finish({ ok: true });
     }, 500);
     const timeout = setTimeout(() => {
       try { tab.close(); } catch { /* */ }
-      finish(false);
+      finish({ ok: false, reason: 'timeout' });
     }, NOVEL_TIMEOUT_MS);
 
     window.addEventListener('message', onMessage);
   });
+}
+
+/** A novel that did not refresh, kept so the UI can name it. */
+export interface RefreshFailure {
+  novelId: string;
+  title: string;
+  reason: string;
 }
 
 export interface RefreshAllState {
@@ -73,6 +92,8 @@ export interface RefreshAllState {
   /** Minutes remaining until due, or 0 once due. Ticks live. */
   minutesUntilDue: number | null;
   summary: string | null;
+  /** Populated by the last run; empty when everything succeeded. */
+  failures: RefreshFailure[];
   refreshAll: (novels: Novel[]) => Promise<void>;
 }
 
@@ -84,6 +105,7 @@ export function useRefreshAll(): RefreshAllState {
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [lastRefresh, setLastRefresh] = useState<string | null>(null);
   const [summary, setSummary] = useState<string | null>(null);
+  const [failures, setFailures] = useState<RefreshFailure[]>([]);
   const [nowTick, setNowTick] = useState(() => Date.now());
   const runningRef = useRef(false);
   const notifiedRef = useRef(false);
@@ -141,15 +163,28 @@ export function useRefreshAll(): RefreshAllState {
       runningRef.current = true;
       setIsRefreshing(true);
       setSummary(null);
+      setFailures([]);
       setProgress({ done: 0, total: targets.length });
 
       let ok = 0;
       let failed = 0;
+      const collected: RefreshFailure[] = [];
 
       for (let start = 0; start < targets.length; start += BATCH_SIZE) {
         const batch = targets.slice(start, start + BATCH_SIZE);
         const results = await Promise.all(batch.map(refreshSingleNovel));
-        for (const r of results) r ? ok++ : failed++;
+        results.forEach((r, i) => {
+          if (r.ok) {
+            ok++;
+            return;
+          }
+          failed++;
+          collected.push({
+            novelId: batch[i].novel_id,
+            title: batch[i].title,
+            reason: r.reason,
+          });
+        });
         setProgress({ done: Math.min(start + BATCH_SIZE, targets.length), total: targets.length });
         if (start + BATCH_SIZE < targets.length) await sleep(BATCH_DELAY_MS);
       }
@@ -163,6 +198,7 @@ export function useRefreshAll(): RefreshAllState {
       await mutate('/novels');
 
       setSummary(failed === 0 ? `Refreshed ${ok} novels` : `Refreshed ${ok}, ${failed} failed`);
+      setFailures(collected);
       setProgress(null);
       setIsRefreshing(false);
       runningRef.current = false;
@@ -179,6 +215,7 @@ export function useRefreshAll(): RefreshAllState {
     needsRefresh,
     minutesUntilDue,
     summary,
+    failures,
     refreshAll,
   };
 }

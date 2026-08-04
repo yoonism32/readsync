@@ -55,6 +55,23 @@ function lastRefreshLabel(iso: string | null): string {
 const ordinal = (n: number): string =>
   n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 
+const FAILURE_LABELS: Record<string, string> = {
+  no_url: 'no site URL on record',
+  popup_blocked: 'popup blocked — allow popups for this site',
+  timeout: 'timed out after 30s',
+  no_chapter_info: 'no chapter number found on page',
+  api_error: 'server rejected the update',
+  exception: 'userscript error',
+  unknown: 'refresh did not report a reason',
+};
+
+/** `api_error:404` → "server rejected the update (HTTP 404)". */
+function describeFailure(reason: string): string {
+  const [kind, status] = reason.split(':');
+  const label = FAILURE_LABELS[kind] ?? kind;
+  return status ? `${label} (HTTP ${status})` : label;
+}
+
 // Sorting moved to lib/novelSort so Explorer sorts by the same rules.
 
 export function MyList() {
@@ -65,6 +82,7 @@ export function MyList() {
   const [smartFilter, setSmartFilter] = useState<SmartFilterId | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
+  const [showFailures, setShowFailures] = useState(false);
 
   const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
     revalidateOnFocus: false,
@@ -194,7 +212,22 @@ export function MyList() {
             : 'Refresh All Novels'}
         </button>
         {refresh.summary && !refresh.isRefreshing && (
-          <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-teal)' }}>{refresh.summary}</span>
+          refresh.failures.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowFailures(v => !v)}
+              aria-expanded={showFailures}
+              style={{
+                background: 'none', border: 'none', padding: 0,
+                fontSize: 'var(--text-sm)', color: 'var(--color-warning)',
+                cursor: 'pointer', textAlign: 'left',
+              }}
+            >
+              {refresh.summary} {showFailures ? '▾' : '▸'}
+            </button>
+          ) : (
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-teal)' }}>{refresh.summary}</span>
+          )
         )}
         <span style={{ flex: 1 }} />
         <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textAlign: 'right' }}>
@@ -205,6 +238,22 @@ export function MyList() {
             <span style={{ display: 'block' }}>Next: {Math.floor(refresh.minutesUntilDue / 60)}h {refresh.minutesUntilDue % 60}m</span>
           ) : null}
         </span>
+        {showFailures && refresh.failures.length > 0 && !refresh.isRefreshing && (
+          <ul
+            style={{
+              flexBasis: '100%', listStyle: 'none', margin: 0,
+              padding: '10px 0 2px', borderTop: '1px solid var(--color-border)',
+              display: 'flex', flexDirection: 'column', gap: 6,
+            }}
+          >
+            {refresh.failures.map(f => (
+              <li key={f.novelId} style={{ fontSize: 'var(--text-xs)' }}>
+                <span style={{ fontWeight: 600 }}>{f.title}</span>
+                <span className="text-muted"> — {describeFailure(f.reason)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Search + tabs + filters */}
