@@ -29,12 +29,16 @@ function PageFallback() {
 function RequireAuth({ children }: { children: ReactNode }) {
   // Session check lives at /api/auth/status (cookie auth, no v1 prefix) —
   // routing it through the v1 request helper 404s and locks out login.
-  const { data, isLoading } = useSWR<AuthStatus>('auth-status', () => auth.status(), {
+  const { data, error } = useSWR<AuthStatus>('auth-status', () => auth.status(), {
     revalidateOnFocus: false,
     shouldRetryOnError: false,
   });
 
-  if (isLoading) {
+  // Wait only while we genuinely have no answer. Deliberately not keyed on
+  // isLoading: that stays true during a background revalidation even when a
+  // known-good status is already cached, which would strand a signed-in user
+  // on this spinner. Once data exists, trust it and revalidate underneath.
+  if (!data && !error) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh' }}>
         <Spinner size={32} />

@@ -39,7 +39,10 @@ export function Login() {
         // used to require pasting this manually, which was easy to get
         // wrong or skip.
         if (res.api_key) setApiKey(res.api_key);
-        await mutate('auth-status');
+        // Seed the cache from this response rather than refetching: nothing is
+        // subscribed to 'auth-status' while we're on the login route, so a bare
+        // mutate() has no fetcher to run and would resolve without asking.
+        await mutate('auth-status', { authenticated: true, username }, { revalidate: false });
         navigate('/mylist');
       } else {
         setError(res.error ?? 'Invalid credentials');
