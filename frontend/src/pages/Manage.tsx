@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { fetchNovels, novels as novelsApi } from '../api/client.js';
+import { ApiError, fetchNovels, novels as novelsApi } from '../api/client.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import type { Novel, NovelStatus } from '../types/index.js';
 
 const STATUSES = ['reading', 'completed', 'on-hold', 'dropped', 'plan-to-read'] as const;
+
+/** Keep the server's own words — a bare "Failed to…" leaves nothing to debug from. */
+function errorDetail(error: unknown): string {
+  if (error instanceof ApiError) return `${error.status} — ${error.message}`;
+  if (error instanceof Error) return error.message;
+  return 'unknown error';
+}
 
 export function Manage() {
   const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
@@ -25,8 +32,8 @@ export function Manage() {
       await novelsApi.setStatus(novelId, newStatus as NovelStatus);
       await mutate();
       toast.success('Status updated');
-    } catch {
-      toast.error('Failed to update status');
+    } catch (error) {
+      toast.error(`Failed to update status: ${errorDetail(error)}`);
     } finally {
       setBusy(null);
     }
@@ -39,8 +46,8 @@ export function Manage() {
       await novelsApi.delete(novelId);
       await mutate();
       toast.success('Novel removed');
-    } catch {
-      toast.error('Failed to remove novel');
+    } catch (error) {
+      toast.error(`Failed to remove novel: ${errorDetail(error)}`);
     } finally {
       setBusy(null);
     }

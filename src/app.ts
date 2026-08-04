@@ -15,6 +15,7 @@ import {
 } from './config.js';
 import pool from './db/pool.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
+import { normalizeBody } from './middleware/normalizeBody.js';
 import adminRouter from './routes/admin.js';
 import authRouter from './routes/auth.js';
 import bookmarksRouter from './routes/bookmarks.js';
@@ -60,6 +61,8 @@ export function createApp(): {
   app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
   app.use(express.json({ limit: JSON_BODY_LIMIT }));
   app.use(express.urlencoded({ extended: true }));
+  // Must follow the parsers: restores the Express 4 `{}` default the routes assume.
+  app.use(normalizeBody);
 
   app.use(
     session({
