@@ -56,16 +56,29 @@ export function NovelPage() {
       </Link>
 
       <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-          {/* Cover */}
-          <div style={{ width: 80, height: 112, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}>
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+          {/* Cover — the anchor of this page, so it is sized to carry the card
+              rather than sit in its corner. Fluid between phone and desktop;
+              aspect-ratio holds the 5:7 shape so nothing shifts as it loads. */}
+          <div
+            style={{
+              width: 'clamp(104px, 20vw, 168px)',
+              aspectRatio: '5 / 7',
+              flexShrink: 0,
+              borderRadius: 10,
+              overflow: 'hidden',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--color-border)',
+              boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
+            }}
+          >
             <img
               src={coverUrl(novel.novel_id)}
               alt=""
-              width={80}
-              height={112}
+              width={168}
+              height={235}
               loading="lazy"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
           </div>
