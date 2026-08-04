@@ -80,8 +80,36 @@ export function extractChapterFromUrl(href: string): number | null {
 // Module-level cache for the real chapter count fetched from the main novel page
 let realChapterCount: number | null = null;
 
+const CHAPTER_COUNT_RE = /^\s*([\d,]+)\s+Chapters?\s*$/i;
+
+/**
+ * Read the "<N> Chapters" figure NovelArrow renders in the novel header.
+ *
+ * It is the only complete size signal available without client-side rendering:
+ * the og:novel meta names the latest *free* chapter (premium chapters run ahead
+ * of it), and the server-rendered chapter list is just the first 30 ascending —
+ * everything past that loads when the Chapters tab is opened.
+ */
+export function extractHeaderChapterCount(root: ParentNode = document): number | null {
+  for (const el of Array.from(root.querySelectorAll('span'))) {
+    const match = el.textContent?.match(CHAPTER_COUNT_RE);
+    if (!match) continue;
+    const num = parseInt(match[1].replace(/,/g, ''), 10);
+    if (num > 0 && num < 100000) return num;
+  }
+  return null;
+}
+
 export function extractLatestChapterInfo(): LatestChapterInfo {
   try {
+    // Every strategy below contributes a *candidate* and the largest wins.
+    // Returning at the first strategy that produced a number is what let a
+    // free-chapter-only meta tag mask the true count, and what let the
+    // first-30-chapters fallback report 30 for a 92-chapter novel.
+    const candidates: number[] = [];
+    let metaTitle: string | null = null;
+    let lChapterTitle: string | null = null;
+
     // Strategy 0: og:novel:latest_chapter_name meta — server-rendered on
     // NovelArrow novel pages (name= attr) and NovelBin (property= attr).
     // Content looks like "Chapter 3118 Dying City".
@@ -93,9 +121,9 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
       const num = extractChapterNum(content);
       if (num) {
         const titleMatch = content.match(/Chapter\s+\d+\s*[-:]?\s*(.+)/i);
-        const title = titleMatch ? titleMatch[1].trim() : (content || null);
-        log('Found latest chapter via og:novel meta', { num, title });
-        return { latestChapterNum: num, latestChapterTitle: title };
+        metaTitle = titleMatch ? titleMatch[1].trim() : (content || null);
+        log('Candidate from og:novel meta', { num, title: metaTitle });
+        candidates.push(num);
       }
     }
 
@@ -113,8 +141,9 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
         const chapterTitle = textMatch ? textMatch[2].trim() : (linkText || null);
 
         if (chapterNum) {
-          log('Found latest chapter via .l-chapter', { num: chapterNum, title: chapterTitle, source: numFromUrl ? 'url' : 'text' });
-          return { latestChapterNum: chapterNum, latestChapterTitle: chapterTitle };
+          log('Candidate from .l-chapter', { num: chapterNum, title: chapterTitle, source: numFromUrl ? 'url' : 'text' });
+          lChapterTitle = chapterTitle;
+          candidates.push(chapterNum);
         }
       }
     }
@@ -166,8 +195,19 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
       }
     }
 
-    // If local detection seems limited, fetch from main page (async, non-blocking)
-    if (maxChapter === 0 || maxChapter < 500) {
+    if (maxChapter > 0) candidates.push(maxChapter);
+
+    // Strategy 4: the header's "<N> Chapters" figure. On NovelArrow novel pages
+    // this is the only signal that sees past the first 30 rendered chapters.
+    const headerCount = extractHeaderChapterCount();
+    if (headerCount) {
+      log('Candidate from header chapter count', { num: headerCount });
+      candidates.push(headerCount);
+    }
+
+    // Only worth a network round-trip when the header gave us nothing — on a
+    // novel page it always does, so this now fires mainly on chapter pages.
+    if (headerCount === null && (maxChapter === 0 || maxChapter < 500)) {
       log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
 
       let novelMainUrl = location.href;
@@ -226,15 +266,24 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
         .catch(err => log('Main page fetch failed (non-critical)', err));
     }
 
-    const finalChapterCount = realChapterCount ?? maxChapter;
+    // A cached count from a previous main-page fetch is one more candidate —
+    // never an override, or a smaller stale value would win outright.
+    if (realChapterCount) candidates.push(realChapterCount);
+
+    const finalChapterCount = candidates.length ? Math.max(...candidates) : 0;
+    // Prefer a title that names an actual chapter. When the header count wins
+    // it carries no title of its own, and emitting null here would blank the
+    // stored title server-side (admin.ts writes the title whenever the number
+    // advances).
+    const finalTitle = metaTitle ?? lChapterTitle ?? maxChapterTitle;
 
     if (finalChapterCount > 0) {
       log('Found latest chapter info', {
         num: finalChapterCount,
-        title: maxChapterTitle,
-        source: realChapterCount ? 'main-page-fetch' : 'local-detection',
+        title: finalTitle,
+        candidates,
       });
-      return { latestChapterNum: finalChapterCount, latestChapterTitle: maxChapterTitle };
+      return { latestChapterNum: finalChapterCount, latestChapterTitle: finalTitle };
     }
 
     log('No latest chapter info found');
