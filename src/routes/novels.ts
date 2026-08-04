@@ -71,10 +71,13 @@ router.get(
           m.notes, m.started_at, m.completed_at,
           COALESCE(m.current_read_through, 1) AS current_read_through,
           COALESCE(m.read_history, '[]'::jsonb) AS read_history,
+          -- Not filtered on d.active: see getLatestStates() in NovelService.
+          -- The latest_activity CTE above never was, so gating these two made
+          -- a removed device show a live "last read" date next to ch. 0.
           (SELECT row_to_json(g) FROM (
             SELECT p.chapter_num, p.chapter_token, p.percent, p.device_id, d.device_label, p.url, p.created_at as ts
             FROM progress_snapshots p JOIN devices d ON p.device_id = d.id
-            WHERE p.user_id = $1 AND p.novel_id = n.id AND d.active = TRUE
+            WHERE p.user_id = $1 AND p.novel_id = n.id
               AND p.read_through_num = COALESCE(m.current_read_through, 1)
             ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC LIMIT 1
           ) g) as latest_global_json,
@@ -83,7 +86,7 @@ router.get(
               json_build_object('chapter_num', p.chapter_num, 'chapter_token', p.chapter_token,
                 'percent', p.percent, 'device_label', d.device_label, 'url', p.url, 'ts', p.created_at) as device_state
             FROM progress_snapshots p JOIN devices d ON p.device_id = d.id
-            WHERE p.user_id = $1 AND p.novel_id = n.id AND d.active = TRUE
+            WHERE p.user_id = $1 AND p.novel_id = n.id
               AND p.read_through_num = COALESCE(m.current_read_through, 1)
             ORDER BY p.device_id, p.created_at DESC
           ) pd) as latest_per_device_json

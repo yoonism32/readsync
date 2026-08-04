@@ -119,12 +119,17 @@ export async function getLatestStates(
     rtNum = meta.rows.length > 0 ? meta.rows[0].current_read_through : 1;
   }
 
+  // Deliberately not filtered on d.active. Reading history belongs to the
+  // reader, not to the browser profile it was recorded on — gating it on the
+  // device made "Remove device" in Settings silently hide every chapter read
+  // there, which once hid 62k snapshots across 117 novels. `active` now only
+  // decides which devices are listed in Settings.
   const globalResult = await client.query(
     `
     SELECT p.*, d.device_label, d.last_seen AS device_last_seen
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
-    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE AND p.read_through_num = $3
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3
     ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
     LIMIT 1
   `,
@@ -136,7 +141,7 @@ export async function getLatestStates(
     SELECT DISTINCT ON (p.device_id) p.*, d.device_label
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
-    WHERE p.user_id = $1 AND p.novel_id = $2 AND d.active = TRUE AND p.read_through_num = $3
+    WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3
     ORDER BY p.device_id, p.created_at DESC
   `,
     [userId, novelId, rtNum],
