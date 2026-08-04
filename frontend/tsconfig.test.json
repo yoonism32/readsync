@@ -5,6 +5,6 @@
     "types": ["vite/client", "node"],
     "noEmit": true
   },
-  "include": ["src/**/*.test.tsx", "vitest.config.ts"],
+  "include": ["src/**/*.test.tsx", "src/test/**/*", "vitest.config.ts"],
   "exclude": []
 }

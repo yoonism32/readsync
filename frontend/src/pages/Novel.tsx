@@ -13,7 +13,7 @@ import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
 import { EditProgress } from '../components/EditProgress.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
-import { StarIcon } from '../components/Icon.js';
+import { StarIcon, ExternalLinkIcon } from '../components/Icon.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -110,31 +110,59 @@ export function NovelPage() {
       </div>
 
       {(novel.latest_url ?? novel.primary_url) && (
-        <a
-          href={novel.latest_url ? resumeUrl(novel.latest_url, novel.latest_percent) : novel.primary_url!}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 6,
-            background: 'var(--color-gold)',
-            color: '#080c12',
-            borderRadius: 'var(--radius-md)',
-            padding: '9px 16px',
-            fontWeight: 600,
-            fontSize: 'var(--text-sm)',
-            textDecoration: 'none',
-            transition: 'background 0.15s, transform 0.1s',
-            touchAction: 'manipulation',
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gold-bright)')}
-          onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-gold)')}
-          onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.97)')}
-          onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
-        >
-          {novel.latest_url ? 'Continue Reading →' : 'Open on NovelArrow →'}
-        </a>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+          <a
+            href={novel.latest_url ? resumeUrl(novel.latest_url, novel.latest_percent) : novel.primary_url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: 'var(--color-gold)',
+              color: '#080c12',
+              borderRadius: 'var(--radius-md)',
+              padding: '9px 16px',
+              fontWeight: 600,
+              fontSize: 'var(--text-sm)',
+              textDecoration: 'none',
+              transition: 'background 0.15s, transform 0.1s',
+              touchAction: 'manipulation',
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gold-bright)')}
+            onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-gold)')}
+            onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.97)')}
+            onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            {novel.latest_url ? 'Continue Reading →' : 'Open on NovelArrow →'}
+          </a>
+
+          <span style={{ flex: 1 }} />
+
+          {/* Secondary actions stack down the right rather than widening into a
+              second horizontal bar. Only shown when the primary button is
+              "Continue Reading" — otherwise it already opens NovelArrow. */}
+          {novel.latest_url && novel.primary_url && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+              <a
+                href={novel.primary_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-ghost"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  textDecoration: 'none',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <ExternalLinkIcon size={14} />
+                Open on NovelArrow
+              </a>
+            </div>
+          )}
+        </div>
       )}
 
       <ChapterMap novel={novel} />
