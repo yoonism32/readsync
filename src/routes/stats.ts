@@ -93,6 +93,49 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
   }
 });
 
+/**
+ * Library health — a plain accounting of what is actually stored, so a display
+ * problem can be told apart from missing data at a glance. Added after a
+ * device-filter bug made 117 novels read "0 / N" while every snapshot was
+ * still on disk.
+ */
+router.get('/api/v1/stats/library', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const result = await pool.query(
+      `
+      SELECT
+        (SELECT COUNT(*) FROM novels) AS novels_tracked,
+        (SELECT COUNT(*) FROM progress_snapshots WHERE user_id = $1) AS progress_snapshots,
+        (SELECT COUNT(DISTINCT novel_id) FROM progress_snapshots WHERE user_id = $1) AS novels_with_progress,
+        (SELECT MIN(created_at) FROM progress_snapshots WHERE user_id = $1) AS oldest_snapshot,
+        (SELECT MAX(created_at) FROM progress_snapshots WHERE user_id = $1) AS newest_snapshot,
+        (SELECT COUNT(*) FROM novel_notes WHERE user_id = $1) AS notes,
+        (SELECT COUNT(*) FROM bookmarks WHERE user_id = $1) AS bookmarks
+      `,
+      [user_id],
+    );
+
+    const row = result.rows[0] ?? {};
+    const novelsTracked = Number(row.novels_tracked ?? 0);
+    const novelsWithProgress = Number(row.novels_with_progress ?? 0);
+
+    res.json({
+      novels_tracked: novelsTracked,
+      novels_with_progress: novelsWithProgress,
+      novels_without_progress: Math.max(novelsTracked - novelsWithProgress, 0),
+      progress_snapshots: Number(row.progress_snapshots ?? 0),
+      oldest_snapshot: row.oldest_snapshot ?? null,
+      newest_snapshot: row.newest_snapshot ?? null,
+      notes: Number(row.notes ?? 0),
+      bookmarks: Number(row.bookmarks ?? 0),
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get library health');
+  }
+});
+
 router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
   const {
     from,

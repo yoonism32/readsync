@@ -2,14 +2,34 @@ import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { swrFetcher, devices as devicesApi, backups as backupsApi, novels as novelsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
-import type { BackupsStatus } from '../api/client.js';
-import { DeviceBadge } from '../components/DeviceBadge.js';
+import { backups as backupsApi, novels as novelsApi, settings as settingsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
+import type { BackupsStatus, Prefs, LibraryHealth } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
-import type { Device } from '../types/index.js';
+
+const REFRESH_CHOICES = [6, 12, 24, 48] as const;
+
+function readNotificationPermission(): string {
+  return typeof Notification === 'undefined' ? 'unsupported' : Notification.permission;
+}
 
 export function Settings() {
-  const { data: deviceList, isLoading, mutate } = useSWR<Device[]>('/devices', swrFetcher);
+  const [notificationPermission, setNotificationPermission] = useState(readNotificationPermission);
+  const { data: lastRefreshData } = useSWR(
+    'settings-last-refresh',
+    () => settingsApi.getLastRefresh(),
+    { revalidateOnFocus: false },
+  );
+  const lastRefresh = lastRefreshData?.last_refresh ?? null;
+  const { data: prefs, mutate: mutatePrefs } = useSWR<Prefs>(
+    'settings-prefs',
+    () => settingsApi.getPrefs(),
+    { revalidateOnFocus: false },
+  );
+  const { data: library } = useSWR<LibraryHealth>(
+    'library-health',
+    () => settingsApi.libraryHealth(),
+    { revalidateOnFocus: false },
+  );
   const { data: backupStatus, mutate: mutateBackups } = useSWR<BackupsStatus>(
     'backups-status',
     () => backupsApi.status(),
@@ -75,14 +95,39 @@ export function Settings() {
     toast.success('API key saved');
   }
 
-  async function handleDeactivate(deviceId: string) {
+  async function handleIntervalChange(hours: number) {
     setSaving(true);
     try {
-      await devicesApi.deactivate(deviceId);
-      await mutate();
-      toast.success('Device deactivated');
+      await settingsApi.savePrefs({ refresh_interval_hours: hours });
+      await mutatePrefs();
+      toast.success(`Checking every ${hours}h`);
     } catch {
-      toast.error('Failed to deactivate');
+      toast.error('Failed to save');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleNotificationsToggle(enabled: boolean) {
+    // Only ask the browser at the moment the reader opts in — the prompt is
+    // one-shot per origin and a denial sticks, so spending it on page load
+    // would permanently disable alerts for someone who never asked for them.
+    if (enabled && typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      const granted = await Notification.requestPermission();
+      setNotificationPermission(granted);
+      if (granted !== 'granted') {
+        toast.error('Your browser blocked notifications');
+        return;
+      }
+    }
+
+    setSaving(true);
+    try {
+      await settingsApi.savePrefs({ notifications_enabled: enabled });
+      await mutatePrefs();
+      toast.success(enabled ? 'Notifications on' : 'Notifications off');
+    } catch {
+      toast.error('Failed to save');
     } finally {
       setSaving(false);
     }
@@ -187,54 +232,114 @@ export function Settings() {
         </p>
       </section>
 
-      {/* Devices */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
-        <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>Devices</h2>
-        {isLoading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spinner /></div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(deviceList ?? []).map(d => (
-              <div
-                key={d.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '10px 14px',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid var(--color-border)',
-                }}
-              >
-                <DeviceBadge label={d.device_label} type={d.device_type} />
-                <span className="text-muted" style={{ fontSize: 'var(--text-xs)', flex: 1 }}>
-                  {d.total_snapshots} syncs · last seen {new Date(d.last_seen).toLocaleDateString()}
-                </span>
+      {/* Refresh + Library share the width the Devices list used to fill. */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+        <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+          <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 6 }}>Refresh</h2>
+          <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 14 }}>
+            How often ReadSync reminds you to check your library for new chapters.
+          </p>
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {REFRESH_CHOICES.map(h => {
+              const active = (prefs?.refresh_interval_hours ?? 24) === h;
+              return (
                 <button
-                  onClick={() => { void handleDeactivate(d.id); }}
+                  key={h}
+                  type="button"
+                  onClick={() => { void handleIntervalChange(h); }}
                   disabled={saving}
-                  aria-label={`Deactivate ${d.device_label}`}
+                  aria-pressed={active}
                   style={{
-                    background: 'none',
-                    border: '1px solid rgba(248,113,113,0.3)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '3px 8px',
-                    color: 'var(--color-danger)',
-                    fontSize: 'var(--text-xs)',
-                    cursor: 'pointer',
+                    background: active ? 'var(--color-gold)' : 'none',
+                    color: active ? '#080c12' : 'var(--color-text-muted)',
+                    border: `1px solid ${active ? 'var(--color-gold)' : 'var(--color-border)'}`,
+                    borderRadius: 'var(--radius-md)',
+                    padding: '5px 12px',
+                    fontSize: 'var(--text-sm)',
+                    fontWeight: active ? 600 : 400,
+                    fontFamily: 'inherit',
+                    cursor: saving ? 'default' : 'pointer',
                     touchAction: 'manipulation',
                   }}
                 >
-                  Remove
+                  {h}h
                 </button>
-              </div>
-            ))}
-            {(deviceList ?? []).length === 0 && (
-              <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>No active devices.</p>
-            )}
+              );
+            })}
           </div>
-        )}
+
+          <p className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>
+            {lastRefresh
+              ? `Last refreshed ${formatTimestamp(lastRefresh)}.`
+              : 'No refresh recorded yet.'}
+          </p>
+        </section>
+
+        <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+          <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 6 }}>Library</h2>
+          <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 14 }}>
+            What's actually stored, so a display glitch can be told apart from missing data.
+          </p>
+
+          {!library ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}><Spinner /></div>
+          ) : (
+            <>
+              <dl style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '6px 14px', fontSize: 'var(--text-sm)' }}>
+                <dt className="text-muted">Novels</dt>
+                <dd className="tabular" style={{ textAlign: 'right' }}>{library.novels_tracked}</dd>
+
+                <dt className="text-muted">With progress</dt>
+                <dd className="tabular" style={{ textAlign: 'right' }}>{library.novels_with_progress}</dd>
+
+                <dt className="text-muted">Snapshots</dt>
+                <dd className="tabular" style={{ textAlign: 'right' }}>{library.progress_snapshots.toLocaleString()}</dd>
+
+                <dt className="text-muted">Notes · bookmarks</dt>
+                <dd className="tabular" style={{ textAlign: 'right' }}>{library.notes} · {library.bookmarks}</dd>
+              </dl>
+
+              <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 12 }}>
+                {library.oldest_snapshot
+                  ? `Tracking since ${new Date(library.oldest_snapshot).toLocaleDateString()}.`
+                  : 'No progress recorded yet.'}
+                {library.novels_without_progress > 0 &&
+                  ` ${library.novels_without_progress} novel${library.novels_without_progress === 1 ? '' : 's'} have no progress recorded.`}
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+
+      {/* Notifications */}
+      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
+          <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>Notifications</h2>
+          <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={() => { void handleNotificationsToggle(!prefs?.notifications_enabled); }}
+            disabled={saving}
+            aria-pressed={!!prefs?.notifications_enabled}
+            style={{
+              color: prefs?.notifications_enabled ? 'var(--color-gold)' : 'var(--color-text-muted)',
+              borderColor: prefs?.notifications_enabled ? 'var(--color-gold)' : 'var(--color-border)',
+            }}
+          >
+            {prefs?.notifications_enabled ? 'On' : 'Off'}
+          </button>
+        </div>
+        <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
+          A desktop notification when your library is due a refresh. ReadSync only
+          asks your browser for permission when you switch this on.
+        </p>
+        <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 8 }}>
+          Browser permission: {notificationPermission}
+          {notificationPermission === 'denied' &&
+            ' — you\'ll need to re-allow notifications in your browser\'s site settings.'}
+        </p>
       </section>
 
       {/* Badge legend */}

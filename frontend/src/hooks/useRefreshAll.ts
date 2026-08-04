@@ -88,14 +88,24 @@ export function useRefreshAll(): RefreshAllState {
   const runningRef = useRef(false);
   const notifiedRef = useRef(false);
 
+  const [intervalHours, setIntervalHours] = useState(REFRESH_INTERVAL_HOURS);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
   useEffect(() => {
     settings
       .getLastRefresh()
       .then(d => setLastRefresh(d.last_refresh))
       .catch(() => { /* non-fatal */ });
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      void Notification.requestPermission();
-    }
+    // Deliberately no requestPermission() here. Asking on every page load
+    // spends the browser's one-shot prompt without the reader ever opting in —
+    // and a denial is sticky. Settings asks, only when the toggle is turned on.
+    settings
+      .getPrefs()
+      .then(p => {
+        setIntervalHours(p.refresh_interval_hours);
+        setNotificationsEnabled(p.notifications_enabled);
+      })
+      .catch(() => { /* keep the defaults */ });
   }, []);
 
   useEffect(() => {
@@ -107,7 +117,7 @@ export function useRefreshAll(): RefreshAllState {
     ? Math.max(
         0,
         Math.round(
-          (new Date(lastRefresh).getTime() + REFRESH_INTERVAL_HOURS * 3_600_000 - nowTick) / 60_000,
+          (new Date(lastRefresh).getTime() + intervalHours * 3_600_000 - nowTick) / 60_000,
         ),
       )
     : null;
@@ -115,11 +125,12 @@ export function useRefreshAll(): RefreshAllState {
   useEffect(() => {
     if (minutesUntilDue !== 0 || notifiedRef.current) return;
     notifiedRef.current = true;
+    if (!notificationsEnabled) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     new Notification('ReadSync — Time to Refresh!', {
-      body: "It's been 24h since your last refresh. Click Refresh All Novels to update your library.",
+      body: `It's been ${intervalHours}h since your last refresh. Click Refresh All Novels to update your library.`,
     });
-  }, [minutesUntilDue]);
+  }, [minutesUntilDue, notificationsEnabled, intervalHours]);
 
   const refreshAll = useCallback(
     async (novels: Novel[]) => {

@@ -268,10 +268,32 @@ export const backups = {
 
 // ── Settings ──────────────────────────────────────────────
 
+export interface Prefs {
+  refresh_interval_hours: number;
+  notifications_enabled: boolean;
+}
+
+export interface LibraryHealth {
+  novels_tracked: number;
+  novels_with_progress: number;
+  novels_without_progress: number;
+  progress_snapshots: number;
+  oldest_snapshot: string | null;
+  newest_snapshot: string | null;
+  notes: number;
+  bookmarks: number;
+}
+
 export const settings = {
   getLastRefresh: () => request<{ last_refresh: string | null; updated_at: string | null }>('/settings/last-refresh'),
   setLastRefresh: (timestamp: string) =>
     request('/settings/last-refresh', { method: 'POST', body: { timestamp } }),
+
+  getPrefs: () => request<Prefs>('/settings/prefs'),
+  savePrefs: (patch: Partial<Prefs>) =>
+    request('/settings/prefs', { method: 'PUT', body: patch }),
+
+  libraryHealth: () => request<LibraryHealth>('/stats/library'),
 };
 
 // ── Admin ─────────────────────────────────────────────────
