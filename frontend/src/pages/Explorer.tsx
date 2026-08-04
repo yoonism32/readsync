@@ -151,7 +151,17 @@ export function Explorer() {
         <div
           id="explorer-filters"
           className="glass animate-fade-in"
-          style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 12 }}
+          style={{
+            borderRadius: 'var(--radius-xl)',
+            padding: 20,
+            marginTop: 12,
+            // .glass applies backdrop-filter, which creates a stacking context.
+            // That traps a popover's z-index inside this panel, so the panel
+            // itself has to out-rank the results grid or the cards — which come
+            // later in the DOM — paint over the open dropdown.
+            position: 'relative',
+            zIndex: 30,
+          }}
         >
           <div
             style={{
