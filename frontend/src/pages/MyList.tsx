@@ -60,6 +60,8 @@ const FAILURE_LABELS: Record<string, string> = {
   popup_blocked: 'popup blocked — allow popups for this site',
   timeout: 'timed out after 30s',
   no_chapter_info: 'no chapter number found on page',
+  chapter_page: 'link opened a chapter, not the novel page',
+  no_novel_id: 'could not read a novel ID from the URL',
   api_error: 'server rejected the update',
   exception: 'userscript error',
   unknown: 'refresh did not report a reason',

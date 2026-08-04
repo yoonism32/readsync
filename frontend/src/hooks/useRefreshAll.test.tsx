@@ -135,6 +135,74 @@ describe('useRefreshAll — failure detail', () => {
     ]);
   });
 
+  it('does not close a slow tab when its batch siblings finish', async () => {
+    // BATCH_SIZE is 3, so these go out together. Two report back, one never
+    // does. The slow tab must survive its siblings' close() calls and only be
+    // closed by its own 30s timeout.
+    const tabs = new Map<string, ReturnType<typeof openedTab>>();
+    window.open = vi.fn((_url: string, name: string) => {
+      const t = openedTab();
+      tabs.set(name, t);
+      return t;
+    }) as unknown as typeof window.open;
+
+    const { result } = renderHook(() => useRefreshAll());
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.refreshAll([
+        novel('a', 'Novel A'),
+        novel('b', 'Novel B'),
+        novel('slow', 'Novel Slow'),
+      ]);
+    });
+
+    act(() => {
+      signal('a', { success: true });
+      signal('b', { success: true });
+    });
+
+    // Past the 1s grace: the two responders have closed.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(tabs.get('_novel_a')?.close).toHaveBeenCalled();
+    expect(tabs.get('_novel_b')?.close).toHaveBeenCalled();
+    // The crux: nothing has touched the slow tab.
+    expect(tabs.get('_novel_slow')?.close).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(29_000);
+      await run;
+    });
+    expect(tabs.get('_novel_slow')?.close).toHaveBeenCalled();
+    expect(result.current.failures).toEqual([
+      { novelId: 'slow', title: 'Novel Slow', reason: 'timeout' },
+    ]);
+  });
+
+  it('counts an externally closed tab as success without any scrape', async () => {
+    // Documents the tab.closed watcher: anything that closes the tab - the
+    // browser, the user, a tab-group sweep - resolves as ok even though the
+    // userscript never reported.
+    const tab = openedTab();
+    window.open = vi.fn(() => tab) as unknown as typeof window.open;
+
+    const { result } = renderHook(() => useRefreshAll());
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.refreshAll([novel('ghost', 'Novel Ghost')]);
+    });
+
+    tab.closed = true;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+      await run;
+    });
+
+    expect(result.current.failures).toEqual([]);
+    expect(result.current.summary).toBe('Refreshed 1 novels');
+  });
+
   it('leaves failures empty and the summary clean when everything succeeds', async () => {
     const { result } = renderHook(() => useRefreshAll());
 

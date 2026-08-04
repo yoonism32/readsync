@@ -317,31 +317,43 @@ function navigate(direction: 'next' | 'previous'): void {
 
 /* ===== Auto-update novel info (runs on novel main pages) ===== */
 async function autoUpdateNovelInfo(): Promise<void> {
+  // Refresh All names each tab `_novel_<novelId>` and filters replies on that
+  // exact id, so the tab name is authoritative — and it is the only id we have
+  // when normalizeNovelId cannot parse the URL.
+  const openerNovelId = isRefreshTab ? window.name.replace(/^_novel_/, '') : null;
+
+  function notifyOpener(msg: Omit<NovelUpdateMessage, 'type'>): void {
+    if (!isRefreshTab || !window.opener || (window.opener as Window & typeof globalThis).closed) return;
+    try {
+      (window.opener as Window).postMessage({ type: 'NOVEL_UPDATE_COMPLETE', ...msg } satisfies NovelUpdateMessage, '*');
+      log('Notified parent:', msg);
+    } catch (e) {
+      log('Failed to notify parent:', e);
+    }
+  }
+
   try {
     const pathname = location.pathname;
     const lastSegment = pathname.split('/').pop() ?? '';
 
+    // Both guards below used to return in silence, stranding Refresh All for
+    // the full 30s timeout and mislabelling a deliberate skip as a hang.
     if (pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment)) {
       log('Skipping auto-update on chapter page', { pathname, lastSegment });
+      if (openerNovelId) notifyOpener({ novelId: openerNovelId, success: false, reason: 'chapter_page' });
       return;
     }
 
     const novelId = normalizeNovelId(location.href);
-    if (!novelId) { log('No novel ID found for auto-update'); return; }
+    if (!novelId) {
+      log('No novel ID found for auto-update');
+      if (openerNovelId) notifyOpener({ novelId: openerNovelId, success: false, reason: 'no_novel_id' });
+      return;
+    }
 
     log('Auto-updating novel info for:', novelId);
 
     const latestChapterInfo = extractLatestChapterInfo();
-
-    function notifyOpener(msg: Omit<NovelUpdateMessage, 'type'>): void {
-      if (!isRefreshTab || !window.opener || (window.opener as Window & typeof globalThis).closed) return;
-      try {
-        (window.opener as Window).postMessage({ type: 'NOVEL_UPDATE_COMPLETE', ...msg } satisfies NovelUpdateMessage, '*');
-        log('Notified parent:', msg);
-      } catch (e) {
-        log('Failed to notify parent:', e);
-      }
-    }
 
     if (!latestChapterInfo.latestChapterNum) {
       log('No chapter info found to update');
