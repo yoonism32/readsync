@@ -10,10 +10,11 @@ import { Spinner } from '../components/Spinner.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
 import type { SmartFilterId } from '../lib/smartFilters.js';
+import { sortValue, updatedAt } from '../lib/novelSort.js';
+import type { SortKey } from '../lib/novelSort.js';
 import type { CategoryAssignment, Novel, NovelStatus } from '../types/index.js';
 
 type Tab = 'all' | 'reading' | 'plan-to-read' | 'completed' | 'on-hold' | 'dropped';
-type SortKey = 'last_read' | 'title' | 'progress' | 'updated' | 'added';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'all',          label: 'All' },
@@ -54,17 +55,7 @@ function lastRefreshLabel(iso: string | null): string {
 const ordinal = (n: number): string =>
   n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 
-const updatedAt = (n: Novel): string | null => n.site_latest_chapter_time ?? n.chapters_updated_at;
-
-function sortValue(n: Novel, key: SortKey): number | string {
-  switch (key) {
-    case 'title':     return n.title.toLowerCase();
-    case 'progress':  return n.latest_chapter ?? -1;
-    case 'last_read': return n.latest_read_at ? new Date(n.latest_read_at).getTime() : 0;
-    case 'updated':   { const u = updatedAt(n); return u ? new Date(u).getTime() : 0; }
-    case 'added':     return n.started_at ? new Date(n.started_at).getTime() : 0;
-  }
-}
+// Sorting moved to lib/novelSort so Explorer sorts by the same rules.
 
 export function MyList() {
   const [tab, setTab] = useState<Tab>('all');
