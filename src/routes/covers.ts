@@ -1,11 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Router } from 'express';
-import {
-  HTTP_GONE,
-  HTTP_INTERNAL_ERROR,
-  HTTP_NOT_FOUND,
-  HTTP_SERVICE_UNAVAILABLE,
-} from '../config.js';
+import { HTTP_GONE, HTTP_INTERNAL_ERROR, HTTP_NOT_FOUND } from '../config.js';
 import pool from '../db/pool.js';
 import logger from '../logger.js';
 import { validateApiKey } from '../middleware/auth.js';
@@ -39,6 +34,36 @@ const MIRRORED_PATH = '/storage/v1/object/public/novel-covers/';
 export function isMirroredCover(url: string | null): boolean {
   return !!url && url.includes(MIRRORED_PATH);
 }
+
+/** Where the cover lives on the source site. */
+export function sourceCoverUrl(novelId: string): string {
+  const slug = String(novelId).replace(/^novelbin:/, '');
+  return `https://images.novelarrow.com/novel/${slug}.jpg`;
+}
+
+/**
+ * How long to stop re-attempting a mirror that just failed for a reason that
+ * isn't going to resolve itself in the next few seconds.
+ */
+export const MIRROR_RETRY_COOLDOWN_MS = 6 * 60 * 60 * 1000; // 6h
+
+/**
+ * Should we skip the mirror attempt and send the reader straight to the source?
+ *
+ * images.novelarrow.com returns 403 to Render's datacenter egress — the same
+ * URLs serve 200 from a residential connection, and no header combination
+ * changes it. Without a cooldown, every render of the Explorer grid re-attempts
+ * a dozen doomed mirrors, each burning three retries and ~3.5s of backoff.
+ */
+export function isMirrorOnCooldown(
+  retryAt: number | undefined,
+  now: number,
+): boolean {
+  return retryAt !== undefined && retryAt > now;
+}
+
+/** slug → epoch ms before which we won't retry mirroring. */
+const mirrorCooldown = new Map<string, number>();
 
 /**
  * Does this source response mean the image genuinely isn't there?
@@ -123,17 +148,35 @@ router.get(
         // JSON like every other exit from this route. The bare string used to
         // come back as text/html, which read like a routing miss rather than a
         // deliberate 404 and sent at least one debugging session sideways.
-        return res.status(HTTP_NOT_FOUND).json({ error: 'Cover not available' });
-      }
-
-      if (!supabase) {
         return res
-          .status(HTTP_INTERNAL_ERROR)
-          .json({ error: 'Cover storage not configured' });
+          .status(HTTP_NOT_FOUND)
+          .json({ error: 'Cover not available' });
       }
 
       const slug = String(novelId).replace(/^novelbin:/, '');
-      const coverUrl = `https://images.novelarrow.com/novel/${slug}.jpg`;
+      const coverUrl = sourceCoverUrl(String(novelId));
+
+      /**
+       * Hand the reader the source URL. Their browser fetches it from their own
+       * connection, which the source serves happily — it is only our datacenter
+       * egress it refuses. Cached briefly, not for a day, because this is a
+       * degraded path we want to leave as soon as mirroring works again.
+       */
+      const redirectToSource = () => {
+        res.setHeader('Cache-Control', 'public, max-age=300'); // 5m
+        return res.redirect(coverUrl);
+      };
+
+      if (!supabase) {
+        return redirectToSource();
+      }
+
+      if (
+        !forceRefresh &&
+        isMirrorOnCooldown(mirrorCooldown.get(slug), Date.now())
+      ) {
+        return redirectToSource();
+      }
 
       logger.debug({ slug }, 'Fetching cover');
 
@@ -141,16 +184,15 @@ router.get(
       try {
         response = await fetchCoverWithRetry(coverUrl);
       } catch (fetchErr) {
-        // Reaching here means the network gave up, not that the image is
+        // Reaching here means we could not reach the image, not that it is
         // missing — fetchCoverWithRetry returns a real 404 rather than throwing.
-        // Leave cover_img untouched so the next request tries again.
+        // Leave cover_img alone and let the reader's browser fetch it directly.
         logger.warn(
           { slug, error: (fetchErr as Error).message },
-          'Cover fetch failed after retries — leaving cover unmarked for retry',
+          'Cover unreachable from here — serving source directly',
         );
-        return res
-          .status(HTTP_SERVICE_UNAVAILABLE)
-          .json({ error: 'Cover temporarily unavailable' });
+        mirrorCooldown.set(slug, Date.now() + MIRROR_RETRY_COOLDOWN_MS);
+        return redirectToSource();
       }
 
       if (!response.ok) {
@@ -160,11 +202,10 @@ router.get(
         if (!isMissingUpstream(response.status)) {
           logger.warn(
             { slug, status: response.status },
-            'Cover source unhealthy — leaving cover unmarked for retry',
+            'Cover refused to us — serving source directly',
           );
-          return res
-            .status(HTTP_SERVICE_UNAVAILABLE)
-            .json({ error: 'Cover temporarily unavailable' });
+          mirrorCooldown.set(slug, Date.now() + MIRROR_RETRY_COOLDOWN_MS);
+          return redirectToSource();
         }
 
         logger.warn(
@@ -204,6 +245,10 @@ router.get(
         publicUrl,
         novelId,
       ]);
+
+      // Mirroring works again for this slug — drop any cooldown so a recovered
+      // source isn't ignored for the rest of the window.
+      mirrorCooldown.delete(slug);
 
       logger.info(
         { slug, size_kb: Math.round(buffer.length / 1024) },
