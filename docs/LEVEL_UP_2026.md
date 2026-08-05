@@ -1,517 +1,218 @@
 # ReadSync Level Up — 2026
 
-> No quick wins. No social features. Just technically impressive shit that makes this a portfolio-defining project.
+> **Single source of truth for future work.** Consolidates the old `future_ideas.md`
+> backlog, the deferred SSS roadmap specs, and the ops findings from the August 2026
+> database session. `future_ideas.md` is kept only for its long-form specs — status
+> is tracked *here*.
+
+Legend: `[x]` done · `[ ]` open · `[~]` partially done
 
 ---
 
-## Tier 1: High Impact, High Impressiveness
+## Recently completed — 2026-08-04 / 08-05 session
 
-### 1. Offline-First PWA with Background Sync
+### Security & database
+- [x] **RLS lockdown** — all 13 public tables. Anon key had `SELECT/INSERT/UPDATE/DELETE/TRUNCATE`
+      on everything with RLS off; `/rest/v1/progress_snapshots` returned 206 + 63,488 rows to a
+      publishable key. Now 401 on every path. (`007_rls_lockdown.sql`)
+- [x] **Blanket grants revoked** from `anon`/`authenticated`, plus default privileges so new
+      tables don't inherit them.
+- [x] **Data API (PostgREST) disabled entirely** — structural fix on top of the policy fix.
+      Also removed the `pg_timezone_names` schema-cache reload that was ~21% of all DB time.
+- [x] **Storage listing policy dropped** — `novel-covers` is public, so object URLs work without
+      the broad `SELECT` on `storage.objects` that let anyone enumerate every file.
+- [x] **Postgres 17.4 → 17.6.1.155**, plus `REINDEX SCHEMA public` and
+      `ALTER DATABASE … REFRESH COLLATION VERSION` for the ICU 153.120→153.121 mismatch the
+      upgrade introduced.
+- [x] **`search_path` pinned** on `update_updated_at_column`.
+- [x] Verified 16 MB pre-upgrade dump at `/mnt/Extra/pgdb/` (63,487 rows, cross-checked against
+      the PostgREST row count).
 
-**What:** Full offline support. Read your dashboard, check progress, even queue updates — all without internet. Syncs when you're back online.
+### Bugs
+- [x] **Novel removal was broken for every novel** — Express 5 leaves `req.body` undefined when
+      no parser matched; the route destructured it *above* its own `try`, so the TypeError
+      bypassed `handleDbError` and surfaced as an opaque 500. Fixed once via `normalizeBody`
+      middleware rather than at 19 call sites.
+- [x] **NovelArrow chapter detection** — the `og:novel` meta short-circuited the max-scanning
+      strategies, and the DOM fallback only sees the first 30 server-rendered chapters. Now reads
+      the header's "N Chapters" figure and takes the max of all candidates.
+- [x] **Digit-leading slugs misread as chapter pages** — `100x-rebate-…` tripped the `/^\d+/`
+      heuristic, which silently disabled auto-update *and* made progress sync record scroll
+      position on the novel main page. Shared `isChapterPath` now requires the path to sit below
+      the slug.
+- [x] **Silent auto-update guards** — two paths returned without notifying the opener, costing a
+      30s timeout each and mislabelling a deliberate skip as a hang.
+- [x] **Covers never mirrored** — 13 of 132 novels hotlinked the source because the admin
+      auto-update wrote `cover_img` first and `covers.ts` short-circuited on any cached URL.
+- [x] **Sessions lived in process memory** — `express-session` with no store meant every deploy
+      and every free-tier hibernation logged you out, appearing as a broken app because
+      `requireAuthAPI` gates only the API while the SPA still served. Now `connect-pg-simple`
+      on the existing pool. (`009_session_store.sql`)
 
-**Why it's impressive:**
-- Service Workers with proper caching strategies
-- IndexedDB for local data persistence
-- Background Sync API for queued operations
-- Conflict resolution when coming back online
-- "Works offline" is a killer demo moment
+### Performance
+- [x] **My List query 300ms → 108ms**, buffers 31,354 → 11,853. Was 60% of all database time.
+      One-off `VACUUM` (the CTE was doing 62,735 heap fetches from a nominally index-only scan
+      after the upgrade ran statistics-only) plus two indexes matching each subquery's `ORDER BY`.
+      (`008_progress_snapshot_indexes.sql`)
 
-**Technical Stack:**
-```
-- Workbox (Google's SW library)
-- IndexedDB via idb-keyval or Dexie.js
-- Background Sync API
-- Cache-first for static, network-first for API
-```
-
-**Implementation Scope:**
-```javascript
-// Service Worker registration
-if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js');
-}
-
-// Offline detection + queue
-window.addEventListener('online', () => syncQueue.flush());
-window.addEventListener('offline', () => showOfflineBanner());
-```
-
-**Files to create:**
-- `public/sw.js` — Service worker
-- `public/js/offline-store.js` — IndexedDB wrapper
-- `public/js/sync-queue.js` — Offline action queue
-
-**Demo value:** Open dashboard, go airplane mode, browse around, queue a status change, go back online, watch it sync. 🔥
-
----
-
-### 2. Reading Time Machine
-
-**What:** Animated visualization of your entire reading journey. A timeline you can scrub through — watch your library grow, see progress bars fill up over weeks/months.
-
-**Why it's impressive:**
-- D3.js or Three.js for smooth animations
-- Time-series data visualization
-- Interactive scrubbing (drag to time-travel)
-- "Replay your 2025 reading" mode
-- Exportable as video/GIF for sharing
-
-**Technical Stack:**
-```
-- D3.js for 2D timeline
-- OR Three.js/WebGL for 3D version
-- Canvas/SVG rendering
-- RequestAnimationFrame for smooth playback
-- MediaRecorder API for export
-```
-
-**Data needed:**
-```sql
--- Already have this in progress_entries
-SELECT novel_id, chapter_num, percent, updated_at 
-FROM progress_entries 
-WHERE user_key = $1 
-ORDER BY updated_at ASC;
-```
-
-**Visualization concepts:**
-- Horizontal timeline with novel "lanes"
-- Progress bars that animate as you scrub time
-- Novels appear when first tracked
-- Completion celebrations (confetti when 100%)
-- Speed controls (1x, 5x, 10x)
-
-**Files to create:**
-- `public/timemachine.html`
-- `public/js/timemachine.js`
-- `public/css/timemachine.css`
+### Product (verified present in `frontend/src/`)
+- [x] Notes, refresh persistence, quick filters, bulk status, export/import, sort persistence,
+      tags/categories, unread counter (features 1–8)
+- [x] Command Palette (Ctrl+K) · Activity Heatmap · Explorer with tri-state genre filters ·
+      History · Manage · Admin · Notification bell · Chapter map · Re-read panel
 
 ---
 
-### 3. Chrome Extension (Manifest V3)
+## Open — Ops & infrastructure
 
-**What:** Graduate from Tampermonkey userscript to a proper Chrome Web Store extension.
+Carried out of the August session. Roughly ordered by value.
 
-**Why it's impressive:**
-- Manifest V3 compliance (the new standard)
-- Background service worker architecture
-- Extension popup with quick stats
-- Badge showing current chapter
-- Context menu integration
-- Proper permissions model
-
-**Structure:**
-```
-readsync-extension/
-├── manifest.json
-├── background.js      # Service worker
-├── content.js         # Injected into NovelBin
-├── popup/
-│   ├── popup.html
-│   ├── popup.js
-│   └── popup.css
-├── options/
-│   ├── options.html
-│   └── options.js
-└── icons/
-    ├── icon-16.png
-    ├── icon-48.png
-    └── icon-128.png
-```
-
-**Popup features:**
-- Current reading status
-- Quick-jump to last position
-- Sync status indicator
-- "Continue on phone" QR code
-
-**Badge:**
-- Shows current chapter number
-- Changes color based on sync status (green = synced, yellow = syncing, red = offline)
+- [ ] **Egress at 69% of free tier** (3.47 / 5 GB, 22 days left). Re-read now that `/novels`
+      moves 62% less data per call. Supabase egress counts *every* pooler result crossing to
+      Render, so the query fix should show up here.
+- [ ] **`SubPlan 2` in the My List query** — the remaining 89% of its cost. Reads 589 rows per
+      novel to return 1, because Postgres has no index skip-scan for `DISTINCT ON`. Needs a
+      `LATERAL` rewrite or a denormalised "latest per device per novel" table maintained by the
+      sync. **Design change, not tuning — decide before starting.**
+- [ ] **Harden the migration runner.** `migrate.ts:75` splits files on `;`, so any `DO` block,
+      function body, or semicolon inside a comment breaks it — this crashed a deploy on
+      2026-08-04. Make it dollar-quote aware (~20 lines) and the whole class disappears.
+      A split-simulation check exists as an ad-hoc script; fold it into the test suite.
+- [ ] **Rotate off the legacy anon key.** Don't rotate the JWT secret — it invalidates
+      `service_role` too, which Storage depends on. Migrate to publishable/secret keys: create a
+      secret key → update `SUPABASE_SERVICE_KEY` on Render → verify covers + backups → then
+      deactivate legacy. Both systems run in parallel, so no downtime window.
+- [ ] **Delete the dead `SUPABASE_KEY` export** (`config.ts:82`) — falls back from service key to
+      anon key and is never read. Harmless now, a trap once legacy keys are deactivated.
+- [ ] **7 unindexed foreign keys** (all `novel_id`), INFO level. Be selective: `progress_snapshots`
+      takes constant writes, and an index there buys faster cascade deletes you rarely perform.
+- [ ] **`realChapterCount` module cache** (`ChapterDetector.ts:81`) is never reset per novel. It
+      can no longer override a larger value, and Refresh All is immune (fresh tab per novel), but
+      browsing several novels in one tab can still surface a stale count.
+- [ ] **`extractChapterNum` caps at `< 10000`** — silently drops novels past 10k chapters. Not hit
+      today (max is ~7,600).
+- [ ] **`tab.closed` counts as success** (`useRefreshAll.ts:68`) — any external close is banked as
+      a win with no scrape. Deliberately left; a test documents the behaviour if you want to flip it.
+- [ ] **Userscript isn't served.** `dist-userscript/` is gitignored and no route exposes it, so
+      Render's `build:all` builds it for nothing and updates are a manual reinstall. Serving it
+      plus `@updateURL`/`@downloadURL` would make Tampermonkey self-update.
+- [ ] **API documentation (OpenAPI/Swagger).** The last genuinely-open item from the old
+      `executive_sum.md` checklist — its other four (TypeScript, automated tests, structured
+      logging, frontend framework) are all done.
 
 ---
 
-### 4. CLI Tool
+## Open — Product features
 
-**What:** `readsync` command-line tool for power users.
+### Tier 1: deferred SSS specs (infra already exists)
 
-**Why it's impressive:**
-- Shows understanding of developer tooling
-- npm publishable package
-- Multiple output formats (table, JSON, minimal)
-- Config file support
-- Autocomplete for shells
+Full specs in the section below; these are UI + light-endpoint projects. All new UI goes in
+`frontend/`, never the legacy vanilla pages.
 
-**Commands:**
-```bash
-readsync status                    # Quick sync status
-readsync list                      # All novels
-readsync list --reading            # Currently reading
-readsync list --completed          # Finished
-readsync progress "Solo Leveling"  # Specific novel
-readsync sync                      # Force sync
-readsync open "Novel Name"         # Open in browser at last position
-readsync export > backup.json      # Export data
-readsync config set api_key xxx    # Configure
-```
+- [ ] **F12 — Per-novel stats page** (`/app/novel/:id/stats`). Start here: the endpoint
+      `GET /api/v1/stats/novels/:novelId` already returns everything and is completely unused.
+- [ ] **F11 — Full stats page** (`/app/stats`). Needs one new `stats/breakdown` endpoint;
+      `stats/summary` and `stats/daily` already exist.
+- [ ] **F13 — Reading goals.** No migration needed — store as JSON under `user_settings`.
+- [ ] **F14 — Reading Wrapped.** Seasonal; ship in December. `computeStreaks` already exists.
 
-**Technical Stack:**
-```
-- Commander.js or Yargs for CLI framework
-- Chalk for colors
-- Ora for spinners
-- Conf for config storage
-- Inquirer for interactive prompts
-```
+**Build order when picked up:** F12 → F11 → F13 → F14.
 
-**Structure:**
-```
-readsync-cli/
-├── package.json
-├── bin/
-│   └── readsync.js
-├── src/
-│   ├── commands/
-│   │   ├── status.js
-│   │   ├── list.js
-│   │   ├── progress.js
-│   │   └── sync.js
-│   ├── api.js
-│   └── config.js
-└── README.md
-```
+### Tier 2: technically impressive
+
+- [ ] **Offline-first PWA** — service worker, IndexedDB, background sync queue. No PWA plugin in
+      `frontend/vite.config.ts` yet.
+- [ ] **Chrome Extension (Manifest V3)** — graduate from the Tampermonkey userscript.
+- [ ] **CLI tool** — `readsync status|list|progress|sync|export`, npm-publishable.
+- [ ] **GraphQL API** alongside REST.
+- [ ] **CRDTs for conflict resolution** — replace last-write-wins with Automerge/Yjs.
+- [ ] **Reading analytics engine** — completion ETA, velocity, peak hours, burnout detection.
+
+### Tier 3: signature "wow"
+
+- [ ] **Reading Time Machine** — scrubable animated timeline of the whole library.
+- [ ] **Ghost positions** — faint markers showing where other devices left off.
+- [ ] **Live reading indicator** — Socket.io is already in place.
+
+### Tier 4: power-user features (specs in `future_ideas.md` §9–17)
+
+- [ ] Dead novel detection & auto-triage (#10)
+- [ ] Unified search across notes, bookmarks, novels, tags (#11)
+- [ ] Theme engine & custom accent colours (#12)
+- [ ] Batch import from URLs (#13)
+- [ ] Chapter highlights & annotations, userscript-side (#14)
+- [ ] Auto-cleanup & maintenance mode (#16)
+- [ ] Userscript reading modes (#17)
+
+### Abandoned
+
+- [~] **Tailwind CSS migration** (Feb 2026) — started, went wrong, commits to be reverted.
+      See `future_ideas.md`. The design system has since moved on; treat as closed unless
+      revisited deliberately.
 
 ---
 
-## Tier 2: Technically Deep
+## Deferred feature specs — F11–F14
 
-### 5. CRDTs for Conflict Resolution
+> Written 2026-08-03. The infrastructure these need already exists.
 
-**What:** Replace "latest timestamp wins" with proper Conflict-free Replicated Data Types.
+### F11 — Full stats page (`/app/stats`)
 
-**Why it's impressive:**
-- Distributed systems knowledge
-- Handles true offline-first scenarios
-- No data loss on conflicts
-- Academic CS concept in production
+Chapters per day/week/month, busiest reading hour, per-device split, session-length distribution.
 
-**Libraries:**
-- **Automerge** — JSON-like CRDT
-- **Yjs** — High-performance CRDT
+**Existing:** `GET /api/v1/stats/summary` (totals, status counts, session aggregates, includes
+`plan-to-read`); `GET /api/v1/stats/daily?days=N` (per-day snapshot events, novels touched,
+chapters read, sessions, seconds — the ActivityHeatmap already consumes this). `reading_sessions`
+is populated server-side on every accepted sync (`af00cfc`), so time-based stats are real data.
 
-**How it works:**
-```javascript
-// Instead of: if (server.timestamp > local.timestamp) use server
-// You merge states mathematically:
+**To build:** `GET /api/v1/stats/breakdown` following `stats.ts` patterns — busiest hour via
+`EXTRACT(HOUR FROM created_at)`, per-device split joining `progress_snapshots` → `devices`,
+weekday via `EXTRACT(DOW FROM created_at)`. Then `frontend/src/pages/Stats.tsx` + nav entry in
+`Layout.tsx`. Reuse the heatmap; hand-rolled SVG bars rather than a chart library (matches the
+design system, keeps the bundle lean). Week/month rollups computed client-side from one
+`days=365` fetch.
 
-import * as Automerge from 'automerge';
+### F12 — Per-novel stats (`/app/novel/:id/stats`)
 
-let doc = Automerge.init();
-doc = Automerge.change(doc, d => {
-  d.novels = {};
-  d.novels['novel-1'] = { chapter: 45, percent: 67.5 };
-});
+Reading pace, total time, sessions, devices used, progress-over-time, read-through history.
 
-// On another device:
-let doc2 = Automerge.merge(doc2, receivedDoc);
-// Conflicts resolve automatically via CRDT math
+**Existing:** `GET /api/v1/stats/novels/:novelId` **already returns all of it and is unused** —
+novel meta, `read_history` JSONB, `current_read_through`, first/last read, max progress, devices
+used, session totals, bookmark count.
+
+**To build:** `frontend/src/pages/NovelStats.tsx`, linked from a Stats button on the Novel page.
+For the sparkline add optional `?series=1` returning
+`SELECT DATE(created_at), MAX(chapter_num) … GROUP BY DATE(created_at)` — ~15 lines.
+Pace = (max_chapter − first_chapter) / days between first and last read; ETA = behind ÷ pace.
+
+### F13 — Reading goals
+
+Targets like "1,000 chapters this year" or "30 min/day", with pace bars on the Dashboard.
+
+**Existing:** `user_settings` is a per-user key/value store with GET/POST routes
+(`src/routes/settings.ts`). Store goals as one JSON value under `reading_goals` — no migration:
+
+```json
+{ "chapters_per_year": 1000, "minutes_per_day": 30, "set_at": "2026-08-03" }
 ```
 
-**Migration path:**
-1. Keep existing API as-is
-2. Add CRDT layer for offline queue
-3. Sync CRDTs between devices
-4. Server becomes "just another peer"
+**To build:** goal editor in Settings (two numeric inputs, existing POST). `GoalBar` on Dashboard
+showing expected-by-today vs actual with an "ahead/behind by N" label. If no goal is set, render
+nothing — no nag UI.
+
+### F14 — Reading Wrapped
+
+Annual recap: total chapters, hours, busiest day, longest streak, top 5 novels, completions.
+
+**Existing:** everything computable from `stats/daily?days=365`, `stats/summary`,
+`reading_sessions`, `progress_snapshots`. `computeStreaks` (`frontend/src/lib/streaks.ts`) gives
+longest streak.
+
+**To build:** `GET /api/v1/stats/wrapped?year=2026` as one query batch. `frontend/src/pages/
+Wrapped.tsx` with scroll-snap slides, `--font-display` + gold glow. Ship in December; the
+"your Wrapped is ready" row can reuse the notifications table (`type: 'wrapped'`).
+Export-as-image optional — a print stylesheet is the cheap version.
 
 ---
 
-### 6. GraphQL API
-
-**What:** Add GraphQL endpoint alongside REST.
-
-**Why it's impressive:**
-- Shows API design flexibility
-- Single endpoint, flexible queries
-- Subscriptions for real-time
-- Type-safe with schema
-
-**Schema:**
-```graphql
-type Query {
-  novels(status: ReadingStatus, limit: Int): [Novel!]!
-  novel(id: ID!): Novel
-  stats: UserStats!
-  devices: [Device!]!
-}
-
-type Mutation {
-  updateProgress(input: ProgressInput!): Progress!
-  setNovelStatus(novelId: ID!, status: ReadingStatus!): Novel!
-}
-
-type Subscription {
-  progressUpdated(novelId: ID): Progress!
-  novelUpdated: Novel!
-}
-
-type Novel {
-  id: ID!
-  title: String!
-  currentChapter: Int!
-  totalChapters: Int
-  percent: Float!
-  status: ReadingStatus!
-  devices: [DeviceProgress!]!
-  notes: [Note!]!
-  lastRead: DateTime!
-}
-```
-
-**Stack:**
-- Apollo Server or graphql-yoga
-- Add to existing Express app
-- Subscriptions via WebSocket
-
----
-
-### 7. Reading Analytics Engine
-
-**What:** Predictive analytics based on your reading patterns.
-
-**Features:**
-- **Completion ETA** — "At your current pace, you'll finish in 3 days"
-- **Reading velocity** — chapters/hour, pages/day trends
-- **Peak hours** — "You read most between 10pm-1am"
-- **Streak tracking** — "7 day reading streak!"
-- **Burnout detection** — "You've been reading 4hrs straight, take a break?"
-
-**Data mining:**
-```sql
--- Reading velocity calculation
-SELECT 
-  novel_id,
-  COUNT(*) as sessions,
-  SUM(chapters_read) as total_chapters,
-  SUM(duration_seconds) / 3600.0 as total_hours,
-  SUM(chapters_read) / (SUM(duration_seconds) / 3600.0) as chapters_per_hour
-FROM reading_sessions
-WHERE user_key = $1
-  AND ended_at IS NOT NULL
-GROUP BY novel_id;
-```
-
-**Predictions:**
-```javascript
-// Simple linear regression for completion ETA
-const avgChaptersPerDay = totalChapters / daysSinceStart;
-const remainingChapters = totalChapters - currentChapter;
-const etaDays = remainingChapters / avgChaptersPerDay;
-```
-
----
-
-## Tier 3: Signature "Wow" Features
-
-### 8. Reading Wrapped (Annual)
-
-**What:** Spotify Wrapped but for your reading year.
-
-**Slides:**
-1. "You read X chapters this year"
-2. "That's equivalent to Y books"
-3. "Your most binged novel was Z"
-4. "You had a X-day reading streak in July"
-5. "Peak reading hour: 11pm"
-6. "Total reading time: X hours"
-7. "Top 5 novels by time spent"
-8. Shareable card with stats
-
-**Technical:**
-- Canvas API for generating shareable images
-- Animated slide transitions
-- Data aggregation queries
-- Runs annually (or on-demand for any period)
-
----
-
-### 9. Ghost Positions
-
-**What:** When viewing a novel, show faint markers where your OTHER devices left off.
-
-**Visual:**
-```
-Chapter 45 ──────────●────────────────── 100%
-                     │
-            Desktop (67%)
-            
-            ░░░░░░░░░░░░░░░▓░░░░░░░░░░░░░
-                          │
-                     Phone (45%)
-                          │
-                     Tablet (52%)
-```
-
-**Why it's cool:**
-- Visual representation of multi-device state
-- See at a glance which device is ahead
-- Subtle but clever UX
-- Click a ghost to jump there
-
----
-
-### 10. Live Reading Indicator
-
-**What:** Real-time WebSocket updates showing when you're actively reading on another device.
-
-**Dashboard shows:**
-```
-📖 Currently reading on iPhone:
-   "Solo Leveling" — Chapter 127 (45%)
-   Started 12 minutes ago
-```
-
-**Technical:**
-- Socket.io already in place
-- Emit events on scroll/progress
-- Presence system (device online/offline)
-- "Reading now" pulse animation
-
----
-
-## Implementation Priority
-
-| Feature | Effort | Portfolio Impact | Fun Factor |
-|---------|--------|------------------|------------|
-| Offline PWA | 2-3 days | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Chrome Extension | 2-3 days | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| CLI Tool | 1-2 days | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Time Machine | 3-4 days | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| GraphQL | 1-2 days | ⭐⭐⭐⭐ | ⭐⭐⭐ |
-| CRDTs | 3-5 days | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ |
-| Reading Wrapped | 2-3 days | ⭐⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| Analytics Engine | 2-3 days | ⭐⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Ghost Positions | 1 day | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-| Live Indicator | 0.5 day | ⭐⭐⭐ | ⭐⭐⭐⭐ |
-
----
-
-## Recommended Build Order
-
-### Phase 1: Foundation (Week 1)
-1. **Chrome Extension** — Most visible upgrade, publishable artifact
-2. **CLI Tool** — Quick win, npm publishable, looks great on GitHub
-
-### Phase 2: Technical Depth (Week 2)
-3. **Offline PWA** — Major architectural upgrade
-4. **GraphQL API** — API design showcase
-
-### Phase 3: Signature Features (Week 3+)
-5. **Time Machine** — The "wow" demo feature
-6. **Reading Wrapped** — Shareable, viral potential
-7. **Analytics Engine** — Useful + impressive
-
-### Phase 4: Advanced (When Ready)
-8. **CRDTs** — Deep technical flex
-9. **Ghost Positions + Live Indicator** — Polish features
-
----
-
-## What This Gets You
-
-**GitHub README bragging rights:**
-- "Offline-first PWA with background sync"
-- "Chrome Extension (Manifest V3)"
-- "CLI tool for power users"
-- "GraphQL + REST APIs"
-- "Real-time WebSocket sync"
-- "60+ API endpoints"
-- "CRDT-based conflict resolution"
-
-**Interview talking points:**
-- Distributed systems (CRDTs, sync)
-- API design (REST + GraphQL)
-- Browser APIs (Service Workers, IndexedDB)
-- Developer tooling (CLI, Extension)
-- Data visualization (D3.js)
-
-**Actually useful:**
-- Works offline
-- CLI for quick checks
-- Extension beats userscript
-- Analytics tell you interesting things
-
----
-
-*This isn't a todo app. This is a real system with real engineering.*
-
----
-
-## Deferred Feature Specs — 2026-08-03 (F11–F14 from the SSS roadmap)
-
-> These four features were deliberately deferred during the August 2026 build run.
-> The infrastructure they need already exists — these are UI + light-endpoint projects.
-> All new UI goes in the React SPA (`frontend/`), never the legacy vanilla pages.
-
-### F11 — Full Stats Page (`/app/stats`)
-
-**What:** A dedicated analytics page: chapters per day/week/month, busiest reading hour,
-per-device split, session-length distribution.
-
-**Existing infra:**
-- `GET /api/v1/stats/summary` — totals, status counts, session aggregates (now includes `plan-to-read`).
-- `GET /api/v1/stats/daily?days=N` — per-day `snapshot_events`, `novels_touched`, `chapters_read`, `sessions`, `session_seconds`. The ActivityHeatmap already consumes this.
-- `reading_sessions` is now populated server-side on every accepted sync (commit `af00cfc`), so time-based stats are real data going forward.
-
-**Needs building:**
-- New endpoint `GET /api/v1/stats/breakdown` (follow `stats.ts` patterns):
-  - Busiest hour: `SELECT EXTRACT(HOUR FROM created_at) AS hour, COUNT(*) FROM progress_snapshots WHERE user_id = $1 GROUP BY hour`.
-  - Per-device split: join `progress_snapshots` → `devices`, group by `device_id`, count snapshots + sum session seconds.
-  - Weekday distribution: `EXTRACT(DOW FROM created_at)`.
-- `frontend/src/pages/Stats.tsx` + NAV entry in `Layout.tsx`. Reuse the heatmap; add simple SVG bar charts (no chart lib — hand-rolled bars match the design system and keep the bundle lean).
-- Week/month rollups can be computed client-side from `stats/daily` (fetch `days=365` once, group in JS).
-
-### F12 — Per-Novel Stats Page (`/app/novel/:id/stats`)
-
-**What:** Deep-dive for one novel: reading pace (chapters/day), total time, sessions,
-devices used, progress-over-time chart, read-through history.
-
-**Existing infra:**
-- `GET /api/v1/stats/novels/:novelId` — **already returns everything and is completely unused**: novel meta + `read_history` JSONB + `current_read_through`, snapshot stats (first/last read, max progress, devices used), session totals, bookmark count.
-
-**Needs building:**
-- `frontend/src/pages/NovelStats.tsx`, linked from a "Stats" button on the Novel page.
-- Progress-over-time sparkline: add optional `?series=1` to the endpoint returning `SELECT DATE(created_at), MAX(chapter_num) FROM progress_snapshots ... GROUP BY DATE(created_at) ORDER BY 1` — a ~15-line addition.
-- Pace = (max_chapter − first_chapter) / days between `first_read` and `last_read`; ETA to caught-up = behind ÷ pace. Render with the gold accent tokens.
-
-### F13 — Reading Goals
-
-**What:** User-set targets (e.g. "1,000 chapters this year", "30 min/day") with pace bars
-on the Dashboard.
-
-**Existing infra:**
-- `user_settings` is a per-user key/value store with GET/POST routes (`src/routes/settings.ts`) — store goals as one JSON value under key `reading_goals`, no migration needed:
-  ```json
-  { "chapters_per_year": 1000, "minutes_per_day": 30, "set_at": "2026-08-03" }
-  ```
-- Progress against goals comes from `stats/daily` (chapters) and `reading_sessions` (minutes).
-
-**Needs building:**
-- Goal editor in the Settings page (two numeric inputs, save via existing settings POST).
-- `GoalBar` component on Dashboard: expected-by-today vs actual, "ahead/behind by N" label. Year progress = `chapters_read` summed from `stats/daily?from=Jan 1`.
-- Keep it honest: if no goal set, render nothing (no nag UI).
-
-### F14 — Reading Wrapped (Year in Review)
-
-**What:** A Spotify-Wrapped-style annual recap: total chapters, total hours, busiest day,
-longest streak, top 5 novels, completion count — shareable card design.
-
-**Existing infra:**
-- Everything computable from `stats/daily?days=365`, `stats/summary`, `reading_sessions`, and `progress_snapshots`. `computeStreaks` (`frontend/src/lib/streaks.ts`) already gives longest streak.
-
-**Needs building:**
-- Endpoint `GET /api/v1/stats/wrapped?year=2026`: one query batch (top novels by distinct chapters, busiest single day, totals, completions where `completed_at` in year).
-- `frontend/src/pages/Wrapped.tsx`: full-screen stepped slides (scroll-snap sections), heavy use of `--font-display` + gold glow. Ship in December; a "Your 2026 Wrapped is ready" notification row can reuse the notifications table (`type: 'wrapped'`).
-- Export-as-image is optional; a print stylesheet is the cheap version.
-
-**Build order when picked up:** F12 (endpoint already done) → F11 → F13 → F14 (seasonal).
+*Not a todo app. A real system with real engineering.*

@@ -1,5 +1,13 @@
 # ReadSync - Future Ideas & Development Notes
 
+> **Status is no longer tracked here.** As of 2026-08-05 the backlog of record is
+> [LEVEL_UP_2026.md](./LEVEL_UP_2026.md), which consolidates this file, the deferred
+> SSS specs, and the ops findings from the August database session.
+>
+> This document is kept for its **long-form specs** — features 9–17 below are referenced
+> from the level-up file rather than duplicated into it. Read the detail here, tick items
+> off there.
+
 > Consolidated document combining implemented features, future ideas, and development experiments.
 
 ---

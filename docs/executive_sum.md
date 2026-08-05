@@ -321,11 +321,14 @@ node server.js
 
 ### Possible Enhancements
 
-- [ ] Automated tests (Jest/Mocha)
-- [ ] TypeScript migration
-- [ ] API documentation (Swagger/OpenAPI)
-- [ ] Structured logging (Winston/Pino)
-- [ ] Frontend framework (optional - React/Vue)
+> **Stale as of 2026-08-05.** Four of these five shipped. Tracking now lives in
+> [LEVEL_UP_2026.md](./LEVEL_UP_2026.md).
+
+- [x] Automated tests — Vitest, 121 tests across server / frontend / userscript
+- [x] TypeScript migration — server, frontend and userscript are all TS
+- [ ] API documentation (Swagger/OpenAPI) — still open
+- [x] Structured logging — Pino
+- [x] Frontend framework — React SPA in `frontend/`
 
 ---
 
