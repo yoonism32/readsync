@@ -13,7 +13,7 @@ import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
 import { EditProgress } from '../components/EditProgress.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
-import { StarIcon, ExternalLinkIcon } from '../components/Icon.js';
+import { StarIcon, ExternalLinkIcon, CrownIcon } from '../components/Icon.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
@@ -39,7 +39,7 @@ export function NovelPage() {
     return (
       <div style={{ padding: '80px 0', textAlign: 'center' }}>
         <p className="text-muted">Novel not found.</p>
-        <Link to="/mylist" style={{ color: 'var(--color-gold)', fontSize: 'var(--text-sm)', marginTop: 12, display: 'block' }}>
+        <Link to="/mylist" style={{ color: 'var(--color-accent)', fontSize: 'var(--text-sm)', marginTop: 12, display: 'block' }}>
           ← Back to My List
         </Link>
       </div>
@@ -48,14 +48,11 @@ export function NovelPage() {
 
   return (
     <div className="animate-fade-in">
-      <Link to="/mylist" className="text-muted" style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20, textDecoration: 'none', transition: 'color 0.15s' }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-      >
+      <Link to="/mylist" className="muted-btn" style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20, textDecoration: 'none' }}>
         ← My List
       </Link>
 
-      <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+      <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
         <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
           {/* Cover — the anchor of this page, so it is sized to carry the card
               rather than sit in its corner. Fluid between phone and desktop;
@@ -128,24 +125,14 @@ export function NovelPage() {
             href={novel.latest_url ? resumeUrl(novel.latest_url, novel.latest_percent) : novel.primary_url!}
             target="_blank"
             rel="noopener noreferrer"
+            className="btn-accent"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              background: 'var(--color-gold)',
-              color: '#080c12',
-              borderRadius: 'var(--radius-md)',
               padding: '9px 16px',
-              fontWeight: 600,
-              fontSize: 'var(--text-sm)',
               textDecoration: 'none',
-              transition: 'background 0.15s, transform 0.1s',
-              touchAction: 'manipulation',
             }}
-            onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-gold-bright)')}
-            onMouseLeave={e => (e.currentTarget.style.background = 'var(--color-gold)')}
-            onMouseDown={e => (e.currentTarget.style.transform = 'scale(0.97)')}
-            onMouseUp={e => (e.currentTarget.style.transform = 'scale(1)')}
           >
             {novel.latest_url ? 'Continue Reading →' : 'Open on NovelArrow →'}
           </a>
@@ -181,7 +168,7 @@ export function NovelPage() {
       <ChapterMap novel={novel} />
 
       {novel.devices_reading.length > 1 && (
-        <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+        <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
           <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>
             Device Progress
             <span className="text-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 400, marginLeft: 8 }}>
@@ -213,7 +200,12 @@ export function NovelPage() {
                       border: isLeader ? '1px solid var(--color-accent-border)' : '1px solid transparent',
                     }}
                   >
-                    {isLeader && <span title="Furthest along" aria-hidden="true">👑</span>}
+                    {isLeader && (
+                      <>
+                        <CrownIcon size={13} style={{ color: 'var(--color-warning)', flexShrink: 0 }} />
+                        <span className="sr-only">Furthest along</span>
+                      </>
+                    )}
                     <DeviceBadge label={d.device_label} />
                     <span className="tabular" style={{ color: isBehind ? 'var(--color-text-faint)' : 'var(--color-text)' }}>
                       Ch. {d.chapter_num} · {Math.round(d.percent)}%

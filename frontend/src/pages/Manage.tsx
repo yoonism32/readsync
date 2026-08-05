@@ -31,7 +31,7 @@ export function Manage() {
     try {
       await novelsApi.setStatus(novelId, newStatus as NovelStatus);
       await mutate();
-      toast.success('Status updated');
+      // Silent success: the row's status badge updates in place.
     } catch (error) {
       toast.error(`Failed to update status: ${errorDetail(error)}`);
     } finally {
@@ -75,7 +75,7 @@ export function Manage() {
           marginBottom: 20,
           transition: 'border-color 0.15s',
         }}
-        onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
+        onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
         onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
       />
 
@@ -86,7 +86,7 @@ export function Manage() {
           {novels.map(n => (
             <div
               key={n.novel_id}
-              className="glass"
+              className="panel"
               style={{
                 borderRadius: 'var(--radius-lg)',
                 padding: '12px 16px',
@@ -137,7 +137,7 @@ export function Manage() {
                     disabled={busy === n.novel_id}
                     style={{
                       background: 'var(--color-danger)',
-                      color: '#fff',
+                      color: 'var(--color-on-accent)',
                       border: 'none',
                       borderRadius: 'var(--radius-sm)',
                       padding: '3px 10px',
@@ -170,7 +170,7 @@ export function Manage() {
                   aria-label={`Remove ${n.title}`}
                   style={{
                     background: 'none',
-                    border: '1px solid rgba(248,113,113,0.3)',
+                    border: '1px solid var(--color-danger-border)',
                     borderRadius: 'var(--radius-sm)',
                     padding: '3px 8px',
                     color: 'var(--color-danger)',

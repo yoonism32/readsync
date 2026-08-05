@@ -162,3 +162,42 @@ export function ClockIcon({ size = 16, className = '' }: IconProps) {
     </svg>
   );
 }
+
+export function FlameIcon({ size = 16, className = '', style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true" focusable="false">
+      <path d="M12 2c1 4-2 5-2 8a4 4 0 0 0 8 0c0-1.5-.7-2.8-1.5-3.8.3 3-1.5 4-1.5 4 .5-3-3-5-3-8.2z"/>
+      <path d="M8.5 12C7 13.2 6 15 6 17a6 6 0 0 0 12 0"/>
+    </svg>
+  );
+}
+
+export function CrownIcon({ size = 16, className = '', style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true" focusable="false">
+      <path d="M2 18h20"/>
+      <path d="M3 7l4.5 4L12 4l4.5 7L21 7l-1.6 8H4.6z"/>
+    </svg>
+  );
+}
+
+export function RefreshIcon({ size = 16, className = '', style }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={style} aria-hidden="true" focusable="false">
+      <path d="M21 12a9 9 0 1 1-2.64-6.36"/>
+      <polyline points="21 3 21 9 15 9"/>
+    </svg>
+  );
+}
+
+export function BotIcon({ size = 16, className = '' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" focusable="false">
+      <rect width="16" height="12" x="4" y="8" rx="2"/>
+      <path d="M12 8V5m0 0h-1.5M12 5h1.5"/>
+      <path d="M2 13v2m20-2v2"/>
+      <circle cx="9" cy="14" r="1"/>
+      <circle cx="15" cy="14" r="1"/>
+    </svg>
+  );
+}

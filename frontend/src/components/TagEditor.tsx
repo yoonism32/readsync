@@ -70,9 +70,9 @@ export function TagEditor({ novelId }: TagEditorProps) {
             alignItems: 'center',
             gap: 4,
             fontSize: 'var(--text-xs)',
-            color: 'var(--color-gold)',
-            background: 'var(--color-gold-glow)',
-            border: '1px solid var(--color-gold-border)',
+            color: 'var(--color-accent)',
+            background: 'var(--color-accent-glow)',
+            border: '1px solid var(--color-accent-border)',
             borderRadius: 'var(--radius-full)',
             padding: '2px 4px 2px 10px',
           }}
@@ -127,7 +127,7 @@ export function TagEditor({ novelId }: TagEditorProps) {
           width: 90,
           outline: 'none',
         }}
-        onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-gold)')}
+        onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
       />
       <datalist id="tag-suggestions">
         {suggestions.map(t => (

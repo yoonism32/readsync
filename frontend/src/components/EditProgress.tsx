@@ -103,7 +103,7 @@ export function EditProgress({ novel }: EditProgressProps) {
           style={{ ...inputStyle, width: 60, marginLeft: 4 }}
         />
       </label>
-      <button type="button" className="btn-gold" style={{ padding: '4px 10px', fontSize: 'var(--text-xs)' }} onClick={save} disabled={busy || !chapter}>
+      <button type="button" className="btn-accent" style={{ padding: '4px 10px', fontSize: 'var(--text-xs)' }} onClick={save} disabled={busy || !chapter}>
         Save
       </button>
       <button type="button" className="btn-ghost" style={{ padding: '4px 10px', fontSize: 'var(--text-xs)' }} onClick={() => setOpen(false)} disabled={busy}>

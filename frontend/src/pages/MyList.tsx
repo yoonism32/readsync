@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { fetchNovels, coverUrl, resumeUrl, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
 import { behindCount, StatusDot } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
-import { StarIcon } from '../components/Icon.js';
+import { StarIcon, RefreshIcon, BellIcon } from '../components/Icon.js';
 import { Spinner } from '../components/Spinner.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
@@ -147,7 +147,7 @@ export function MyList() {
     try {
       await novelsApi.setStatus(novelId, status);
       await mutate();
-      toast.success(`Moved to ${status}`);
+      // Silent success: the row's status cell updates in place.
     } catch {
       toast.error('Failed to update status');
     }
@@ -189,7 +189,7 @@ export function MyList() {
 
       {/* Refresh All bar */}
       <div
-        className="glass"
+        className="panel"
         style={{
           display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
           borderRadius: 'var(--radius-lg)', padding: '12px 16px', margin: '14px 0 18px',
@@ -203,13 +203,14 @@ export function MyList() {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 8,
             background: refresh.isRefreshing ? 'var(--color-teal-glow)' : 'var(--color-teal)',
-            color: refresh.isRefreshing ? 'var(--color-teal)' : '#07110f',
+            color: refresh.isRefreshing ? 'var(--color-teal)' : 'var(--color-on-teal)',
             border: 'none', borderRadius: 'var(--radius-md)', padding: '9px 16px',
             fontWeight: 600, fontSize: 'var(--text-sm)', cursor: refresh.isRefreshing ? 'default' : 'pointer',
             touchAction: 'manipulation',
           }}
         >
-          🔄 {refresh.isRefreshing
+          <RefreshIcon size={14} className={refresh.isRefreshing ? 'animate-spin' : ''} />
+          {refresh.isRefreshing
             ? `Refreshing ${refresh.progress?.done ?? 0}/${refresh.progress?.total ?? 0}…`
             : 'Refresh All Novels'}
         </button>
@@ -235,7 +236,9 @@ export function MyList() {
         <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textAlign: 'right' }}>
           Last: {lastRefreshLabel(refresh.lastRefresh)}
           {refresh.needsRefresh ? (
-            <span style={{ display: 'block', color: 'var(--color-warning)', fontWeight: 600 }}>🔔 Time to refresh!</span>
+            <span style={{ display: 'block', color: 'var(--color-warning)', fontWeight: 600 }}>
+              <BellIcon size={11} /> Time to refresh
+            </span>
           ) : refresh.minutesUntilDue != null ? (
             <span style={{ display: 'block' }}>Next: {Math.floor(refresh.minutesUntilDue / 60)}h {refresh.minutesUntilDue % 60}m</span>
           ) : null}
@@ -308,7 +311,7 @@ export function MyList() {
               background: tab === t.id ? 'var(--color-accent-glow)' : 'transparent',
               color: tab === t.id ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
               fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap',
-              transition: 'all 0.15s', touchAction: 'manipulation',
+              transition: 'border-color 150ms var(--ease-out-expo), background-color 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo)', touchAction: 'manipulation',
             }}
           >
             {t.label}
@@ -334,7 +337,7 @@ export function MyList() {
                 background: active ? 'var(--color-teal-glow)' : 'transparent',
                 color: active ? 'var(--color-teal)' : 'var(--color-text-faint)',
                 fontSize: 'var(--text-xs)', cursor: 'pointer', whiteSpace: 'nowrap',
-                transition: 'all 0.15s', touchAction: 'manipulation',
+                transition: 'border-color 150ms var(--ease-out-expo), background-color 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo)', touchAction: 'manipulation',
               }}
             >
               {f.label}
@@ -345,12 +348,12 @@ export function MyList() {
 
       {/* Table */}
       {filtered.length === 0 ? (
-        <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+        <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
           {search ? `No novels matching "${search}"` : smartFilter || tagFilter ? 'No novels match the active filters.' : 'No novels here yet.'}
         </div>
       ) : (
         <>
-          <div className="glass" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
+          <div className="panel" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 880 }}>
                 <thead>
@@ -432,9 +435,8 @@ function Row({ novel: n, onSetStatus, onToggleFav }: {
 
   return (
     <tr
-      style={{ borderBottom: '1px solid var(--color-border)', transition: 'background 0.12s' }}
-      onMouseEnter={e => (e.currentTarget.style.background = 'var(--color-bg-hover)')}
-      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+      className="row-hover"
+      style={{ borderBottom: '1px solid var(--color-border)' }}
     >
       {/* Cover */}
       <td style={{ ...td, width: 52 }}>
@@ -457,9 +459,8 @@ function Row({ novel: n, onSetStatus, onToggleFav }: {
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}
-            style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none', transition: 'color 0.15s' }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-accent-bright)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text)')}
+            className="link-accent"
+            style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none' }}
           >
             {n.title}
           </Link>
@@ -481,7 +482,7 @@ function Row({ novel: n, onSetStatus, onToggleFav }: {
           )}
           {behind > 0 && (
             <span className="tabular" style={{
-              fontSize: 'var(--text-xs)', fontWeight: 600, color: '#07110f',
+              fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-on-teal)',
               background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px',
             }}>
               +{behind}

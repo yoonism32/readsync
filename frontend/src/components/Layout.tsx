@@ -64,9 +64,9 @@ export function Layout({ children }: Props) {
           position: 'absolute',
           left: -9999,
           top: 8,
-          zIndex: 9999,
-          background: 'var(--color-gold)',
-          color: '#080c12',
+          zIndex: 'var(--z-skip-link)',
+          background: 'var(--color-accent)',
+          color: 'var(--color-on-accent)',
           padding: '8px 16px',
           borderRadius: 'var(--radius-md)',
           fontWeight: 600,
@@ -88,7 +88,7 @@ export function Layout({ children }: Props) {
           borderBottom: '1px solid var(--color-border)',
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
-          background: 'rgba(8,12,18,0.85)',
+          background: 'var(--color-bg-header)',
         }}
       >
         <div
@@ -115,7 +115,7 @@ export function Layout({ children }: Props) {
               fontFamily: 'var(--font-display)',
               fontWeight: 700,
               fontSize: 'var(--text-xl)',
-              color: 'var(--color-gold)',
+              color: 'var(--color-accent)',
               letterSpacing: '-0.02em',
               userSelect: 'none',
               marginRight: 10,
@@ -163,6 +163,7 @@ export function Layout({ children }: Props) {
           <button
             onClick={() => { void handleLogout(); }}
             aria-label="Log out"
+            className="muted-btn"
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -172,15 +173,11 @@ export function Layout({ children }: Props) {
               background: 'none',
               border: 'none',
               cursor: 'pointer',
-              color: 'var(--color-text-muted)',
               fontSize: 'var(--text-base)',
               borderRadius: 'var(--radius-md)',
-              transition: 'color 0.15s',
               flexShrink: 0,
               touchAction: 'manipulation',
             }}
-            onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text)')}
-            onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
           >
             <LogOutIcon size={16} />
             <span className="nav-label">Sign out</span>
@@ -201,7 +198,7 @@ export function Layout({ children }: Props) {
       >
         {keyMissing && (
           <div
-            className="glass"
+            className="panel"
             style={{
               borderRadius: 'var(--radius-lg)',
               padding: '12px 16px',
@@ -214,7 +211,7 @@ export function Layout({ children }: Props) {
               fontSize: 'var(--text-sm)',
             }}
           >
-            <span>Couldn't find your API key — your library won't load until it's set.</span>
+            <span>Couldn’t find your API key — your library won’t load until it’s set.</span>
             <NavLink to="/settings" style={{ color: 'var(--color-accent-bright)', fontWeight: 600 }}>
               Go to Settings →
             </NavLink>

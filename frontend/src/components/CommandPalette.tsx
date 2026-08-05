@@ -4,6 +4,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import toast from 'react-hot-toast';
 import { fetchNovels, resumeUrl, copyResumeLink, novels as novelsApi } from '../api/client.js';
 import { rankItems } from '../lib/fuzzy.js';
+import { BookOpenIcon } from './Icon.js';
 import type { Novel, NovelStatus } from '../types/index.js';
 
 interface PageCommand {
@@ -184,7 +185,7 @@ export function CommandPalette() {
         style={{
           width: 'min(560px, 92vw)',
           borderRadius: 'var(--radius-xl)',
-          border: '1px solid var(--color-gold-border)',
+          border: '1px solid var(--color-accent-border)',
           background: 'var(--color-bg-raised)',
           boxShadow: '0 16px 48px rgba(0,0,0,0.6)',
           overflow: 'hidden',
@@ -226,12 +227,12 @@ export function CommandPalette() {
                     gap: 10,
                     width: '100%',
                     textAlign: 'left',
-                    background: active ? 'var(--color-gold-glow)' : 'none',
+                    background: active ? 'var(--color-accent-glow)' : 'none',
                     border: 'none',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
                     cursor: 'pointer',
-                    color: active ? 'var(--color-gold)' : 'var(--color-text)',
+                    color: active ? 'var(--color-accent)' : 'var(--color-text)',
                     fontSize: 'var(--text-sm)',
                   }}
                 >
@@ -263,17 +264,17 @@ export function CommandPalette() {
                     gap: 10,
                     width: '100%',
                     textAlign: 'left',
-                    background: active ? 'var(--color-gold-glow)' : 'none',
+                    background: active ? 'var(--color-accent-glow)' : 'none',
                     border: 'none',
                     borderRadius: 'var(--radius-md)',
                     padding: '9px 12px',
                     cursor: 'pointer',
-                    color: active ? 'var(--color-gold)' : 'var(--color-text)',
+                    color: active ? 'var(--color-accent)' : 'var(--color-text)',
                     fontSize: 'var(--text-sm)',
                   }}
                 >
                   <span aria-hidden="true" style={{ opacity: 0.6, flexShrink: 0 }}>
-                    {cmd.kind === 'page' ? '→' : '📖'}
+                    {cmd.kind === 'page' ? '→' : <BookOpenIcon size={12} />}
                   </span>
                   <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {cmd.label}

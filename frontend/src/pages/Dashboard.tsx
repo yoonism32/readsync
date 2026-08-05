@@ -9,19 +9,54 @@ import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import type { Novel, StatsSummary } from '../types/index.js';
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+/** Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero. */
+function AttentionStat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+  const active = value > 0;
   return (
     <div
-      className="glass"
-      style={{ borderRadius: 'var(--radius-xl)', padding: '20px 24px' }}
+      className="panel"
+      style={{
+        borderRadius: 'var(--radius-xl)',
+        padding: '18px 22px',
+        borderColor: active ? 'var(--color-accent-border)' : 'var(--color-border)',
+        background: active ? 'var(--color-accent-glow)' : 'var(--color-bg-card)',
+      }}
     >
-      <div className="text-muted" style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+      <div
+        className="text-muted"
+        style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}
+      >
         {label}
       </div>
-      <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, fontFamily: 'var(--font-display)', fontVariantNumeric: 'tabular-nums' }}>
+      <div
+        className="tabular"
+        style={{
+          fontSize: 'var(--text-3xl)',
+          lineHeight: 1.1,
+          fontWeight: 700,
+          fontFamily: 'var(--font-display)',
+          color: active ? 'var(--color-accent-bright)' : 'var(--color-text-faint)',
+        }}
+      >
         {value}
       </div>
       {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>{sub}</div>}
+    </div>
+  );
+}
+
+/** Tier 2: a reference figure. Present, not competing for attention. */
+function MinorStat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+  return (
+    <div>
+      <dt className="text-muted" style={{ fontSize: 'var(--text-xs)', marginBottom: 2 }}>{label}</dt>
+      <dd
+        className="tabular"
+        style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, lineHeight: 1.2 }}
+      >
+        {value}
+      </dd>
+      {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }
@@ -74,7 +109,7 @@ export function Dashboard() {
           href={resumeUrl(continueNovel.latest_url, continueNovel.latest_percent)}
           target="_blank"
           rel="noopener noreferrer"
-          className="glass"
+          className="panel row-interactive-strong"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -82,13 +117,10 @@ export function Dashboard() {
             padding: '16px 20px',
             marginBottom: 24,
             borderRadius: 'var(--radius-lg)',
-            border: '1px solid var(--color-gold-border)',
-            background: 'var(--color-gold-glow)',
+            border: '1px solid var(--color-accent-border)',
+            background: 'var(--color-accent-glow)',
             textDecoration: 'none',
-            transition: 'border-color 0.15s',
           }}
-          onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-gold)')}
-          onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-gold-border)')}
         >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
@@ -106,7 +138,7 @@ export function Dashboard() {
               {continueNovel.latest_device_label && ` on ${continueNovel.latest_device_label}`}
             </div>
           </div>
-          <span aria-hidden="true" style={{ fontSize: 24, color: 'var(--color-gold)' }}>→</span>
+          <span aria-hidden="true" style={{ fontSize: 24, color: 'var(--color-accent)' }}>→</span>
         </a>
       )}
 
@@ -114,39 +146,61 @@ export function Dashboard() {
       {statsLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner /></div>
       ) : (
-        <div
-          className="stagger-1 animate-fade-in"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-            gap: 12,
-            marginBottom: 32,
-          }}
-        >
-          <StatCard label="Novels" value={stats?.total_novels ?? 0} />
-          <StatCard label="Reading" value={stats?.novels_by_status?.reading ?? 0} />
-          <StatCard label="Completed" value={stats?.novels_by_status?.completed ?? 0} />
-          <StatCard label="Plan to Read" value={stats?.novels_by_status?.['plan-to-read'] ?? 0} />
-          <StatCard label="Reading Time" value={`${totalHours}h`} sub={`${stats?.reading_sessions.total ?? 0} sessions`} />
-          <StatCard label="Avg Progress" value={`${Math.round(stats?.avg_progress ?? 0)}%`} />
-          <StatCard label="Bookmarks" value={stats?.total_bookmarks ?? 0} />
-          <StatCard label="Novels Behind" value={libraryStats.novelsBehind} />
-          <StatCard label="New Chapters" value={libraryStats.newChapters} />
-          <StatCard label="Total Devices" value={stats?.active_devices ?? libraryStats.totalDevices} />
-          <StatCard
-            label="Sync Conflicts"
-            value={libraryStats.syncConflicts}
-            sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
-          />
+        <div className="stagger-1 animate-fade-in" style={{ marginBottom: 32 }}>
+          {/* Tier 1 — the three you act on. Each goes quiet at zero, so a
+              caught-up library reads calm instead of shouting three noughts. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+              gap: 12,
+              marginBottom: 14,
+            }}
+          >
+            <AttentionStat label="Novels behind" value={libraryStats.novelsBehind} />
+            <AttentionStat label="New chapters" value={libraryStats.newChapters} />
+            <AttentionStat
+              label="Sync conflicts"
+              value={libraryStats.syncConflicts}
+              sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
+            />
+          </div>
+
+          {/* Tier 2 — reference figures. Dense, quiet, scannable. */}
+          <dl
+            className="panel"
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 150px), 1fr))',
+              gap: '10px 20px',
+              margin: 0,
+              padding: '14px 18px',
+              borderRadius: 'var(--radius-lg)',
+            }}
+          >
+            <MinorStat label="Novels" value={stats?.total_novels ?? 0} />
+            <MinorStat label="Reading" value={stats?.novels_by_status?.reading ?? 0} />
+            <MinorStat label="Completed" value={stats?.novels_by_status?.completed ?? 0} />
+            <MinorStat label="Plan to read" value={stats?.novels_by_status?.['plan-to-read'] ?? 0} />
+            <MinorStat label="Avg progress" value={`${Math.round(stats?.avg_progress ?? 0)}%`} />
+            <MinorStat label="Bookmarks" value={stats?.total_bookmarks ?? 0} />
+            <MinorStat label="Devices" value={stats?.active_devices ?? libraryStats.totalDevices} />
+            <MinorStat
+              label="Reading time"
+              value={`${totalHours}h`}
+              sub={`${stats?.reading_sessions.total ?? 0} sessions`}
+            />
+          </dl>
         </div>
       )}
 
       <ActivityHeatmap />
 
-      {/* Currently reading — scaled up further: this is the section you
-          actually act on every day, so it gets extra visual weight. */}
-      <div style={{ zoom: 1.25 }}>
-        <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Currently Reading</h2>
+      {/* Currently reading — the section you act on every day, so it carries
+          extra weight through type size and spacing rather than a zoom
+          multiplier (which compounded with the old html-level zoom). */}
+      <div style={{ marginTop: 36 }}>
+        <h2 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, marginBottom: 14 }}>Currently Reading</h2>
         {recentNovels.length === 0 ? (
           <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Nothing in progress.</p>
         ) : (
@@ -155,23 +209,20 @@ export function Dashboard() {
               <Link
                 key={n.novel_id}
                 to={`/novel/${encodeURIComponent(n.novel_id)}`}
-                className="animate-fade-in glass"
+                className="animate-fade-in panel row-interactive"
                 style={{
                   animationDelay: `${i * 40}ms`,
                   borderRadius: 'var(--radius-lg)',
-                  padding: '12px 16px',
+                  padding: '14px 18px',
                   display: 'flex',
                   alignItems: 'center',
                   gap: 12,
-                  transition: 'border-color 0.15s',
                   textDecoration: 'none',
                 }}
-                onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-accent-border)')}
-                onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                    <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{n.title}</span>
+                    <span style={{ fontWeight: 600, fontSize: 'var(--text-base)' }}>{n.title}</span>
                     <BehindBadge novel={n} />
                   </div>
                   <ProgressBar percent={n.latest_percent ?? 0} showLabel size="sm" />

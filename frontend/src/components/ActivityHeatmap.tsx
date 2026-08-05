@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
 import { computeStreaks } from '../lib/streaks.js';
+import { FlameIcon } from './Icon.js';
 import type { DailyActivity } from '../lib/streaks.js';
 
 interface DailyRow extends DailyActivity {
@@ -60,7 +61,7 @@ export function ActivityHeatmap() {
   }
 
   return (
-    <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginBottom: 32 }}>
+    <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginBottom: 32 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
         <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>Reading Activity</h2>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>
@@ -68,7 +69,7 @@ export function ActivityHeatmap() {
         </span>
         <span style={{ flex: 1 }} />
         <span className="tabular" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 700 }}>
-          🔥 {streaks.current} day streak
+          <FlameIcon size={12} style={{ verticalAlign: '-1px' }} /> {streaks.current} day streak
         </span>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>
           best {streaks.longest}

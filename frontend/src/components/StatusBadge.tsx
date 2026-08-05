@@ -10,7 +10,7 @@ const CONFIG: Record<NovelStatus, { label: string; bg: string; color: string }> 
   completed: { label: 'Completed', bg: 'var(--color-success-dim)', color: 'var(--color-success)' },
   'on-hold': { label: 'On Hold',   bg: 'var(--color-warning-dim)', color: 'var(--color-warning)' },
   dropped:   { label: 'Dropped',   bg: 'var(--color-danger-dim)',  color: 'var(--color-danger)' },
-  'plan-to-read': { label: 'Plan to Read', bg: 'var(--color-gold-glow)', color: 'var(--color-gold)' },
+  'plan-to-read': { label: 'Plan to Read', bg: 'var(--color-accent-glow)', color: 'var(--color-accent)' },
   removed:   { label: 'Removed',   bg: 'rgba(255,255,255,0.05)',   color: 'var(--color-text-muted)' },
 };
 

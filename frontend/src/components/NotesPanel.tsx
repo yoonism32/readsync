@@ -23,9 +23,9 @@ function ChapterPill({ chapter }: { chapter: number }) {
     <span
       style={{
         fontSize: 'var(--text-xs)',
-        color: 'var(--color-gold)',
-        background: 'var(--color-gold-glow)',
-        border: '1px solid var(--color-gold-border)',
+        color: 'var(--color-accent)',
+        background: 'var(--color-accent-glow)',
+        border: '1px solid var(--color-accent-border)',
         borderRadius: 'var(--radius-full)',
         padding: '1px 8px',
         flexShrink: 0,
@@ -92,7 +92,7 @@ function NoteRow({ note, onChanged }: { note: Note; onChanged: () => void }) {
           <button type="button" className="btn-ghost" onClick={() => { setEditing(false); setText(note.note_text); }} disabled={busy}>
             Cancel
           </button>
-          <button type="button" className="btn-gold" onClick={save} disabled={busy || !text.trim()}>
+          <button type="button" className="btn-accent" onClick={save} disabled={busy || !text.trim()}>
             Save
           </button>
         </div>
@@ -154,7 +154,7 @@ export function NotesPanel({ novelId }: NotesPanelProps) {
   };
 
   return (
-    <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+    <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>
         Notes
         {data && data.length > 0 && (
@@ -182,7 +182,7 @@ export function NotesPanel({ novelId }: NotesPanelProps) {
             style={{ ...inputStyle, width: 110 }}
           />
           <span style={{ flex: 1 }} />
-          <button type="button" className="btn-gold" onClick={add} disabled={busy || !text.trim()}>
+          <button type="button" className="btn-accent" onClick={add} disabled={busy || !text.trim()}>
             Add note
           </button>
         </div>

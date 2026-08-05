@@ -22,7 +22,7 @@ function HistoryRow({ entry }: { entry: ReadThroughEntry }) {
         fontSize: 'var(--text-sm)',
       }}
     >
-      <span style={{ color: 'var(--color-gold)', fontWeight: 600, flexShrink: 0 }}>#{entry.read_through}</span>
+      <span style={{ color: 'var(--color-accent)', fontWeight: 600, flexShrink: 0 }}>#{entry.read_through}</span>
       <span style={{ flex: 1, minWidth: 0 }}>
         reached ch. {entry.max_chapter}
         <span className="text-muted"> · {Math.round(entry.max_percent)}%</span>
@@ -61,15 +61,15 @@ export function RereadPanel({ novel }: RereadPanelProps) {
   };
 
   return (
-    <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+    <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
         <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>Read-throughs</h2>
         <span
           style={{
             fontSize: 'var(--text-xs)',
-            color: 'var(--color-gold)',
-            background: 'var(--color-gold-glow)',
-            border: '1px solid var(--color-gold-border)',
+            color: 'var(--color-accent)',
+            background: 'var(--color-accent-glow)',
+            border: '1px solid var(--color-accent-border)',
             borderRadius: 'var(--radius-full)',
             padding: '1px 8px',
           }}
@@ -85,7 +85,7 @@ export function RereadPanel({ novel }: RereadPanelProps) {
             <button type="button" className="btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
               Cancel
             </button>
-            <button type="button" className="btn-gold" onClick={startReread} disabled={busy}>
+            <button type="button" className="btn-accent" onClick={startReread} disabled={busy}>
               Start re-read
             </button>
           </span>

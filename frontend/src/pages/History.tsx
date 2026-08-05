@@ -73,12 +73,12 @@ export function History() {
               style={{
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-full)',
-                border: days === d ? '1px solid var(--color-border-gold)' : '1px solid var(--color-border)',
-                background: days === d ? 'var(--color-gold-glow)' : 'transparent',
-                color: days === d ? 'var(--color-gold)' : 'var(--color-text-muted)',
+                border: days === d ? '1px solid var(--color-border-accent)' : '1px solid var(--color-border)',
+                background: days === d ? 'var(--color-accent-glow)' : 'transparent',
+                color: days === d ? 'var(--color-accent)' : 'var(--color-text-muted)',
                 fontSize: 'var(--text-xs)',
                 cursor: 'pointer',
-                transition: 'all 0.15s',
+                transition: 'border-color 150ms var(--ease-out-expo), background-color 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo)',
                 touchAction: 'manipulation',
               }}
             >
@@ -91,7 +91,7 @@ export function History() {
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>
       ) : grouped.length === 0 ? (
-        <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
+        <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
           No reading activity in this period.
         </div>
       ) : (
@@ -99,7 +99,7 @@ export function History() {
           {grouped.map(([day, rows], gi) => (
             <section key={day} className="animate-fade-in" style={{ animationDelay: `${Math.min(gi * 40, 240)}ms` }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
-                <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-gold)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   {dayLabel(day, now)}
                 </h2>
                 <span className="text-faint tabular" style={{ fontSize: 'var(--text-xs)' }}>
@@ -107,7 +107,7 @@ export function History() {
                 </span>
               </div>
 
-              <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: '4px 16px' }}>
+              <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '4px 16px' }}>
                 {rows.map((row, i) => (
                   <div
                     key={`${row.novel_id}-${i}`}
@@ -123,9 +123,8 @@ export function History() {
                     <div style={{ flex: 1, minWidth: 160 }}>
                       <Link
                         to={`/novel/${encodeURIComponent(row.novel_id)}`}
-                        style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none', transition: 'color 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-gold)')}
-                        onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text)')}
+                        className="link-accent"
+                        style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none' }}
                       >
                         {row.title}
                       </Link>

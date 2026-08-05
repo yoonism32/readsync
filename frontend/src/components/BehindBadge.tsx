@@ -74,9 +74,9 @@ export function BehindBadge({ novel }: Props) {
         padding: '1px 8px',
         fontSize: 'var(--text-xs)',
         fontWeight: 600,
-        background: 'var(--color-gold-glow)',
-        color: 'var(--color-gold-bright)',
-        border: '1px solid var(--color-gold-border)',
+        background: 'var(--color-accent-glow)',
+        color: 'var(--color-accent-bright)',
+        border: '1px solid var(--color-accent-border)',
         whiteSpace: 'nowrap',
       }}
     >

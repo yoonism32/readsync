@@ -10,6 +10,7 @@
   --color-bg-card:      rgba(255,255,255,0.04);
   --color-bg-input:     rgba(255,255,255,0.06);
   --color-bg-hover:     rgba(255,255,255,0.07);
+  --color-bg-header:    rgba(8,12,18,0.85);
 
   /* Primary accent — refined crimson */
   --color-accent-dim:    #6e2b31;
@@ -24,12 +25,11 @@
   --color-teal-glow:    rgba(52,208,186,0.14);
   --color-teal-border:  rgba(52,208,186,0.28);
 
-  /* Legacy aliases — older components reference the gold names */
-  --color-gold-dim:     var(--color-accent-dim);
-  --color-gold:         var(--color-accent);
-  --color-gold-bright:  var(--color-accent-bright);
-  --color-gold-glow:    var(--color-accent-glow);
-  --color-gold-border:  var(--color-accent-border);
+  /* Foregrounds for use ON a saturated fill — near-black, not white:
+     against crimson and teal both, the dark foreground is the stronger
+     contrast pairing. */
+  --color-on-accent:    #080c12;
+  --color-on-teal:      #07110f;
 
   /* Text */
   --color-text:         #e4e8e6;
@@ -37,39 +37,42 @@
   --color-text-faint:   #4e5754;
 
   /* Semantic */
-  --color-success:      #34d0ba;
-  --color-success-dim:  rgba(52,208,186,0.12);
-  --color-warning:      #fbbf24;
-  --color-warning-dim:  rgba(251,191,36,0.12);
-  --color-danger:       #f87171;
-  --color-danger-dim:   rgba(248,113,113,0.12);
-  --color-info:         #60a5fa;
-  --color-info-dim:     rgba(96,165,250,0.12);
+  --color-success:        #34d0ba;
+  --color-success-dim:    rgba(52,208,186,0.12);
+  --color-warning:        #fbbf24;
+  --color-warning-dim:    rgba(251,191,36,0.12);
+  --color-warning-border: rgba(251,191,36,0.30);
+  --color-danger:         #f87171;
+  --color-danger-dim:     rgba(248,113,113,0.12);
+  --color-danger-border:  rgba(248,113,113,0.30);
+  --color-info:           #60a5fa;
+  --color-info-dim:       rgba(96,165,250,0.12);
 
   /* Borders */
-  --color-border:       rgba(255,255,255,0.08);
-  --color-border-gold:  var(--color-accent-border);
+  --color-border:        rgba(255,255,255,0.08);
+  --color-border-accent: var(--color-accent-border);
 
   /* ── Typography ──────────────────────────────────────── */
   --font-*: initial;
   --font-display: "Newsreader Variable", "Newsreader", "Georgia", serif;
   --font-body:    "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", "Fira Code", monospace;
+  /* Deliberate system stack — no mono webfont is loaded, so name the
+     fallback rather than requesting a face that will never arrive. */
+  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
-  /* Type scale — a notch larger across the board */
-  --text-xs:   0.78125rem;
-  --text-sm:   0.875rem;
-  --text-base: 1rem;
-  --text-lg:   1.125rem;
-  --text-xl:   1.3125rem;
-  --text-2xl:  1.625rem;
-  --text-3xl:  2rem;
-  --text-4xl:  2.5rem;
+  /* Type scale — absorbs the 1.1 zoom that used to sit on <html>. */
+  --text-xs:   0.875rem;
+  --text-sm:   0.9375rem;
+  --text-base: 1.0625rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.4375rem;
+  --text-2xl:  1.8125rem;
+  --text-3xl:  2.1875rem;
+  --text-4xl:  2.75rem;
 
   /* ── Motion ──────────────────────────────────────────── */
   --ease-*: initial;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-spring:   cubic-bezier(0.34, 1.56, 0.64, 1);
 
   /* ── Radius ──────────────────────────────────────────── */
   --radius-*: initial;
@@ -81,10 +84,11 @@
   --radius-full: 9999px;
 
   /* ── Z-index ─────────────────────────────────────────── */
-  --z-dropdown: 100;
-  --z-sticky:   200;
-  --z-modal:    500;
-  --z-toast:    800;
+  --z-dropdown:  100;
+  --z-sticky:    200;
+  --z-modal:     500;
+  --z-toast:     800;
+  --z-skip-link: 900;
 }
 
 /* ── Base reset ──────────────────────────────────────────── */
@@ -94,9 +98,6 @@
 html {
   color-scheme: dark;
   -webkit-text-size-adjust: 100%;
-  /* Default zoom: at 100% browser zoom this reads like 110% did before —
-     matches the scale the app was actually designed to be viewed at. */
-  zoom: 1.1;
 }
 
 body {
@@ -127,7 +128,7 @@ a { color: inherit; text-decoration: none; }
 p { margin: 0; }
 
 :focus-visible {
-  outline: 2px solid var(--color-gold);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -140,7 +141,24 @@ p { margin: 0; }
 }
 ::-webkit-scrollbar-thumb:hover { background: rgba(201,79,87,0.35); }
 
-/* ── Utilities ───────────────────────────────────────────── */
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Surfaces ────────────────────────────────────────────── */
+/* `glass` is an OVERLAY signal — it means "this floats above content".
+   Reserve it for popovers, sheets, the command palette and the sticky
+   header. Static surfaces use `panel`: same colour, same border, no
+   backdrop-filter, no compositing cost. */
 
 @utility glass {
   background: var(--color-bg-card);
@@ -149,14 +167,12 @@ p { margin: 0; }
   -webkit-backdrop-filter: blur(12px) saturate(160%);
 }
 
-@utility glass-gold {
+@utility panel {
   background: var(--color-bg-card);
-  border: 1px solid var(--color-border-gold);
-  backdrop-filter: blur(12px) saturate(160%);
-  -webkit-backdrop-filter: blur(12px) saturate(160%);
+  border: 1px solid var(--color-border);
 }
 
-@utility text-gold { color: var(--color-gold); }
+@utility text-accent { color: var(--color-accent); }
 @utility text-muted { color: var(--color-text-muted); }
 @utility text-faint { color: var(--color-text-faint); }
 
@@ -177,7 +193,7 @@ p { margin: 0; }
   to { transform: rotate(360deg); }
 }
 
-.animate-spin-gold {
+.animate-spin {
   animation: spin 0.7s linear infinite;
 }
 
@@ -229,11 +245,91 @@ p { margin: 0; }
   }
 }
 
+/* ── Interactive surfaces ────────────────────────────────── */
+/* Hover and focus-visible are styled together so keyboard users get the
+   same affordance mouse users do — these used to be inline JS style
+   mutations, which no pseudo-class and no reduced-motion query could reach. */
+
+.row-interactive {
+  transition: border-color 150ms var(--ease-out-expo);
+}
+.row-interactive:hover,
+.row-interactive:focus-visible {
+  border-color: var(--color-border-accent);
+}
+
+.row-interactive-strong {
+  transition: border-color 150ms var(--ease-out-expo);
+}
+.row-interactive-strong:hover,
+.row-interactive-strong:focus-visible {
+  border-color: var(--color-accent);
+}
+
+.icon-btn {
+  color: var(--color-text-faint);
+  transition: color 150ms var(--ease-out-expo);
+}
+.icon-btn:hover,
+.icon-btn:focus-visible {
+  color: var(--color-text);
+}
+
+/* Muted → full text. For chrome controls that start legible, not faint. */
+.muted-btn {
+  color: var(--color-text-muted);
+  transition: color 150ms var(--ease-out-expo);
+}
+.muted-btn:hover,
+.muted-btn:focus-visible {
+  color: var(--color-text);
+}
+
+.row-hover {
+  transition: background-color 150ms var(--ease-out-expo);
+}
+.row-hover:hover,
+.row-hover:focus-visible {
+  background-color: var(--color-bg-hover);
+}
+
+.link-accent {
+  transition: color 150ms var(--ease-out-expo);
+}
+.link-accent:hover,
+.link-accent:focus-visible {
+  color: var(--color-accent-bright);
+}
+
+/* ── Login shell ─────────────────────────────────────────── */
+/* Asymmetric on purpose: an uneven two-column split with left-aligned
+   type, rather than a single centred column in a centred viewport.
+   Stacks to one left-aligned column below 860px — still not centred. */
+
+.login-shell {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  gap: 40px;
+  padding: 48px 24px;
+  max-width: 1040px;
+  margin-inline: auto;
+}
+
+@media (min-width: 860px) {
+  .login-shell {
+    grid-template-columns: 1.15fr minmax(0, 380px);
+    align-items: center;
+    gap: 80px;
+    padding-inline: 48px;
+  }
+}
+
 /* ── Buttons ─────────────────────────────────────────────── */
 
-.btn-gold {
-  background: var(--color-gold);
-  color: #fff;
+.btn-accent {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
   border: none;
   border-radius: var(--radius-md);
   padding: 7px 14px;
@@ -241,12 +337,12 @@ p { margin: 0; }
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
+  transition: background-color 150ms var(--ease-out-expo), transform 100ms var(--ease-out-expo);
   touch-action: manipulation;
 }
-.btn-gold:hover:not(:disabled) { background: var(--color-gold-bright); }
-.btn-gold:active:not(:disabled) { transform: scale(0.97); }
-.btn-gold:disabled { opacity: 0.45; cursor: default; }
+.btn-accent:hover:not(:disabled) { background: var(--color-accent-bright); }
+.btn-accent:active:not(:disabled) { transform: scale(0.97); }
+.btn-accent:disabled { opacity: 0.45; cursor: default; }
 
 .btn-ghost {
   background: none;
@@ -257,28 +353,11 @@ p { margin: 0; }
   font-size: var(--text-sm);
   font-family: inherit;
   cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
+  transition: color 150ms var(--ease-out-expo), border-color 150ms var(--ease-out-expo);
   touch-action: manipulation;
 }
-.btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-border-gold); }
+.btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-border-accent); }
 .btn-ghost:disabled { opacity: 0.45; cursor: default; }
-
-.btn-accent {
-  background: var(--color-accent);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 7px 14px;
-  font-size: var(--text-sm);
-  font-weight: 600;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.15s, transform 0.1s;
-  touch-action: manipulation;
-}
-.btn-accent:hover:not(:disabled) { background: var(--color-accent-bright); }
-.btn-accent:active:not(:disabled) { transform: scale(0.97); }
-.btn-accent:disabled { opacity: 0.45; cursor: default; }
 
 /* ── Native form controls ────────────────────────────────── */
 /* color-scheme:dark on html isn't always enough to darken a <select>'s

@@ -55,161 +55,144 @@ export function Login() {
   }
 
   return (
-    <div
-      className="animate-fade-in"
-      style={{
-        minHeight: '100dvh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '24px 16px',
-      }}
-    >
-      <div style={{ width: '100%', maxWidth: 380 }}>
-        {/* Wordmark */}
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontSize: 'var(--text-4xl)',
-              fontWeight: 700,
-              color: 'var(--color-gold)',
-              letterSpacing: '-0.03em',
-              marginBottom: 8,
-            }}
-          >
-            ReadSync
-          </h1>
-          <p style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-sm)' }}>
-            Cross-device reading progress
-          </p>
-        </div>
-
-        {/* Card */}
-        <form
-          onSubmit={(e) => { void handleSubmit(e); }}
-          className="glass"
-          style={{ borderRadius: 'var(--radius-xl)', padding: 28 }}
-          aria-label="Sign in form"
+    <div className="animate-fade-in login-shell">
+      {/* Wordmark — left-aligned, and the larger of the two columns. */}
+      <div>
+        <h1
+          style={{
+            fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(2.75rem, 7vw, 4.5rem)',
+            lineHeight: 1.05,
+            fontWeight: 700,
+            color: 'var(--color-accent)',
+            letterSpacing: '-0.03em',
+            marginBottom: 12,
+            overflowWrap: 'anywhere',
+          }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Username */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                Username
-              </span>
+          ReadSync
+        </h1>
+        <p
+          style={{
+            color: 'var(--color-text-muted)',
+            fontSize: 'var(--text-lg)',
+            maxWidth: '24ch',
+          }}
+        >
+          Cross-device reading progress
+        </p>
+      </div>
+
+      {/* Card */}
+      <form
+        onSubmit={(e) => { void handleSubmit(e); }}
+        className="panel"
+        style={{ borderRadius: 'var(--radius-xl)', padding: 28, minWidth: 0 }}
+        aria-label="Sign in form"
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {/* Username */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+              Username
+            </span>
+            <input
+              type="text"
+              name="username"
+              autoComplete="username"
+              spellCheck={false}
+              required
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="admin"
+              style={inputStyle}
+              onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
+              onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
+            />
+          </label>
+
+          {/* Password */}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+              Password
+            </span>
+            <div style={{ position: 'relative' }}>
               <input
-                type="text"
-                name="username"
-                autoComplete="username"
-                spellCheck={false}
+                type={showPassword ? 'text' : 'password'}
+                name="password"
+                autoComplete="current-password"
                 required
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder="admin"
-                style={inputStyle}
-                onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="••••••••"
+                style={{ ...inputStyle, paddingRight: 44 }}
+                onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
                 onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
               />
-            </label>
-
-            {/* Password */}
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
-                Password
-              </span>
-              <div style={{ position: 'relative' }}>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  name="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={{ ...inputStyle, paddingRight: 44 }}
-                  onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
-                  onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
-                />
-                <button
-                  type="button"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPassword(p => !p)}
-                  style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: 0,
-                    height: '100%',
-                    width: 44,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--color-text-faint)',
-                    transition: 'color 0.15s',
-                    touchAction: 'manipulation',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text-muted)')}
-                  onMouseLeave={e => (e.currentTarget.style.color = 'var(--color-text-faint)')}
-                >
-                  {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
-                </button>
-              </div>
-            </label>
-
-            {/* Error */}
-            {error && (
-              <div
-                id="login-error"
-                role="alert"
-                aria-live="polite"
+              <button
+                type="button"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                className="icon-btn"
+                onClick={() => setShowPassword(p => !p)}
                 style={{
-                  background: 'var(--color-danger-dim)',
-                  border: '1px solid rgba(248,113,113,0.3)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '8px 12px',
-                  color: 'var(--color-danger)',
-                  fontSize: 'var(--text-sm)',
+                  position: 'absolute',
+                  right: 0,
+                  top: 0,
+                  height: '100%',
+                  width: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  touchAction: 'manipulation',
                 }}
               >
-                {error}
-              </div>
-            )}
+                {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+              </button>
+            </div>
+          </label>
 
-            {/* Submit */}
-            <button
-              type="submit"
-              disabled={loading}
+          {/* Error */}
+          {error && (
+            <div
+              id="login-error"
+              role="alert"
+              aria-live="polite"
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
-                background: 'var(--color-gold)',
-                color: '#080c12',
-                border: 'none',
+                background: 'var(--color-danger-dim)',
+                border: '1px solid var(--color-danger-border)',
                 borderRadius: 'var(--radius-md)',
-                padding: '10px 16px',
-                fontWeight: 600,
-                fontSize: 'var(--text-base)',
-                cursor: loading ? 'not-allowed' : 'pointer',
-                opacity: loading ? 0.7 : 1,
-                transition: 'opacity 0.15s, transform 0.1s, background 0.15s',
-                touchAction: 'manipulation',
+                padding: '8px 12px',
+                color: 'var(--color-danger)',
+                fontSize: 'var(--text-sm)',
               }}
-              onMouseEnter={e => { if (!loading) e.currentTarget.style.background = 'var(--color-gold-bright)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--color-gold)'; }}
-              onMouseDown={e => { if (!loading) e.currentTarget.style.transform = 'scale(0.97)'; }}
-              onMouseUp={e => { e.currentTarget.style.transform = 'scale(1)'; }}
             >
-              {loading && <Spinner size={16} />}
-              {loading ? 'Signing in…' : 'Sign In'}
-            </button>
-          </div>
-        </form>
-      </div>
+              {error}
+            </div>
+          )}
+
+          {/* Submit */}
+          <button
+            type="submit"
+            className="btn-accent"
+            disabled={loading}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              padding: '10px 16px',
+              fontSize: 'var(--text-base)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {loading && <Spinner size={16} />}
+            {loading ? 'Signing in…' : 'Sign in'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

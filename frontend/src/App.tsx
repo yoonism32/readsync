@@ -67,7 +67,7 @@ export default function App() {
             fontSize: 'var(--text-sm)',
           },
           success: {
-            iconTheme: { primary: 'var(--color-gold)', secondary: '#080c12' },
+            iconTheme: { primary: 'var(--color-accent)', secondary: 'var(--color-on-accent)' },
           },
         }}
       />

@@ -65,13 +65,10 @@ export function NotificationBell() {
           background: 'none',
           border: 'none',
           cursor: 'pointer',
-          color: open ? 'var(--color-gold)' : 'var(--color-text-muted)',
+          ...(open ? { color: 'var(--color-accent)' } : null),
           borderRadius: 'var(--radius-md)',
-          transition: 'color 0.15s',
           touchAction: 'manipulation',
         }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--color-text)')}
-        onMouseLeave={e => (e.currentTarget.style.color = open ? 'var(--color-gold)' : 'var(--color-text-muted)')}
       >
         <BellIcon size={16} />
         {unread > 0 && (
@@ -85,8 +82,8 @@ export function NotificationBell() {
               height: 15,
               padding: '0 4px',
               borderRadius: 999,
-              background: 'var(--color-gold)',
-              color: '#080c12',
+              background: 'var(--color-accent)',
+              color: 'var(--color-on-accent)',
               fontSize: 10,
               fontWeight: 700,
               display: 'flex',
@@ -138,7 +135,7 @@ export function NotificationBell() {
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: 'var(--color-gold)',
+                  color: 'var(--color-accent)',
                   fontSize: 'var(--text-xs)',
                   padding: 0,
                 }}
@@ -163,7 +160,7 @@ export function NotificationBell() {
                   width: '100%',
                   textAlign: 'left',
                   padding: '10px 14px',
-                  background: n.read ? 'transparent' : 'var(--color-gold-glow)',
+                  background: n.read ? 'transparent' : 'var(--color-accent-glow)',
                   border: 'none',
                   borderBottom: '1px solid var(--color-border)',
                   cursor: 'pointer',

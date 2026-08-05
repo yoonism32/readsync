@@ -110,7 +110,7 @@ export function Explorer() {
             value={query}
             onChange={e => setQuery(e.target.value)}
             style={{ ...fieldStyle, borderRadius: 'var(--radius-lg)', padding: '11px 14px 11px 36px', fontSize: 'var(--text-base)' }}
-            onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
+            onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
             onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
           />
         </div>
@@ -120,11 +120,11 @@ export function Explorer() {
           onClick={() => setPanelOpen(o => !o)}
           aria-expanded={panelOpen}
           aria-controls="explorer-filters"
-          className="glass"
+          className="panel"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 9,
             borderRadius: 'var(--radius-lg)', padding: '0 18px',
-            color: activeCount > 0 ? 'var(--color-gold)' : 'var(--color-text)',
+            color: activeCount > 0 ? 'var(--color-accent)' : 'var(--color-text)',
             fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'inherit',
             cursor: 'pointer', touchAction: 'manipulation',
           }}
@@ -136,7 +136,7 @@ export function Explorer() {
               style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 minWidth: 19, height: 19, padding: '0 5px', borderRadius: 'var(--radius-full)',
-                background: 'var(--color-gold)', color: '#080c12',
+                background: 'var(--color-accent)', color: 'var(--color-on-accent)',
                 fontSize: 'var(--text-xs)', fontWeight: 700,
               }}
             >
@@ -150,7 +150,7 @@ export function Explorer() {
       {panelOpen && (
         <div
           id="explorer-filters"
-          className="glass animate-fade-in"
+          className="panel animate-fade-in"
           style={{
             borderRadius: 'var(--radius-xl)',
             padding: 20,
@@ -367,7 +367,7 @@ function RadioRow({
         gap: 8,
         padding: '5px 2px',
         fontSize: 'var(--text-sm)',
-        color: checked ? 'var(--color-gold)' : 'var(--color-text)',
+        color: checked ? 'var(--color-accent)' : 'var(--color-text)',
         fontWeight: checked ? 600 : 400,
         cursor: 'pointer',
       }}
@@ -459,10 +459,8 @@ function ListRow({ novel, index }: { novel: Novel; index: number }) {
   return (
     <Link
       to={`/novel/${encodeURIComponent(novel.novel_id)}`}
-      className="glass animate-fade-in"
+      className="panel animate-fade-in row-interactive"
       style={{ ...cardBase, animationDelay: `${Math.min(index * 18, 200)}ms`, padding: 12 }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--color-border-gold)')}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--color-border)')}
     >
       <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
         <div style={{ width: 44, height: 62, flexShrink: 0, borderRadius: 6, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)' }}>

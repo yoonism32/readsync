@@ -5,6 +5,14 @@ import toast from 'react-hot-toast';
 import { backups as backupsApi, novels as novelsApi, settings as settingsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
 import type { BackupsStatus, Prefs, LibraryHealth } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
+import { BookOpenIcon, DashboardIcon, ClockIcon, BotIcon } from '../components/Icon.js';
+
+const quickLinkStyle: React.CSSProperties = {
+  textDecoration: 'none',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 7,
+};
 
 const REFRESH_CHOICES = [6, 12, 24, 48] as const;
 
@@ -100,7 +108,7 @@ export function Settings() {
     try {
       await settingsApi.savePrefs({ refresh_interval_hours: hours });
       await mutatePrefs();
-      toast.success(`Checking every ${hours}h`);
+      // Silent success: the chosen interval button becomes active.
     } catch {
       toast.error('Failed to save');
     } finally {
@@ -125,7 +133,7 @@ export function Settings() {
     try {
       await settingsApi.savePrefs({ notifications_enabled: enabled });
       await mutatePrefs();
-      toast.success(enabled ? 'Notifications on' : 'Notifications off');
+      // Silent success: the toggle reads On/Off directly.
     } catch {
       toast.error('Failed to save');
     } finally {
@@ -138,7 +146,7 @@ export function Settings() {
       <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 24 }}>Settings</h1>
 
       {/* API Key */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 4 }}>API Key</h2>
         <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>
           Used by the browser extension to sync your reading progress.
@@ -163,7 +171,7 @@ export function Settings() {
               fontFamily: 'var(--font-mono)',
               outline: 'none',
             }}
-            onFocus={e => (e.target.style.borderColor = 'var(--color-gold)')}
+            onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
             onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
           />
           <button type="submit" className="btn-accent">
@@ -173,7 +181,7 @@ export function Settings() {
       </section>
 
       {/* Export / Import */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 4 }}>Backup &amp; Restore</h2>
         <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>
           Export your reading data to a JSON file for a manual backup, or import from a
@@ -208,7 +216,7 @@ export function Settings() {
       </section>
 
       {/* Backups */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 4 }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>Backups</h2>
           <span style={{ flex: 1 }} />
@@ -234,7 +242,7 @@ export function Settings() {
 
       {/* Refresh + Library share the width the Devices list used to fill. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-        <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+        <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 6 }}>Refresh</h2>
           <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 14 }}>
             How often ReadSync reminds you to check your library for new chapters.
@@ -251,9 +259,9 @@ export function Settings() {
                   disabled={saving}
                   aria-pressed={active}
                   style={{
-                    background: active ? 'var(--color-gold)' : 'none',
-                    color: active ? '#080c12' : 'var(--color-text-muted)',
-                    border: `1px solid ${active ? 'var(--color-gold)' : 'var(--color-border)'}`,
+                    background: active ? 'var(--color-accent)' : 'none',
+                    color: active ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
+                    border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border)'}`,
                     borderRadius: 'var(--radius-md)',
                     padding: '5px 12px',
                     fontSize: 'var(--text-sm)',
@@ -276,7 +284,7 @@ export function Settings() {
           </p>
         </section>
 
-        <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+        <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 6 }}>Library</h2>
           <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 14 }}>
             What's actually stored, so a display glitch can be told apart from missing data.
@@ -313,7 +321,7 @@ export function Settings() {
       </div>
 
       {/* Notifications */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 6 }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>Notifications</h2>
           <span style={{ flex: 1 }} />
@@ -324,8 +332,8 @@ export function Settings() {
             disabled={saving}
             aria-pressed={!!prefs?.notifications_enabled}
             style={{
-              color: prefs?.notifications_enabled ? 'var(--color-gold)' : 'var(--color-text-muted)',
-              borderColor: prefs?.notifications_enabled ? 'var(--color-gold)' : 'var(--color-border)',
+              color: prefs?.notifications_enabled ? 'var(--color-accent)' : 'var(--color-text-muted)',
+              borderColor: prefs?.notifications_enabled ? 'var(--color-accent)' : 'var(--color-border)',
             }}
           >
             {prefs?.notifications_enabled ? 'On' : 'Off'}
@@ -343,7 +351,7 @@ export function Settings() {
       </section>
 
       {/* Badge legend */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>What the badges mean</h2>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <LegendRow
@@ -363,11 +371,11 @@ export function Settings() {
             text="Way behind — 50+ unread chapters."
           />
           <LegendRow
-            swatch={<span className="tabular" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: '#07110f', background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>+8</span>}
+            swatch={<span className="tabular" style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-on-teal)', background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>+8</span>}
             text="Unread chapters since your last read — the count on the site minus your bookmark."
           />
           <LegendRow
-            swatch={<span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', background: 'rgba(251,191,36,0.14)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>hiatus?</span>}
+            swatch={<span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-warning)', background: 'var(--color-warning-dim)', border: '1px solid var(--color-warning-border)', borderRadius: 'var(--radius-full)', padding: '1px 8px' }}>hiatus?</span>}
             text="No new chapter on the site in 90+ days while you're still marked Reading."
           />
           <LegendRow
@@ -382,13 +390,13 @@ export function Settings() {
       </section>
 
       {/* Quick links */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginTop: 16 }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600, marginBottom: 16 }}>Quick Links</h2>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <Link to="/mylist" className="btn-ghost" style={{ textDecoration: 'none' }}>📚 My Library</Link>
-          <Link to="/dashboard" className="btn-ghost" style={{ textDecoration: 'none' }}>📊 Dashboard</Link>
-          <Link to="/history" className="btn-ghost" style={{ textDecoration: 'none' }}>🕐 History</Link>
-          <Link to="/admin" className="btn-ghost" style={{ textDecoration: 'none' }}>🤖 Bot Admin</Link>
+          <Link to="/mylist" className="btn-ghost" style={quickLinkStyle}><BookOpenIcon size={14} /> My Library</Link>
+          <Link to="/dashboard" className="btn-ghost" style={quickLinkStyle}><DashboardIcon size={14} /> Dashboard</Link>
+          <Link to="/history" className="btn-ghost" style={quickLinkStyle}><ClockIcon size={14} /> History</Link>
+          <Link to="/admin" className="btn-ghost" style={quickLinkStyle}><BotIcon size={14} /> Bot Admin</Link>
         </div>
       </section>
     </div>

@@ -27,14 +27,14 @@ export function Admin() {
       <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 24 }}>Admin</h1>
 
       {/* Bot status */}
-      <section className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+      <section className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 600 }}>Chapter Update Bot</h2>
           <button
             onClick={() => { void handleTrigger(); }}
             style={{
-              background: 'var(--color-gold)',
-              color: '#080c12',
+              background: 'var(--color-accent)',
+              color: 'var(--color-on-accent)',
               border: 'none',
               borderRadius: 'var(--radius-md)',
               padding: '7px 14px',

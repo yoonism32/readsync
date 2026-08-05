@@ -2,8 +2,8 @@ import type { TriState } from '../lib/explorerFilters.js';
 
 /**
  * Three-state filter box: unset → include → exclude → unset.
- * Include is gold (the app's affirmative accent), exclude is danger red with a
- * minus, so the two are distinguishable by shape as well as colour.
+ * Include is the accent (the app's affirmative colour), exclude is danger red
+ * with a minus, so the two are distinguishable by shape as well as colour.
  */
 export function TriCheckbox({
   label,
@@ -18,7 +18,7 @@ export function TriCheckbox({
   const isExclude = state === 'exclude';
 
   const colour = isInclude
-    ? 'var(--color-gold)'
+    ? 'var(--color-accent)'
     : isExclude
       ? 'var(--color-danger)'
       : 'var(--color-text-muted)';
@@ -59,7 +59,7 @@ export function TriCheckbox({
           borderRadius: 3,
           border: `1px solid ${state === 'off' ? 'var(--color-border)' : colour}`,
           background: state === 'off' ? 'transparent' : colour,
-          color: '#080c12',
+          color: 'var(--color-on-accent)',
         }}
       >
         {isInclude && (

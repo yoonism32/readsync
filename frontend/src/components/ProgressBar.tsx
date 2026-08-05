@@ -31,7 +31,7 @@ export function ProgressBar({ percent, showLabel = false, size = 'sm', className
             height: '100%',
             background: clamped >= 100
               ? 'var(--color-success)'
-              : 'linear-gradient(90deg, var(--color-gold-dim), var(--color-gold))',
+              : 'linear-gradient(90deg, var(--color-accent-dim), var(--color-accent))',
             borderRadius: 'inherit',
             transition: 'width 0.4s var(--ease-out-expo)',
           }}

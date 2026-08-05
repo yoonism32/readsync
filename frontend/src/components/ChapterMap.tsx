@@ -58,7 +58,7 @@ export function ChapterMap({ novel }: Props) {
   const skippedRanges = compressRanges(skipped);
 
   return (
-    <div className="glass" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+    <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
         <h2 style={{ fontSize: 'var(--text-md, var(--text-sm))', fontWeight: 600 }}>Chapters</h2>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>
@@ -98,11 +98,11 @@ export function ChapterMap({ novel }: Props) {
                 height: 12,
                 borderRadius: 2,
                 background: isCurrent
-                  ? 'var(--color-gold-bright)'
+                  ? 'var(--color-accent-bright)'
                   : isRead
-                    ? 'var(--color-gold-dim)'
+                    ? 'var(--color-accent-dim)'
                     : 'rgba(255,255,255,0.06)',
-                outline: isCurrent ? '1px solid var(--color-gold)' : 'none',
+                outline: isCurrent ? '1px solid var(--color-accent)' : 'none',
                 outlineOffset: 1,
               }}
             />
@@ -111,8 +111,8 @@ export function ChapterMap({ novel }: Props) {
       </div>
 
       <div className="text-faint" style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 'var(--text-xs)' }}>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--color-gold-dim)', marginRight: 5, verticalAlign: 'middle' }} />Read</span>
-        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--color-gold-bright)', marginRight: 5, verticalAlign: 'middle' }} />Current</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--color-accent-dim)', marginRight: 5, verticalAlign: 'middle' }} />Read</span>
+        <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--color-accent-bright)', marginRight: 5, verticalAlign: 'middle' }} />Current</span>
         <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'rgba(255,255,255,0.06)', marginRight: 5, verticalAlign: 'middle' }} />Unread</span>
       </div>
     </div>
