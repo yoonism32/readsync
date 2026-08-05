@@ -17,6 +17,24 @@ const supabase =
 
 const router = Router();
 
+/** Path fragment every URL we mirrored into our own bucket contains. */
+const MIRRORED_PATH = '/storage/v1/object/public/novel-covers/';
+
+/**
+ * Has this cover been mirrored into our bucket, or is it still pointing at the
+ * source site?
+ *
+ * `novels.cover_img` has two writers. This route mirrors the image and stores
+ * our own URL, but the admin auto-update also stamps the scraped
+ * images.novelarrow.com URL whenever the column is NULL or 'failed'. Whichever
+ * runs first wins, so a novel refreshed by the userscript before anyone viewed
+ * its cover keeps hotlinking the source forever — the mirroring branch below is
+ * unreachable once any URL is cached.
+ */
+export function isMirroredCover(url: string | null): boolean {
+  return !!url && url.includes(MIRRORED_PATH);
+}
+
 async function fetchCoverWithRetry(
   url: string,
   maxRetries = 3,
@@ -73,8 +91,14 @@ router.get(
       const cachedCoverUrl = novelResult.rows[0].cover_img;
 
       if (cachedCoverUrl && cachedCoverUrl !== 'failed' && !forceRefresh) {
-        res.setHeader('Cache-Control', 'public, max-age=86400'); // 24h — URL is stable
-        return res.redirect(cachedCoverUrl);
+        // Only our own mirrored URL is terminal. A source URL means the admin
+        // auto-update got here first, so fall through and mirror it now —
+        // unless storage isn't configured, in which case the source URL is
+        // still better than a 500.
+        if (isMirroredCover(cachedCoverUrl) || !supabase) {
+          res.setHeader('Cache-Control', 'public, max-age=86400'); // 24h — URL is stable
+          return res.redirect(cachedCoverUrl);
+        }
       }
 
       if (cachedCoverUrl === 'failed' && !forceRefresh) {
