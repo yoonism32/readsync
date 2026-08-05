@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import path from 'node:path';
 import compression from 'compression';
+import connectPgSimple from 'connect-pg-simple';
 import cors from 'cors';
 import express from 'express';
 import session from 'express-session';
@@ -64,8 +65,23 @@ export function createApp(): {
   // Must follow the parsers: restores the Express 4 `{}` default the routes assume.
   app.use(normalizeBody);
 
+  // Without a store, express-session uses MemoryStore: sessions live in the
+  // process heap, so every deploy and every free-tier hibernation logs everyone
+  // out. Because requireAuthAPI accepts only req.session.authenticated, that
+  // surfaced as the app serving pages while every API call returned 401.
+  // Reusing the existing pool keeps this to one connection source.
+  const PgSession = connectPgSimple(session);
+
   app.use(
     session({
+      store: new PgSession({
+        pool,
+        tableName: 'session',
+        // Migration 009 owns the schema — no DDL at request time.
+        createTableIfMissing: false,
+        // Sweep expired rows every 15 minutes (seconds here, not ms).
+        pruneSessionInterval: 15 * 60,
+      }),
       secret: SESSION_SECRET,
       resave: false,
       saveUninitialized: false,
