@@ -63,6 +63,7 @@ export function Manage() {
         autoComplete="off"
         value={query}
         onChange={e => setQuery(e.target.value)}
+        className="input"
         style={{
           width: '100%',
           background: 'var(--color-bg-input)',
@@ -73,10 +74,7 @@ export function Manage() {
           fontSize: 'var(--text-base)',
           outline: 'none',
           marginBottom: 20,
-          transition: 'border-color 0.15s',
         }}
-        onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-        onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
       />
 
       {isLoading ? (

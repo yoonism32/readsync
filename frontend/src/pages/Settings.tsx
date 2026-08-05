@@ -160,6 +160,7 @@ export function Settings() {
             value={apiKeyInput}
             onChange={e => setApiKeyInput(e.target.value)}
             placeholder="Paste your API key…"
+            className="input"
             style={{
               flex: 1,
               background: 'var(--color-bg-input)',
@@ -171,8 +172,6 @@ export function Settings() {
               fontFamily: 'var(--font-mono)',
               outline: 'none',
             }}
-            onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-            onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
           />
           <button type="submit" className="btn-accent">
             Save API Key

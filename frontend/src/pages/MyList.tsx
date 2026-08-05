@@ -269,13 +269,12 @@ export function MyList() {
           autoComplete="off"
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
+          className="input"
           style={{
             flex: '1 1 220px', background: 'var(--color-bg-input)',
             border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
             padding: '8px 12px', color: 'var(--color-text)', fontSize: 'var(--text-sm)', outline: 'none',
           }}
-          onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-          onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
         />
         {tagCounts.length > 0 && (
           <select

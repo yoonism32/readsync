@@ -112,11 +112,11 @@ export function TagEditor({ novelId }: TagEditorProps) {
             void add(input);
           }
         }}
-        onBlur={e => {
-          e.currentTarget.style.borderColor = 'var(--color-border)';
+        onBlur={() => {
           if (input.trim()) void add(input);
         }}
         disabled={busy}
+        className="input"
         style={{
           background: 'transparent',
           border: '1px dashed var(--color-border)',
@@ -127,7 +127,6 @@ export function TagEditor({ novelId }: TagEditorProps) {
           width: 90,
           outline: 'none',
         }}
-        onFocus={e => (e.currentTarget.style.borderColor = 'var(--color-accent)')}
       />
       <datalist id="tag-suggestions">
         {suggestions.map(t => (

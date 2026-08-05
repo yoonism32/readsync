@@ -109,9 +109,8 @@ export function Explorer() {
             autoComplete="off"
             value={query}
             onChange={e => setQuery(e.target.value)}
+            className="input"
             style={{ ...fieldStyle, borderRadius: 'var(--radius-lg)', padding: '11px 14px 11px 36px', fontSize: 'var(--text-base)' }}
-            onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-            onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
           />
         </div>
 

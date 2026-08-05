@@ -13,7 +13,6 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--color-text)',
   fontSize: 'var(--text-base)',
   outline: 'none',
-  transition: 'border-color 0.15s',
   width: '100%',
 };
 
@@ -105,9 +104,8 @@ export function Login() {
               value={username}
               onChange={e => setUsername(e.target.value)}
               placeholder="admin"
+              className="input"
               style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-              onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
             />
           </label>
 
@@ -125,9 +123,8 @@ export function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
+                className="input"
                 style={{ ...inputStyle, paddingRight: 44 }}
-                onFocus={e => (e.target.style.borderColor = 'var(--color-accent)')}
-                onBlur={e => (e.target.style.borderColor = 'var(--color-border)')}
               />
               <button
                 type="button"

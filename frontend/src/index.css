@@ -275,6 +275,18 @@ p { margin: 0; }
   color: var(--color-text);
 }
 
+/* Text fields. The border shift was an inline onFocus/onBlur pair mutating
+   element.style — the same anti-pattern as the hover handlers, and missed
+   because the audit listed only hover. `:focus` rather than `:focus-visible`
+   is deliberate: it preserves the old behaviour exactly, and a text field
+   that has the caret should look focused however you got there. */
+.input {
+  transition: border-color 150ms var(--ease-out-expo);
+}
+.input:focus {
+  border-color: var(--color-accent);
+}
+
 /* Muted → full text. For chrome controls that start legible, not faint. */
 .muted-btn {
   color: var(--color-text-muted);
