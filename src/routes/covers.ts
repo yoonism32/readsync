@@ -1,6 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 import { Router } from 'express';
-import { HTTP_INTERNAL_ERROR, HTTP_NOT_FOUND } from '../config.js';
+import {
+  HTTP_GONE,
+  HTTP_INTERNAL_ERROR,
+  HTTP_NOT_FOUND,
+  HTTP_SERVICE_UNAVAILABLE,
+} from '../config.js';
 import pool from '../db/pool.js';
 import logger from '../logger.js';
 import { validateApiKey } from '../middleware/auth.js';
@@ -33,6 +38,19 @@ const MIRRORED_PATH = '/storage/v1/object/public/novel-covers/';
  */
 export function isMirroredCover(url: string | null): boolean {
   return !!url && url.includes(MIRRORED_PATH);
+}
+
+/**
+ * Does this source response mean the image genuinely isn't there?
+ *
+ * Only a definitive answer may be written to `cover_img` as 'failed', because
+ * that sentinel is terminal — nothing retries it, and the frontend never sends
+ * ?refresh=true. A 5xx, a 429 or a hotlink-blocking 403 says nothing about
+ * whether the image exists, and those are exactly the statuses that arrive for
+ * a whole batch at once. Condemning on them poisons a dozen covers in one run.
+ */
+export function isMissingUpstream(status: number): boolean {
+  return status === HTTP_NOT_FOUND || status === HTTP_GONE;
 }
 
 async function fetchCoverWithRetry(
@@ -102,7 +120,10 @@ router.get(
       }
 
       if (cachedCoverUrl === 'failed' && !forceRefresh) {
-        return res.status(HTTP_NOT_FOUND).send('Cover not available');
+        // JSON like every other exit from this route. The bare string used to
+        // come back as text/html, which read like a routing miss rather than a
+        // deliberate 404 and sent at least one debugging session sideways.
+        return res.status(HTTP_NOT_FOUND).json({ error: 'Cover not available' });
       }
 
       if (!supabase) {
@@ -120,21 +141,36 @@ router.get(
       try {
         response = await fetchCoverWithRetry(coverUrl);
       } catch (fetchErr) {
+        // Reaching here means the network gave up, not that the image is
+        // missing — fetchCoverWithRetry returns a real 404 rather than throwing.
+        // Leave cover_img untouched so the next request tries again.
         logger.warn(
           { slug, error: (fetchErr as Error).message },
-          'Cover fetch failed after retries',
+          'Cover fetch failed after retries — leaving cover unmarked for retry',
         );
-        await pool.query('UPDATE novels SET cover_img = $1 WHERE id = $2', [
-          'failed',
-          novelId,
-        ]);
         return res
-          .status(HTTP_NOT_FOUND)
-          .json({ error: 'Cover not found on source' });
+          .status(HTTP_SERVICE_UNAVAILABLE)
+          .json({ error: 'Cover temporarily unavailable' });
       }
 
       if (!response.ok) {
-        logger.warn({ slug, status: response.status }, 'Cover fetch failed');
+        // Only condemn the cover when the source says the image isn't there.
+        // A 5xx, 429 or hotlink-blocking 403 arrives for whole batches at once
+        // and says nothing about whether the image exists.
+        if (!isMissingUpstream(response.status)) {
+          logger.warn(
+            { slug, status: response.status },
+            'Cover source unhealthy — leaving cover unmarked for retry',
+          );
+          return res
+            .status(HTTP_SERVICE_UNAVAILABLE)
+            .json({ error: 'Cover temporarily unavailable' });
+        }
+
+        logger.warn(
+          { slug, status: response.status },
+          'Cover missing at source',
+        );
         await pool.query('UPDATE novels SET cover_img = $1 WHERE id = $2', [
           'failed',
           novelId,
