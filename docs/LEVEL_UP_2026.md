@@ -215,4 +215,122 @@ Export-as-image optional — a print stylesheet is the cheap version.
 
 ---
 
+## Absorbed from the two roadmap artifacts
+
+**"ReadSync — 30 SSS Features"** (2026-08-03) — the bulk of these shipped and are ticked off in
+*Recently completed* above. The four still open are tracked as F11–F14.
+
+**"Build Report & What You're Missing"** — audit of the same run. Two gaps it identified:
+
+- [ ] **Bot admin panel** — still legacy-only, never ported to the React SPA
+- [ ] **Raw API explorer** — still legacy-only
+
+And nine ideas it raised that remain open:
+
+- [ ] Per-novel update cadence, rather than a flat hiatus timer
+- [ ] Recommendations drawn from your own shelf, not a stranger's algorithm
+- [ ] "Since you left" digest on login
+- [ ] Per-novel finish ETA
+- [ ] Mirror & duplicate detector
+- [ ] A "reading personality" page
+- [ ] Sync conflicts made visible in History
+- [ ] Installable, one-tap-to-reading
+- [ ] Time-capsule notes
+
+---
+
+## SSS+ — 50 new directions
+
+> None of these appear in the 30 SSS list, the Build Report, or anything above.
+> ★ = my pick. Rationale is the last clause of each line.
+
+### A. Language & text — the biggest untapped surface
+
+You read machine-translated Chinese web novels. Nothing in any previous list touches the *text*.
+
+1. ★ **Glossary builder** — extract characters, sects, techniques per novel from chapter text; MTL renames things constantly and you're holding it all in your head.
+2. ★ **Pronoun-drift detector** — flag chapters where a character's gender flips mid-scene; readers complain about exactly this on your own shelf.
+3. **Translation-quality score** — per-chapter MTL-artifact heuristics (repetition, broken clauses) so you know if a novel changed translator.
+4. ★ **Catch-up summary** — "you left this 3 months ago, here's what happened since" for the long tail of 131 novels.
+5. **Cliffhanger scoring** — rank chapter endings so you can stop at a clean break.
+6. **Reading-difficulty index** — sentence length and vocabulary spread per novel.
+7. **Arc boundary detection** — infer volume/arc breaks from chapter title patterns.
+8. **Character first-appearance index** — jump to where anyone was introduced.
+9. **Term-drift alerts** — a name changes spelling mid-novel, which happens constantly with MTL.
+10. **"Who is this again?"** — hover recall for names, built from the glossary.
+
+### B. Premium-chapter economics
+
+Discovered during the August session: novelarrow gates chapters behind Keys, and nothing models it.
+
+11. ★ **Free vs premium ledger** — which chapters are gated, so `latest_chapter_num` stops conflating the two.
+12. **Keys cost-to-catch-up** — what finishing a novel would actually cost.
+13. **Free-unlock forecaster** — predict when a paid chapter drops free, from historical cadence.
+14. **Wait-or-pay advisor** — combines the two above into one call.
+
+### C. Source resilience & archival
+
+novelbin → novelarrow already happened once. Assume it happens again.
+
+15. ★ **Chapter text archival** — snapshot what you've read; the only defence against a site vanishing.
+16. ★ **Source-migration mapper** — auto-remap slugs when a site rebrands, instead of a manual migration.
+17. **Multi-mirror health monitor** — track which mirrors are alive.
+18. **Dead-link resurrection** — fall back to archive.org.
+19. **Slug-change detector** — catch renames before they read as regressions.
+20. **Content-hash change detection** — spot silently re-translated or edited chapters.
+
+### D. Data integrity — generalising this session's bugs
+
+21. ★ **Progress anomaly detector** — flag impossible jumps; the guard already logs them, nothing surfaces them.
+22. ★ **Snapshot provenance** — record which device and which scrape strategy wrote each value.
+23. **Chapter-count history** — time-travel view of how a novel's count changed and what wrote each change.
+24. **Scrape confidence score** — the detector now weighs several candidates; persist how much they agreed.
+25. **Self-healing reconciliation** — a job that re-derives stored values and reports drift.
+
+### E. Reading ergonomics
+
+26. **Fatigue detection from scroll velocity** — distinct from time tracking; measures *how* you're reading.
+27. **Cold open** — re-render the last few paragraphs you read before resuming.
+28. ★ **Chapter length preview** — words and estimated minutes before you commit to opening it.
+29. **Adaptive autoscroll** — the userscript's Shift+S speed matched to your measured rate.
+30. **Sunset-aware theme** — shift warmth by local time, not a manual toggle.
+
+### F. Library-level intelligence
+
+31. **Shelf overlap map** — cluster your 131 by shared tropes and authors.
+32. **Abandonment predictor** — likelihood *you* drop it, as opposed to the novel going dead.
+33. **Tonight's pick by time budget** — "I have 40 minutes", not a recommendation engine.
+34. ★ **Backlog debt meter** — chapters accumulating vs your actual read rate, across the whole shelf.
+35. **Series and sequel linker** — connect related novels into one lineage.
+
+### G. Infrastructure
+
+36. ★ **Read-model materialisation** — a maintained "latest per device per novel" table; the concrete fix for the `SubPlan 2` problem in the ops list.
+37. **Event-sourced progress** — treat snapshots as an append-only log with derived views.
+38. **Multi-tenant readiness** — the schema is already per-user; the auth layer is single-tenant.
+39. ★ **Scraper canary** — synthetic check that fetches a known novel hourly and alerts on drift; tonight's two detection bugs ran silently for weeks.
+40. ★ **Scraper contract tests against fixture HTML** — `__tests__/fixtures/` already holds saved pages and nothing asserts against them.
+
+### H. Interop & export
+
+41. **OPDS / Calibre feed** — plug into an existing ebook stack.
+42. **EPUB generation** from archived chapters (needs #15).
+43. **iCal release feed** — subscribe to update schedules in a normal calendar.
+44. ★ **Outbound webhooks** — generic automation hooks; you already run Home Assistant.
+45. **ntfy / Matrix notifications** — self-hosted push, no Discord dependency.
+
+### I. Signature
+
+46. **Ambient hardware indicator** — surface "new chapters" on Home Assistant or desk lighting.
+47. ★ **TTS playback with position sync** — listen and keep the same progress model.
+48. **E-ink target** — a stripped, high-contrast route for a reader device.
+49. ★ **Local LLM sidecar** — summaries and glossaries on your own RTX 3050 rather than an API.
+50. **Reading receipt** — print a physical end-of-month slip, purely because it's absurd.
+
+**If you only take five:** #36 (fixes a known bottleneck), #39 and #40 (would have caught this
+session's silent bugs), #15 (existential — the source already migrated once), #1 (the single
+biggest quality-of-life gap for MTL reading).
+
+---
+
 *Not a todo app. A real system with real engineering.*
