@@ -5,7 +5,7 @@
 > database session. `future_ideas.md` is kept only for its long-form specs — status
 > is tracked *here*.
 
-Legend: `[x]` done · `[ ]` open · `[~]` partially done
+Legend: `[x]` done · `[ ]` open, accepted · `[~]` partially done · ~~struck~~ declined (rated N)
 
 ---
 
@@ -200,8 +200,11 @@ Full specs in the section below; these are UI + light-endpoint projects. All new
 ## Deferred feature specs — F11–F14
 
 > Written 2026-08-03. The infrastructure these need already exists.
+> **Decided 2026-08-06:** F11 and F14 rated M (accepted, not yet scoped for a sprint — F14 also
+> gained a data-scope caveat, see below). **F12 and F13 rated N — declined, specs kept below for
+> reference only, not on the build list.**
 
-### F11 — Full stats page (`/app/stats`)
+### F11 — Full stats page (`/app/stats`) — accepted (M)
 
 Chapters per day/week/month, busiest reading hour, per-device split, session-length distribution.
 
@@ -217,7 +220,7 @@ weekday via `EXTRACT(DOW FROM created_at)`. Then `frontend/src/pages/Stats.tsx` 
 design system, keeps the bundle lean). Week/month rollups computed client-side from one
 `days=365` fetch.
 
-### F12 — Per-novel stats (`/app/novel/:id/stats`)
+### ~~F12 — Per-novel stats (`/app/novel/:id/stats`)~~ — declined (N)
 
 Reading pace, total time, sessions, devices used, progress-over-time, read-through history.
 
@@ -230,7 +233,7 @@ For the sparkline add optional `?series=1` returning
 `SELECT DATE(created_at), MAX(chapter_num) … GROUP BY DATE(created_at)` — ~15 lines.
 Pace = (max_chapter − first_chapter) / days between first and last read; ETA = behind ÷ pace.
 
-### F13 — Reading goals
+### ~~F13 — Reading goals~~ — declined (N)
 
 Targets like "1,000 chapters this year" or "30 min/day", with pace bars on the Dashboard.
 
@@ -245,7 +248,7 @@ Targets like "1,000 chapters this year" or "30 min/day", with pace bars on the D
 showing expected-by-today vs actual with an "ahead/behind by N" label. If no goal is set, render
 nothing — no nag UI.
 
-### F14 — Reading Wrapped
+### F14 — Reading Wrapped — accepted (M), scope caveat
 
 Annual recap: total chapters, hours, busiest day, longest streak, top 5 novels, completions.
 
@@ -258,29 +261,53 @@ Wrapped.tsx` with scroll-snap slides, `--font-display` + gold glow. Ship in Dece
 "your Wrapped is ready" row can reuse the notifications table (`type: 'wrapped'`).
 Export-as-image optional — a print stylesheet is the cheap version.
 
+**Data-scope caveat, verified 2026-08-06 against production:** the DB was wiped for space in
+late 2025, keeping only each novel's most-recent snapshot. Confirmed in `progress_snapshots` row
+counts by month: 5 / 24 / 28 / 55 for Aug–Nov 2025, then 307 in December, then 32,955 in January
+2026. A full calendar-year Wrapped would show almost nothing before December. Scope the first one
+to a recent window (last 3–6 months) rather than the full year, or wait for a real first January.
+
 ---
 
-## Absorbed from the two roadmap artifacts
+## Absorbed from the three roadmap artifacts
 
 **"ReadSync — 30 SSS Features"** (2026-08-03) — the bulk of these shipped and are ticked off in
-*Recently completed* above. The four still open are tracked as F11–F14.
+*Recently completed* above. The four still open are tracked as F11–F14 above (two declined, two
+accepted — see the caveats there).
 
-**"Build Report & What You're Missing"** — audit of the same run. Two gaps it identified:
+**"Build Report & What You're Missing"** — audit of the same run. Two gaps it identified,
+never rated, still genuinely open:
 
 - [ ] **Bot admin panel** — still legacy-only, never ported to the React SPA
 - [ ] **Raw API explorer** — still legacy-only
 
-And nine ideas it raised that remain open:
+**"ReadSync — Field Audit & Roadmap"** (2026-08-06) — its 30 proposals are numbered 51–80 in
+the SSS++ section below; decisions are marked inline there.
 
-- [ ] Per-novel update cadence, rather than a flat hiatus timer
-- [ ] Recommendations drawn from your own shelf, not a stranger's algorithm
-- [ ] "Since you left" digest on login
-- [ ] Per-novel finish ETA
-- [ ] Mirror & duplicate detector
-- [ ] A "reading personality" page
-- [ ] Sync conflicts made visible in History
-- [ ] Installable, one-tap-to-reading
-- [ ] Time-capsule notes
+**Consolidation, 2026-08-06:** all three artifacts plus the Field Audit were merged into one
+working doc (`docs/PROPOSAL_GATEWAY_2026-08-06.md`, committed for the decision trail) and run
+through two rounds of Y/N/M. Full write-up, with every description checked against the actual
+codebase, in the final artifact:
+**[ReadSync, narrowed](https://claude.ai/code/artifact/43b105b2-3561-48eb-aa91-7a30b76d1316)**.
+
+The build report's nine ideas, decided:
+
+- [ ] **Per-novel update cadence, rather than a flat hiatus timer** — ~~declined (N)~~
+- [ ] **Recommendations drawn from your own shelf** — ~~declined (N)~~
+- [ ] **"Since you left" digest on login** — ~~declined (N)~~
+- [ ] **Per-novel finish ETA** — ~~declined (N)~~
+- [ ] **Mirror & duplicate detector** — **parked, not declined** — revisit once the library's
+      grown enough for duplicate-novel forks (from a site re-scrape, as already happened once
+      with the novelbin → novelarrow migration) to actually matter
+- [ ] **A "reading personality" page** — **accepted (Y)**, paired with F14 Wrapped above — build
+      it from `progress_snapshots` (real history since January), not `reading_sessions` (only 11
+      rows total, all from the past 3 days, not a real history table yet)
+- [ ] **Sync conflicts made visible in History** — **accepted (Y), conditional** — only ships
+      with a manual resolve action on the History row (pick which device's position is correct),
+      not as a read-only log entry
+- [ ] **Installable, one-tap-to-reading** — ~~declined (N)~~
+- [x] ~~Time-capsule notes~~ — dropped as a duplicate of spoiler-gated notes (below, also
+      declined)
 
 ---
 
@@ -386,95 +413,104 @@ biggest quality-of-life gap for MTL reading).
 > (Kavita, StoryGraph, Hardcover, Mihon, KOReader/KOSync, NovelUpdates — the 6 surveyed), not a
 > generic "wouldn't it be nice." ★ = my pick.
 
+> **Decided 2026-08-06:** rated Y/N/M against the actual codebase — full reasoning in the
+> [final artifact](https://claude.ai/code/artifact/43b105b2-3561-48eb-aa91-7a30b76d1316). Legend
+> below: ✅ accepted (Y) · 🟡 accepted, unscoped (M) · ❌ declined (N) · ⏳ explained, not yet rated.
+
 ### J. Interop & portability
 
-51. **Spoiler-tagged notes** — blur until clicked, chapter-scoped so re-reading past that point
-    auto-reveals it. *(Hardcover, StoryGraph)*
-52. ★ **NovelUpdates reading-list bridge** — two-way sync so the two lists stop drifting apart.
+51. ❌ ~~**Spoiler-tagged notes**~~ — blur until clicked, chapter-scoped so re-reading past that
+    point auto-reveals it. *(Hardcover, StoryGraph)*
+52. ★🟡 **NovelUpdates reading-list bridge** — two-way sync so the two lists stop drifting apart.
     *(NovelUpdates)*
-53. **AniList / MAL custom-list mirror** — auto-set status/progress there for novels with an
-    official entry. *(Mihon)*
-54. **Goodreads / StoryGraph import bridge** — one-time import so ReadSync becomes the single
-    reading ledger, not just the web-novel one. *(Bookwyrm, Hardcover)*
-55. ★ **KOSync-protocol-compatible endpoint** — implement the actual KOReader sync-server API so
-    archived EPUBs and web-novel progress share one account. *(KOReader/KOSync)*
+53. ❌ ~~**AniList / MAL custom-list mirror**~~ — auto-set status/progress there for novels with
+    an official entry. *(Mihon)*
+54. ❌ ~~**Goodreads / StoryGraph import bridge**~~ — one-time import so ReadSync becomes the
+    single reading ledger, not just the web-novel one. *(Bookwyrm, Hardcover)*
+55. ★❌ ~~**KOSync-protocol-compatible endpoint**~~ — implement the actual KOReader sync-server
+    API so archived EPUBs and web-novel progress share one account. *(KOReader/KOSync)*
 
 ### K. Social, lightly
 
-56. **Public read-only shelf page** — opt-in shareable link, no login required to view.
+56. ❌ ~~**Public read-only shelf page**~~ — opt-in shareable link, no login required to view.
     *(Hardcover, Bookwyrm)*
-57. **Buddy-read mode** — two users track the same novel with a shared side-by-side view, opted
-    in per novel. *(Bookwyrm)*
-58. **Household activity digest** — weekly "who read what" for a multi-user deploy. *(Bookwyrm
-    groups)*
-59. **Author / translator-group following** — follow the person, not just the title. *(Hardcover
-    lists)*
-60. **Community translation-quality signal** — one honest aggregated number, not a review feed.
-    *(StoryGraph aggregate stats)*
+57. ❌ ~~**Buddy-read mode**~~ — two users track the same novel with a shared side-by-side view,
+    opted in per novel. *(Bookwyrm)*
+58. ❌ ~~**Household activity digest**~~ — weekly "who read what" for a multi-user deploy.
+    *(Bookwyrm groups)*
+59. ❌ ~~**Author / translator-group following**~~ — follow the person, not just the title.
+    *(Hardcover lists)*
+60. ❌ ~~**Community translation-quality signal**~~ — one honest aggregated number, not a review
+    feed. *(StoryGraph aggregate stats)*
 
 ### L. Mood, pace & reading identity
 
-61. ★ **Mood & pace tagging** — slow-burn/fast-paced, dark/light, filterable in Explorer.
+61. ★❌ ~~**Mood & pace tagging**~~ — slow-burn/fast-paced, dark/light, filterable in Explorer.
     *(StoryGraph)*
-62. **DNF reason capture** — one-tap reason on drop, then a personal "why you drop novels"
-    insight card. *(StoryGraph)*
-63. **Time-boxed reading sprints** — opt-in 7-day challenges with a completion badge, distinct
-    from F13's standing goal bar. *(StoryGraph)*
-64. **Genre/mood variety challenges** — a nudge toward variety, not just volume. *(StoryGraph)*
-65. **Pace-aware catch-up countdown** — "will I ever catch up to live?", combining release
-    cadence with your own pace. *(NovelUpdates)*
+62. ❌ ~~**DNF reason capture**~~ — one-tap reason on drop, then a personal "why you drop
+    novels" insight card. *(StoryGraph)*
+63. 🟡 **Time-boxed reading sprints** — opt-in 7-day challenges with a completion badge, distinct
+    from F13's standing goal bar (F13 itself declined above). *(StoryGraph)*
+64. ❌ ~~**Genre/mood variety challenges**~~ — a nudge toward variety, not just volume.
+    *(StoryGraph)*
+65. ❌ ~~**Pace-aware catch-up countdown**~~ — "will I ever catch up to live?", combining
+    release cadence with your own pace. *(NovelUpdates)*
 
 ### M. Rating, depth & intent
 
-66. **Half-star rating scale** — widen to 0.5 increments. *(Hardcover)*
-67. **"Would re-read?" intent flag** — captured at completion, separate from the numeric rating.
-    *(StoryGraph)*
-68. **Volume/arc-aware chapter list** — the UI layer for arc-boundary detection (#A7) once that
-    data exists. *(Kavita)*
-69. **Shared-universe family tree** — the visual graph layer on top of simple sequel linking
-    (#F35). *(Kavita)*
-70. **Voice-command chapter navigation** — Web Speech API in the userscript overlay; the inverse
-    of TTS (#47), commanding rather than being read to.
+66. ✅ **Half-star rating scale** — superseded by a firmer decision: a star-click control on the
+    novel page (not MyList, not a dropdown — there was no rating UI anywhere in the app before
+    this). Tracked as one item in the [final artifact](https://claude.ai/code/artifact/43b105b2-3561-48eb-aa91-7a30b76d1316),
+    not duplicated here. *(Hardcover)*
+67. ❌ ~~**"Would re-read?" intent flag**~~ — captured at completion, separate from the numeric
+    rating. *(StoryGraph)*
+68. ❌ ~~**Volume/arc-aware chapter list**~~ — the UI layer for arc-boundary detection (#A7) once
+    that data exists. *(Kavita)*
+69. ❌ ~~**Shared-universe family tree**~~ — the visual graph layer on top of simple sequel
+    linking (#F35). *(Kavita)*
+70. ❌ ~~**Voice-command chapter navigation**~~ — Web Speech API in the userscript overlay; the
+    inverse of TTS (#47), commanding rather than being read to.
 
 ### N. Trust, made visible
 
-71. ★ **Weekly data-health digest** — auto-corrections, cooldown'd mirrors, and rejected
+71. ★✅ **Weekly data-health digest** — auto-corrections, cooldown'd mirrors, and rejected
     regressions from the past week, surfaced proactively instead of sitting in logs.
-72. **Per-novel freshness badge** — a small "last verified" chip on the novel card. *(Kavita
-    "last scanned")*
-73. ★ **Admin scraper-health dashboard** — surface the scraper canary (#39) and contract tests
-    (#40) in the Admin page itself, so a silent detection failure is an alert, not a support
-    ticket six weeks later.
-74. ★ **QR-code device pairing** — scan a code from Settings to configure a new device instead
-    of copying the raw API key by hand. The actual fix for the plaintext-key finding in the
-    field audit.
-75. **"Continue on {device}" resume toast** — first chapter opened each session names which
-    device you left off on and the exact position. *(KOReader/KOSync)*
+72. ⏳ **Per-novel freshness badge** — explained, not yet rated: a small "last verified" chip on
+    the novel card, the UI-facing counterpart to #73's admin dashboard. *(Kavita "last scanned")*
+73. ★❌ ~~**Admin scraper-health dashboard**~~ — surface the scraper canary (#39) and contract
+    tests (#40) in the Admin page itself, so a silent detection failure is an alert, not a
+    support ticket six weeks later.
+74. ★❌ ~~**QR-code device pairing**~~ — scan a code from Settings to configure a new device
+    instead of copying the raw API key by hand. The actual fix for the plaintext-key finding in
+    the field audit — still open as a bug, just not via this proposal.
+75. ❌ ~~**"Continue on {device}" resume toast**~~ — first chapter opened each session names
+    which device you left off on and the exact position. *(KOReader/KOSync)*
 
 ### O. Infra & access
 
-76. **One-command Docker self-host bundle** — app + Postgres + storage in one Compose file,
-    closing the gap between Render+Supabase coupling and how genre-peers already ship.
+76. ❌ ~~**One-command Docker self-host bundle**~~ — app + Postgres + storage in one Compose
+    file, closing the gap between Render+Supabase coupling and how genre-peers already ship.
     *(KOReader/KOSync, Mihon's SyncYomi)*
-77. **Discord bot with slash commands** — `/readsync status`, `/readsync next <novel>`, not just
-    a webhook ping (#44). *(Hardcover)*
-78. **Accessible reader overlay** — dyslexia-friendly font/spacing toggle plus ARIA live-region
-    sync announcements, injected on the source page itself.
-79. **Second-screen companion view** — a live ambient display, not a reading surface: a "now
+77. ❌ ~~**Discord bot with slash commands**~~ — `/readsync status`, `/readsync next <novel>`,
+    not just a webhook ping (#44). *(Hardcover)*
+78. 🟡 **Accessible reader overlay** — dyslexia-friendly font/spacing toggle plus ARIA
+    live-region sync announcements, injected on the source page itself.
+79. ✅ **Second-screen companion view** — a live ambient display, not a reading surface: a "now
     reading" state (cover, title, chapter, percent, session stats) when a progress sync is
     active, falling back to a "now scanning" state (from `getBotStatus()`) when idle. No direct
     analog in any reading tracker surveyed — closest patterns are Spotify's Now Playing view and
     Google Nest Hub's Ambient Mode, borrowed into an underserved niche. *(In design — full spec
     and open decisions in the TODO section right after this list. Pick up there, not from
-    scratch.)*
-80. **Bulk "resume all" launcher** — one click opens every "reading" novel at its next-chapter
-    URL in background tabs, reusing Refresh All's tab orchestration for reading instead of
-    scraping.
+    scratch. Accepted status doesn't mean started — this TODO section is a design doc, not a
+    build log; it still counts as a live proposal.)*
+80. ❌ ~~**Bulk "resume all" launcher**~~ — one click opens every "reading" novel at its
+    next-chapter URL in background tabs, reusing Refresh All's tab orchestration for reading
+    instead of scraping.
 
-**If you only take five:** #52 (closes the split-brain with the one other list you're already
-on), #55 (small, well-documented protocol, unifies two reading contexts), #61 (StoryGraph's
-signature axis, absent here entirely), #74 (fixes a real finding from the field audit), #79
-(genuinely nothing else like it in the space).
+**Final decided list, all sources merged:** 12 items survived — #52, #63, #66(via Ratings),
+#71, #78, #79 from this list, plus 6 more from the build-report ideas and F11/F14 above. Full
+detail, checked against the actual codebase, in the
+[final artifact](https://claude.ai/code/artifact/43b105b2-3561-48eb-aa91-7a30b76d1316).
 
 ---
 
