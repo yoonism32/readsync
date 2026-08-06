@@ -423,7 +423,9 @@ const cardBase: React.CSSProperties = {
   borderRadius: 'var(--radius-lg)',
   display: 'block',
   textDecoration: 'none',
-  transition: 'border-color 0.15s',
+  // No inline `transition`: it outranks the .card-lift / .row-interactive
+  // classes that own these transitions, so the token easing was being
+  // discarded and `translate` never made it into the transition list.
 };
 
 function GridCard({ novel, index }: { novel: Novel; index: number }) {

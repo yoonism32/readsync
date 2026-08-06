@@ -308,12 +308,17 @@ p { margin: 0; }
    enough to read as intent and short enough not to feel broken. Leaving is
    undelayed — the card drops the moment you go, so the grid settles fast. */
 .card-lift {
-  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+  transition: translate 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
   transition-delay: 0ms;
 }
 .card-lift:hover,
 .card-lift:focus-visible {
-  transform: translateY(-4px);
+  /* `translate`, not `transform`. These cards also carry .animate-fade-in,
+     whose `both` fill-mode makes its final keyframe (transform: translateY(0))
+     persist forever — and an animation outranks a normal declaration, so a
+     transform here was silently overridden and the card never moved.
+     `translate` is an independent longhand the animation doesn't touch. */
+  translate: 0 -4px;
   transition-delay: 200ms;
 }
 
