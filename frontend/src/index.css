@@ -302,34 +302,42 @@ p { margin: 0; }
   border-color: var(--color-accent);
 }
 
-/* A card that rises under a settled cursor.
-   The delay is the whole point: a pointer crossing the grid on its way
-   somewhere else shouldn't set off a wave of lifting tiles. 200ms is long
-   enough to read as intent and short enough not to feel broken. Leaving is
-   undelayed — the card drops the moment you go, so the grid settles fast. */
-.card-lift {
-  transition: scale 220ms var(--ease-out-expo), background-color 220ms var(--ease-out-expo),
-    border-color 220ms var(--ease-out-expo);
-  transition-delay: 0ms;
-  transform-origin: center center;
-  /* z-index below needs a positioned element, or the scaled card is
-     overlapped by its later-painted neighbours. */
+/* The artwork floats; the metadata stays anchored — the Plex/Steam pattern.
+   Scaling the whole card dragged the chapter count and title along with it,
+   which made every row feel unstable. Hover is still triggered by the card,
+   so the target stays generous, but only the cover moves.
+
+   `scale` over `transform` is deliberate: these cards carry .animate-fade-in,
+   whose `both` fill-mode parks its final keyframe (transform: translateY(0))
+   permanently, and an animation outranks a normal declaration — a transform
+   here is silently overridden and nothing moves at all.
+
+   `scale` never affects layout, so the cover cannot push the text down. It
+   grows from its centre and paints over it, which is what the raised z-index
+   below is for. */
+.cover-lift {
   position: relative;
 }
-.card-lift:hover,
-.card-lift:focus-visible {
-  /* Depth, not a hop: the card comes toward the reader rather than sliding
-     up the page. On a flat screen that IS scale — a translateZ with per-card
-     perspective resolves to the same thing, and would have to go through
-     `transform`, which .animate-fade-in's `both` fill-mode already owns and
-     would silently override. `scale` is an independent longhand, so it wins
-     cleanly. Elevation is reinforced by a lighter surface rather than a
-     shadow, because a halo on a dark background reads as glow, not height. */
+.cover-lift:hover,
+.cover-lift:focus-visible {
+  /* Raise the whole card in the stack, or the grown cover is clipped by
+     neighbours painted after it. */
+  z-index: 1;
+}
+
+.cover-lift-art {
+  transition: scale 220ms var(--ease-out-expo), border-color 220ms var(--ease-out-expo);
+  transition-delay: 0ms;
+  transform-origin: center center;
+}
+.cover-lift:hover .cover-lift-art,
+.cover-lift:focus-visible .cover-lift-art {
+  /* The delay is the point: a pointer crossing the grid on its way somewhere
+     else shouldn't set off a wave of covers. Leaving is undelayed, so the
+     grid settles the instant you go. */
   scale: 1.06;
-  background-color: var(--color-bg-hover);
   border-color: var(--color-border-accent);
   transition-delay: 200ms;
-  z-index: 1;
 }
 
 /* Muted → full text. For chrome controls that start legible, not faint. */

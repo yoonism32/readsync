@@ -61,11 +61,11 @@ export function Explorer() {
     const q = query.trim().toLowerCase();
     const searched = q
       ? novels.filter(
-          n =>
-            n.title.toLowerCase().includes(q) ||
-            (n.author ?? '').toLowerCase().includes(q) ||
-            (n.genre ?? '').toLowerCase().includes(q),
-        )
+        n =>
+          n.title.toLowerCase().includes(q) ||
+          (n.author ?? '').toLowerCase().includes(q) ||
+          (n.genre ?? '').toLowerCase().includes(q),
+      )
       : novels;
 
     return sortNovels(applyExplorerFilters(searched, filters), sortId);
@@ -423,7 +423,7 @@ const cardBase: React.CSSProperties = {
   borderRadius: 'var(--radius-lg)',
   display: 'block',
   textDecoration: 'none',
-  // No inline `transition`: it outranks the .card-lift / .row-interactive
+  // No inline `transition`: it outranks the .cover-lift / .row-interactive
   // classes that own these transitions, so the token easing was being
   // discarded and `translate` never made it into the transition list.
 };
@@ -432,10 +432,13 @@ function GridCard({ novel, index }: { novel: Novel; index: number }) {
   return (
     <Link
       to={`/novel/${encodeURIComponent(novel.novel_id)}`}
-      className="animate-fade-in card-lift"
+      className="animate-fade-in cover-lift"
       style={{ ...cardBase, animationDelay: `${Math.min(index * 18, 200)}ms` }}
     >
-      <div style={{ width: '100%', aspectRatio: '5 / 7', borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)', marginBottom: 8 }}>
+      <div
+        className="cover-lift-art"
+        style={{ width: '100%', aspectRatio: '5 / 7', borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)', marginBottom: 8 }}
+      >
         <img
           src={coverUrl(novel.novel_id)}
           alt=""
