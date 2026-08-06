@@ -151,7 +151,9 @@ export function Settings() {
         <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>
           Used by the browser extension to sync your reading progress.
         </p>
-        <form onSubmit={(e) => { void handleSaveKey(e); }} style={{ display: 'flex', gap: 8 }}>
+        {/* Wraps because the input has a floor and the button can't shrink —
+            below ~360px the two together overran the viewport. */}
+        <form onSubmit={(e) => { void handleSaveKey(e); }} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <input
             type="text"
             name="api-key"
@@ -162,7 +164,7 @@ export function Settings() {
             placeholder="Paste your API key…"
             className="input"
             style={{
-              flex: 1,
+              flex: '1 1 180px',
               background: 'var(--color-bg-input)',
               border: '1px solid var(--color-border)',
               borderRadius: 'var(--radius-md)',

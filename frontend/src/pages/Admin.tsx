@@ -60,7 +60,7 @@ export function Admin() {
             ].map(({ label, value }) => (
               <div key={label} style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--color-border)' }}>
                 <div className="text-muted" style={{ fontSize: 'var(--text-xs)', marginBottom: 4 }}>{label}</div>
-                <div style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{value}</div>
+                <div className="tabular" style={{ fontWeight: 600 }}>{value}</div>
               </div>
             ))}
           </div>

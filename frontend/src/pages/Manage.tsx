@@ -90,17 +90,22 @@ export function Manage() {
                 padding: '12px 16px',
                 display: 'flex',
                 alignItems: 'center',
+                // The controls can't shrink below their content, so at 320px
+                // they pushed past the viewport. Let them drop to a second row.
+                flexWrap: 'wrap',
                 gap: 12,
                 opacity: busy === n.novel_id ? 0.6 : 1,
                 transition: 'opacity 0.15s',
               }}
             >
-              <div style={{ flex: 1, minWidth: 0 }}>
+              {/* A 0% basis let this collapse to nothing rather than pushing
+                  the controls onto their own row — the title read as "I…". */}
+              <div style={{ flex: '1 1 160px', minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 'var(--text-sm)', marginBottom: 4 }} className="line-clamp-1">
                   {n.title}
                 </div>
                 {n.author && (
-                  <div className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{n.author}</div>
+                  <div className="text-muted line-clamp-1" style={{ fontSize: 'var(--text-xs)' }}>{n.author}</div>
                 )}
               </div>
 

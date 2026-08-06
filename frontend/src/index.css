@@ -178,6 +178,17 @@ p { margin: 0; }
 
 @utility font-display { font-family: var(--font-display); }
 
+/* Tailwind v4 only generates the utilities declared here — `line-clamp-1` was
+   used in Manage but never defined, so it was a no-op class. A CJK title in a
+   squeezed flex column then wrapped one character per line, because CJK breaks
+   anywhere and nothing was clamping it. */
+@utility line-clamp-1 {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 @utility line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
