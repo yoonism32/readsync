@@ -50,13 +50,15 @@ function MinorStat({ label, value, sub }: { label: string; value: string | numbe
   return (
     <div>
       <dt className="text-muted" style={{ fontSize: 'var(--text-xs)', marginBottom: 2 }}>{label}</dt>
+      {/* `sub` lives inside the <dd>: a <div> wrapper inside a <dl> may only
+          hold a dt/dd group, so a third sibling made the list invalid. */}
       <dd
         className="tabular"
         style={{ margin: 0, fontSize: 'var(--text-lg)', fontWeight: 600, lineHeight: 1.2 }}
       >
         {value}
+        {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', fontWeight: 400, marginTop: 1 }}>{sub}</div>}
       </dd>
-      {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }

@@ -430,7 +430,7 @@ function GridCard({ novel, index }: { novel: Novel; index: number }) {
   return (
     <Link
       to={`/novel/${encodeURIComponent(novel.novel_id)}`}
-      className="animate-fade-in"
+      className="animate-fade-in card-lift"
       style={{ ...cardBase, animationDelay: `${Math.min(index * 18, 200)}ms` }}
     >
       <div style={{ width: '100%', aspectRatio: '5 / 7', borderRadius: 8, overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)', marginBottom: 8 }}>

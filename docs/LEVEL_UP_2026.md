@@ -333,4 +333,34 @@ biggest quality-of-life gap for MTL reading).
 
 ---
 
+## Explorer grid — hover overlay, three candidates
+
+Shipped for now: a delayed card lift (`.card-lift`, 200ms hover intent, `translateY(-4px)`).
+Deliberately minimal. Any of these three can replace it later — they were considered
+together, so the notes are kept together.
+
+**A · Quick-action overlay.** Hover dims the cover and reveals per-novel actions:
+Continue Reading, a status dropdown, a favourite toggle — My List's controls without
+leaving Explorer. The most useful of the three: Explorer is where all 131 titles are
+browsed, so setting status or resuming without a round-trip to the novel page is the
+real saving. **Cost:** the card is currently one `<Link>` wrapping everything, and
+buttons cannot nest inside a link — it has to be restructured so the cover is the link
+and the actions are siblings. That refactor is correct regardless of this feature.
+
+**B · Info peek overlay.** Hover reveals read-only detail over the cover: progress bar,
+chapters behind, last-read date, status badge. No buttons, so the card stays a single
+clean link and no restructuring is needed. Makes the grid far more scannable, but you
+still click through to *do* anything.
+
+**C · Multi-select for bulk actions.** Hover shows a checkbox; ticking several covers
+raises a bar to set status, favourite, or remove in one go. Genuinely powerful at 131
+novels — but the largest build of the three, and it overlaps the Manage page's remit.
+Worth it only if bulk editing becomes a real need.
+
+**If picking one:** A. It's the only one that reduces clicks on the page where the most
+browsing happens, and it forces the card restructure that B and C would each want later
+anyway.
+
+---
+
 *Not a todo app. A real system with real engineering.*

@@ -111,6 +111,7 @@ export function Manage() {
 
               {/* Status selector */}
               <select
+                aria-label={`Reading status for ${n.title}`}
                 value={n.status ?? ''}
                 disabled={busy === n.novel_id}
                 onChange={e => { void handleStatusChange(n.novel_id, e.target.value); }}

@@ -14,7 +14,11 @@
 
   /* Primary accent — refined crimson */
   --color-accent-dim:    #6e2b31;
-  --color-accent:        #c94f57;
+  /* #c94f57 sat at the luminance where neither black nor white text clears
+     4.5:1 — it measured 4.42 against the near-black ink and 4.43 against
+     white, so no foreground choice could fix it. Three percent lighter takes
+     .btn-accent to 4.92:1 and lifts every accent-on-dark use with it. */
+  --color-accent:        #cd5b62;
   --color-accent-bright: #e0707a;
   --color-accent-glow:   rgba(201,79,87,0.16);
   --color-accent-border: rgba(201,79,87,0.24);
@@ -296,6 +300,21 @@ p { margin: 0; }
 }
 .input:focus {
   border-color: var(--color-accent);
+}
+
+/* A card that rises under a settled cursor.
+   The delay is the whole point: a pointer crossing the grid on its way
+   somewhere else shouldn't set off a wave of lifting tiles. 200ms is long
+   enough to read as intent and short enough not to feel broken. Leaving is
+   undelayed — the card drops the moment you go, so the grid settles fast. */
+.card-lift {
+  transition: transform 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+  transition-delay: 0ms;
+}
+.card-lift:hover,
+.card-lift:focus-visible {
+  transform: translateY(-4px);
+  transition-delay: 200ms;
 }
 
 /* Muted → full text. For chrome controls that start legible, not faint. */

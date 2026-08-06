@@ -68,8 +68,20 @@ export function ActivityHeatmap() {
           {totalChapters} chapters this year
         </span>
         <span style={{ flex: 1 }} />
-        <span className="tabular" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-teal)', fontWeight: 700 }}>
-          <FlameIcon size={12} style={{ verticalAlign: '-1px' }} /> {streaks.current} day streak
+        {/* flex, not a verticalAlign nudge: the bare SVG sat on the text
+            baseline and rode above the label at every font size. */}
+        <span
+          className="tabular"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            fontSize: 'var(--text-xs)',
+            color: 'var(--color-teal)',
+            fontWeight: 700,
+          }}
+        >
+          <FlameIcon size={12} /> {streaks.current} day streak
         </span>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>
           best {streaks.longest}
