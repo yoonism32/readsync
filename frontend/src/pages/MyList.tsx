@@ -236,7 +236,18 @@ export function MyList() {
         <span className="text-muted" style={{ fontSize: 'var(--text-xs)', textAlign: 'right' }}>
           Last: {lastRefreshLabel(refresh.lastRefresh)}
           {refresh.needsRefresh ? (
-            <span style={{ display: 'block', color: 'var(--color-warning)', fontWeight: 600 }}>
+            <span
+              style={{
+                // inline-flex, not block: the bare SVG sat on the text baseline
+                // and floated above the label instead of beside it.
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 4,
+                color: 'var(--color-warning)',
+                fontWeight: 600,
+              }}
+            >
               <BellIcon size={11} /> Time to refresh
             </span>
           ) : refresh.minutesUntilDue != null ? (
@@ -454,7 +465,10 @@ function Row({ novel: n, onSetStatus, onToggleFav }: {
       </td>
 
       {/* Title */}
-      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 380 }}>
+      {/* 560, not 380: at the old cap a long title wrapped to two lines and
+          pushed the star + delta onto a third. The intended shape is one line
+          of title/star/delta with the "Last ch." pill beneath it. */}
+      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 560 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}

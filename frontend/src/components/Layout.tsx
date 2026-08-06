@@ -93,7 +93,7 @@ export function Layout({ children }: Props) {
       >
         <div
           style={{
-            maxWidth: 1280,
+            maxWidth: 1440,
             margin: '0 auto',
             padding: '0 28px',
             height: 64,
@@ -190,7 +190,7 @@ export function Layout({ children }: Props) {
         id="main-content"
         style={{
           flex: 1,
-          maxWidth: 1280,
+          maxWidth: 1440,
           width: '100%',
           margin: '0 auto',
           padding: '28px 28px 56px',
