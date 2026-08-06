@@ -63,6 +63,51 @@ Legend: `[x]` done · `[ ]` open · `[~]` partially done
 
 ---
 
+## Recently completed — 2026-08-06 session
+
+### Userscript-assisted cover mirroring
+- [x] **`GM_xmlhttpRequest` cover upload** — images.novelarrow.com blocks Render's datacenter
+      egress (403) and sends no CORS headers, so the server has no route to cover bytes at all.
+      The userscript (v5.6.0, `@grant GM_xmlhttpRequest`) now fetches the cover from the reader's
+      own connection and POSTs it to a new `POST /api/v1/covers/:novelId/upload`, which sniffs the
+      actual JPEG magic bytes rather than trusting the claimed content-type before writing into
+      the public bucket. `commitMirroredCover()`/`normalizeSlug()` extracted so the GET mirror
+      route and the new upload route share one code path instead of duplicating it.
+
+### Bugs — chapter-count inflation and its blast radius
+- [x] **Header chapter count beating a titled meta chapter** — NovelArrow's "`<N>` Chapters"
+      header is a document *count*, not a chapter *number* (bonus/side entries like "897_2"
+      inflate it past the true latest). Three novels in production had `latest_chapter_num`
+      permanently 1–14 higher than any real chapter, each provably wrong because the *title*
+      still named the correct lower chapter. Fixed in `ChapterDetector.ts`: a titled meta/
+      `.l-chapter` number now always outranks the bare header count.
+- [x] **The same regression-lock bug existed unpatched in the far more common write path** —
+      tonight's first fix only wired self-healing into `admin.ts`'s novel-page auto-update, but
+      `progress.ts`'s per-chapter sync (which fires on nearly every page read) wrote
+      `latest_chapter_num` through a bare `GREATEST()` with no correction path at all. Extracted
+      the guard into `src/services/ChapterCorrection.ts` (`isChapterRegression`,
+      `isConfirmedChapterCorrection`, `recordCorrectionAttempt` — a single scrape reporting fewer
+      chapters is rejected, the *same* lower number reported twice is trusted) and wired it into
+      **both** writers, since they share one column and one pending-correction map.
+- [x] **Auto-reread false-positive on a second device** — reread detection compared a novel-wide
+      max chapter against the syncing device's current chapter. Opening a novel for the first time
+      on a new device at an early chapter could read as "500 chapters behind" and fabricate a
+      completed read-through with a false completion date. Fixed by scoping the max-chapter query
+      to the requesting device (`isAutoReread()`, `progress.ts`) — a genuine reread almost always
+      happens on the same device that was previously caught up.
+- [x] **Backups and exports could understate progress** — `ExportService.ts` picked the
+      *most-recently-written* snapshot per novel instead of the furthest-progressed one, so a
+      brief out-of-order glance at an earlier chapter on a second device would report that lower
+      chapter in the daily backup and any manual export. Reordered to match the app's established
+      `chapter_num DESC, percent DESC, created_at DESC` convention (`NovelService.ts`'s
+      `getLatestStates`, the My List query). Same bug, same fix, recurred in `novels.ts`'s
+      manual "mark as completed" synthetic snapshot — merged into one correctly-ordered query.
+
+Full writeup, a 6-competitor market cross-reference, and 30 new market-informed feature
+proposals: see the *ReadSync — Field Audit & Roadmap* artifact (2026-08-06).
+
+---
+
 ## Open — Ops & infrastructure
 
 Carried out of the August session. Roughly ordered by value.
@@ -330,6 +375,161 @@ novelbin → novelarrow already happened once. Assume it happens again.
 **If you only take five:** #36 (fixes a known bottleneck), #39 and #40 (would have caught this
 session's silent bugs), #15 (existential — the source already migrated once), #1 (the single
 biggest quality-of-life gap for MTL reading).
+
+---
+
+## SSS++ — 30 more, cross-referenced against the market
+
+> Written 2026-08-06, from the *ReadSync — Field Audit & Roadmap* artifact. Checked against
+> the 30 SSS list, the 50 SSS+ directions above, and everything else in this file, so nothing
+> here restates a build already planned. Every entry is grounded in a specific competitor gap
+> (Kavita, StoryGraph, Hardcover, Mihon, KOReader/KOSync, NovelUpdates — the 6 surveyed), not a
+> generic "wouldn't it be nice." ★ = my pick.
+
+### J. Interop & portability
+
+51. **Spoiler-tagged notes** — blur until clicked, chapter-scoped so re-reading past that point
+    auto-reveals it. *(Hardcover, StoryGraph)*
+52. ★ **NovelUpdates reading-list bridge** — two-way sync so the two lists stop drifting apart.
+    *(NovelUpdates)*
+53. **AniList / MAL custom-list mirror** — auto-set status/progress there for novels with an
+    official entry. *(Mihon)*
+54. **Goodreads / StoryGraph import bridge** — one-time import so ReadSync becomes the single
+    reading ledger, not just the web-novel one. *(Bookwyrm, Hardcover)*
+55. ★ **KOSync-protocol-compatible endpoint** — implement the actual KOReader sync-server API so
+    archived EPUBs and web-novel progress share one account. *(KOReader/KOSync)*
+
+### K. Social, lightly
+
+56. **Public read-only shelf page** — opt-in shareable link, no login required to view.
+    *(Hardcover, Bookwyrm)*
+57. **Buddy-read mode** — two users track the same novel with a shared side-by-side view, opted
+    in per novel. *(Bookwyrm)*
+58. **Household activity digest** — weekly "who read what" for a multi-user deploy. *(Bookwyrm
+    groups)*
+59. **Author / translator-group following** — follow the person, not just the title. *(Hardcover
+    lists)*
+60. **Community translation-quality signal** — one honest aggregated number, not a review feed.
+    *(StoryGraph aggregate stats)*
+
+### L. Mood, pace & reading identity
+
+61. ★ **Mood & pace tagging** — slow-burn/fast-paced, dark/light, filterable in Explorer.
+    *(StoryGraph)*
+62. **DNF reason capture** — one-tap reason on drop, then a personal "why you drop novels"
+    insight card. *(StoryGraph)*
+63. **Time-boxed reading sprints** — opt-in 7-day challenges with a completion badge, distinct
+    from F13's standing goal bar. *(StoryGraph)*
+64. **Genre/mood variety challenges** — a nudge toward variety, not just volume. *(StoryGraph)*
+65. **Pace-aware catch-up countdown** — "will I ever catch up to live?", combining release
+    cadence with your own pace. *(NovelUpdates)*
+
+### M. Rating, depth & intent
+
+66. **Half-star rating scale** — widen to 0.5 increments. *(Hardcover)*
+67. **"Would re-read?" intent flag** — captured at completion, separate from the numeric rating.
+    *(StoryGraph)*
+68. **Volume/arc-aware chapter list** — the UI layer for arc-boundary detection (#A7) once that
+    data exists. *(Kavita)*
+69. **Shared-universe family tree** — the visual graph layer on top of simple sequel linking
+    (#F35). *(Kavita)*
+70. **Voice-command chapter navigation** — Web Speech API in the userscript overlay; the inverse
+    of TTS (#47), commanding rather than being read to.
+
+### N. Trust, made visible
+
+71. ★ **Weekly data-health digest** — auto-corrections, cooldown'd mirrors, and rejected
+    regressions from the past week, surfaced proactively instead of sitting in logs.
+72. **Per-novel freshness badge** — a small "last verified" chip on the novel card. *(Kavita
+    "last scanned")*
+73. ★ **Admin scraper-health dashboard** — surface the scraper canary (#39) and contract tests
+    (#40) in the Admin page itself, so a silent detection failure is an alert, not a support
+    ticket six weeks later.
+74. ★ **QR-code device pairing** — scan a code from Settings to configure a new device instead
+    of copying the raw API key by hand. The actual fix for the plaintext-key finding in the
+    field audit.
+75. **"Continue on {device}" resume toast** — first chapter opened each session names which
+    device you left off on and the exact position. *(KOReader/KOSync)*
+
+### O. Infra & access
+
+76. **One-command Docker self-host bundle** — app + Postgres + storage in one Compose file,
+    closing the gap between Render+Supabase coupling and how genre-peers already ship.
+    *(KOReader/KOSync, Mihon's SyncYomi)*
+77. **Discord bot with slash commands** — `/readsync status`, `/readsync next <novel>`, not just
+    a webhook ping (#44). *(Hardcover)*
+78. **Accessible reader overlay** — dyslexia-friendly font/spacing toggle plus ARIA live-region
+    sync announcements, injected on the source page itself.
+79. **Second-screen companion view** — a live ambient display, not a reading surface: a "now
+    reading" state (cover, title, chapter, percent, session stats) when a progress sync is
+    active, falling back to a "now scanning" state (from `getBotStatus()`) when idle. No direct
+    analog in any reading tracker surveyed — closest patterns are Spotify's Now Playing view and
+    Google Nest Hub's Ambient Mode, borrowed into an underserved niche. *(In design — full spec
+    and open decisions in the TODO section right after this list. Pick up there, not from
+    scratch.)*
+80. **Bulk "resume all" launcher** — one click opens every "reading" novel at its next-chapter
+    URL in background tabs, reusing Refresh All's tab orchestration for reading instead of
+    scraping.
+
+**If you only take five:** #52 (closes the split-brain with the one other list you're already
+on), #55 (small, well-documented protocol, unifies two reading contexts), #61 (StoryGraph's
+signature axis, absent here entirely), #74 (fixes a real finding from the field audit), #79
+(genuinely nothing else like it in the space).
+
+---
+
+## TODO next session — #79 Second-screen companion, design in progress
+
+> Started 2026-08-06. Scoping discussion got partway through and was parked — pick up from
+> "open decisions" below, don't re-derive the concept from scratch.
+
+**The reframe.** First pass treated this as a *reading surface* (phone mirrors the desktop
+chapter, you could read from either). Correct framing, from direct feedback: it is **not** for
+reading. It's an **ambient status display** — something you glance at, not read from. That
+reframing is what makes it interesting; it isn't just "My List on a second screen."
+
+**Two states, not one.**
+- **Reading state** — a progress sync is actively coming in. Show it big: cover, title,
+  chapter, percent. Modeled on Spotify's Now Playing view and Plex/Jellyfin active-stream
+  dashboards, where the art becomes the hero the moment something's playing.
+- **Idle state** — nothing synced recently. *Not blank.* Show library/scan status instead —
+  modeled on Google Nest Hub's Ambient Mode, which swaps to weather/clock/photos rather than a
+  dark screen when idle. Source: the existing `getBotStatus()` (`running`, `lastRun`,
+  `novelsUpdated`, `novelsChecked`, `nextRun`) — e.g. "142 novels · checked 87 · 3 new chapters
+  found · next scan in 4h." No new backend signal needed for this state either.
+
+**Why it's worth building.** Checked against all 6 competitors surveyed in the field audit
+(Kavita, StoryGraph, Hardcover, Mihon, KOReader/KOSync, NovelUpdates) — none have anything like
+it. Closest real analogs are all from adjacent domains (music/media-server Now Playing views,
+smart-display ambient mode, OS-level "currently reading" widgets in BookFusion/BookMaster/Book
+Track — but those are single-device home-screen widgets, not a live cross-device second screen).
+Proven UX patterns, borrowed into a niche nobody else has brought them to.
+
+**Technical foundation already exists — this is close to a frontend-only build.**
+`src/websocket/handlers.ts` puts every authenticated socket into a `user:${userId}` room the
+moment it connects (`socket.join(room)`); `src/routes/progress.ts` already
+`io.to(`user:${user_id}`).emit('progress:updated', ...)` on every accepted sync. A companion
+page just needs to open a socket connection (reusing the existing session login — no QR pairing,
+no new auth) and render whatever arrives. No new endpoint required for the live data path;
+`getBotStatus()` already exists for the idle-state data.
+
+**Open decisions — pick these up first:**
+1. **Reading-state stats, beyond cover/title/chapter/percent.** Two directions on the table:
+   - *Session-focused* — time spent this session, chapters read today, current streak
+     (`computeStreaks`). Numbers that change while you watch; feels alive.
+   - *Book-identity-focused* — genre tags, author, overall position (Ch. 102 of 2645). Static,
+     calmer, more "book jacket" than "live dashboard."
+2. **What triggers the reading → idle switch?**
+   - *Timeout since last sync* (~5 min with no `progress:updated`) — pure frontend, no backend
+     change, just a guess at "stopped reading."
+   - *Explicit signal* — userscript emits on `beforeunload`/`visibilitychange`
+     (`io.emit('reading:ended')` or similar) so the switch is immediate and deliberate, not
+     timing-guessed. New backend + userscript wiring, more precise.
+
+Recommended defaults going in (not yet confirmed with the user): session-focused stats, timeout-
+based idle trigger — both are the zero-new-backend options, so if the goal is a fast first build,
+start there and upgrade to the explicit-signal / book-identity variants later if the timeout
+guess feels wrong in practice.
 
 ---
 
