@@ -4,6 +4,7 @@ import { Toaster } from 'react-hot-toast';
 import useSWR from 'swr';
 import { auth } from './api/client.js';
 import { Layout } from './components/Layout.js';
+import { ErrorBoundary } from './components/ErrorBoundary.js';
 import { Login } from './pages/Login.js';
 import { Spinner } from './components/Spinner.js';
 import type { AuthStatus } from './types/index.js';
@@ -78,8 +79,11 @@ export default function App() {
           element={
             <RequireAuth>
               <Layout>
-                <Suspense fallback={<PageFallback />}>
-                  <Routes>
+                {/* Inside Layout so the nav survives a page crash, and outside
+                    Suspense because a rejected lazy() import throws past it. */}
+                <ErrorBoundary>
+                  <Suspense fallback={<PageFallback />}>
+                    <Routes>
                     <Route index element={<Navigate to="/dashboard" replace />} />
                     <Route path="dashboard" element={<Dashboard />} />
                     <Route path="mylist" element={<MyList />} />
@@ -89,9 +93,10 @@ export default function App() {
                     <Route path="manage" element={<Manage />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="admin" element={<Admin />} />
-                    <Route path="*" element={<Navigate to="/dashboard" replace />} />
-                  </Routes>
-                </Suspense>
+                      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+                    </Routes>
+                  </Suspense>
+                </ErrorBoundary>
               </Layout>
             </RequireAuth>
           }

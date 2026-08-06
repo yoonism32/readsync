@@ -40,7 +40,7 @@ function chapterSpan(row: HistoryRow): string {
 
 export function History() {
   const [days, setDays] = useState<number>(30);
-  const { data, isLoading } = useSWR<HistoryRow[]>(
+  const { data, isLoading, error, mutate } = useSWR<HistoryRow[]>(
     `/history?days=${days}`,
     swrFetcher,
     { revalidateOnFocus: false },
@@ -48,7 +48,10 @@ export function History() {
 
   const grouped = useMemo(() => {
     const byDay = new Map<string, HistoryRow[]>();
-    for (const row of data ?? []) {
+    // Array.isArray, not `?? []`: a non-array body (an error envelope, say)
+    // is truthy, and iterating it throws during render — which took the whole
+    // app down rather than just this page.
+    for (const row of Array.isArray(data) ? data : []) {
       const key = row.date.slice(0, 10);
       const list = byDay.get(key);
       if (list) list.push(row);
@@ -90,6 +93,13 @@ export function History() {
 
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>
+      ) : error ? (
+        // Distinct from the empty state: "nothing to show" and "we couldn't
+        // ask" look identical to a reader, and only one of them is retryable.
+        <div className="panel" role="alert" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center' }}>
+          <p style={{ fontSize: 'var(--text-sm)', marginBottom: 16 }}>Couldn’t load your history.</p>
+          <button type="button" className="btn-accent" onClick={() => { void mutate(); }}>Try again</button>
+        </div>
       ) : grouped.length === 0 ? (
         <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
           No reading activity in this period.
