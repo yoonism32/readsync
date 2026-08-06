@@ -81,14 +81,23 @@ router.get(
               AND p.read_through_num = COALESCE(m.current_read_through, 1)
             ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC LIMIT 1
           ) g) as latest_global_json,
+          -- LATERAL per device instead of DISTINCT ON over the whole
+          -- read-through: idx_progress_device_novel_latest turns each
+          -- device's lookup into an Index Scan + LIMIT 1 instead of a scan
+          -- of every snapshot in the group. See migration 010.
           (SELECT json_object_agg(device_id, device_state) FROM (
-            SELECT DISTINCT ON (p.device_id) p.device_id,
+            SELECT d.id AS device_id,
               json_build_object('chapter_num', p.chapter_num, 'chapter_token', p.chapter_token,
                 'percent', p.percent, 'device_label', d.device_label, 'url', p.url, 'ts', p.created_at) as device_state
-            FROM progress_snapshots p JOIN devices d ON p.device_id = d.id
-            WHERE p.user_id = $1 AND p.novel_id = n.id
-              AND p.read_through_num = COALESCE(m.current_read_through, 1)
-            ORDER BY p.device_id, p.created_at DESC
+            FROM devices d
+            CROSS JOIN LATERAL (
+              SELECT chapter_num, chapter_token, percent, url, created_at
+              FROM progress_snapshots
+              WHERE device_id = d.id AND user_id = $1 AND novel_id = n.id
+                AND read_through_num = COALESCE(m.current_read_through, 1)
+              ORDER BY created_at DESC LIMIT 1
+            ) p
+            WHERE d.user_id = $1
           ) pd) as latest_per_device_json
         FROM novels n
         JOIN latest_activity la ON n.id = la.novel_id
