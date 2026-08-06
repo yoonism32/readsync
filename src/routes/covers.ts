@@ -1,11 +1,17 @@
 import { createClient } from '@supabase/supabase-js';
 import { Router } from 'express';
-import { HTTP_GONE, HTTP_INTERNAL_ERROR, HTTP_NOT_FOUND } from '../config.js';
+import {
+  HTTP_BAD_REQUEST,
+  HTTP_GONE,
+  HTTP_INTERNAL_ERROR,
+  HTTP_NOT_FOUND,
+} from '../config.js';
 import pool from '../db/pool.js';
 import logger from '../logger.js';
 import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { validateNovelId } from '../middleware/validation.js';
+import type { AuthenticatedRequest } from '../types/index.js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? '';
@@ -35,10 +41,14 @@ export function isMirroredCover(url: string | null): boolean {
   return !!url && url.includes(MIRRORED_PATH);
 }
 
+/** Novel IDs still carry the legacy novelbin: prefix; the slug on disk never does. */
+export function normalizeSlug(novelId: string): string {
+  return String(novelId).replace(/^novelbin:/, '');
+}
+
 /** Where the cover lives on the source site. */
 export function sourceCoverUrl(novelId: string): string {
-  const slug = String(novelId).replace(/^novelbin:/, '');
-  return `https://images.novelarrow.com/novel/${slug}.jpg`;
+  return `https://images.novelarrow.com/novel/${normalizeSlug(novelId)}.jpg`;
 }
 
 /**
@@ -113,6 +123,106 @@ async function fetchCoverWithRetry(
   throw lastError;
 }
 
+/**
+ * Upload cover bytes into the novel-covers bucket, point novels.cover_img at
+ * the public URL, and clear any mirror-retry cooldown for the slug. Shared by
+ * the GET route's server-side-fetch success path and the userscript upload
+ * route below so "commit a mirrored cover" isn't duplicated between them.
+ */
+async function commitMirroredCover(
+  novelId: string,
+  slug: string,
+  buffer: Buffer,
+): Promise<string> {
+  if (!supabase) {
+    throw new Error('storage_not_configured');
+  }
+
+  const fileName = `${slug}.jpg`;
+  const { error: uploadError } = await supabase.storage
+    .from('novel-covers')
+    .upload(fileName, buffer, { contentType: 'image/jpeg', upsert: true });
+
+  if (uploadError) {
+    throw new Error(`upload_failed: ${uploadError.message}`);
+  }
+
+  const { data: urlData } = supabase.storage
+    .from('novel-covers')
+    .getPublicUrl(fileName);
+  const publicUrl = urlData.publicUrl;
+
+  await pool.query('UPDATE novels SET cover_img = $1 WHERE id = $2', [
+    publicUrl,
+    novelId,
+  ]);
+
+  // Mirroring works again for this slug — drop any cooldown so a recovered
+  // source isn't ignored for the rest of the window.
+  mirrorCooldown.delete(slug);
+
+  logger.info(
+    { slug, size_kb: Math.round(buffer.length / 1024) },
+    'Cached cover',
+  );
+
+  return publicUrl;
+}
+
+/**
+ * The first three bytes of every JPEG are the SOI marker. The upload route
+ * below writes client-claimed bytes straight into a *public* bucket that
+ * every reader's <img> tag loads — trusting the caller's content_type string
+ * instead of sniffing would let a truncated fetch or an HTML error page get
+ * served as a cover to everyone.
+ */
+export function isJpegMagicBytes(buffer: Buffer): boolean {
+  return (
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff
+  );
+}
+
+// Real covers run 30-150KB. The ceiling is generous headroom against the
+// app-wide 10mb JSON_BODY_LIMIT (the base64 payload can't be bounded any
+// tighter at the body-parser layer, since that limit is shared by every
+// route); the floor rejects empty/near-empty payloads outright.
+export const MAX_COVER_UPLOAD_BYTES = 5 * 1024 * 1024;
+export const MIN_COVER_UPLOAD_BYTES = 256;
+
+export function isValidCoverUploadSize(byteLength: number): boolean {
+  return (
+    byteLength >= MIN_COVER_UPLOAD_BYTES && byteLength <= MAX_COVER_UPLOAD_BYTES
+  );
+}
+
+/**
+ * Per-user upload rate limit. isMirroredCover() already bounds real Storage
+ * writes to ~once per novel ever, so this only matters for the pre-mirror
+ * window: a buggy or malicious client bypassing the userscript's own
+ * localStorage cache and hammering base64-decode/sniff work on
+ * not-yet-mirrored novels.
+ */
+const UPLOAD_RATE_LIMIT = 20;
+const UPLOAD_RATE_WINDOW_MS = 60 * 60 * 1000; // 1h
+const uploadAttempts = new Map<string, number[]>();
+
+function isUploadRateLimited(userId: string, now: number): boolean {
+  const recent = (uploadAttempts.get(userId) ?? []).filter(
+    (t) => now - t < UPLOAD_RATE_WINDOW_MS,
+  );
+  uploadAttempts.set(userId, recent);
+  return recent.length >= UPLOAD_RATE_LIMIT;
+}
+
+function recordUploadAttempt(userId: string, now: number): void {
+  const times = uploadAttempts.get(userId) ?? [];
+  times.push(now);
+  uploadAttempts.set(userId, times);
+}
+
 router.get(
   '/api/v1/covers/:novelId',
   validateApiKey,
@@ -153,7 +263,7 @@ router.get(
           .json({ error: 'Cover not available' });
       }
 
-      const slug = String(novelId).replace(/^novelbin:/, '');
+      const slug = normalizeSlug(String(novelId));
       const coverUrl = sourceCoverUrl(String(novelId));
 
       /**
@@ -224,40 +334,119 @@ router.get(
       const arrayBuffer = await response.arrayBuffer();
       const buffer = Buffer.from(arrayBuffer);
 
-      const fileName = `${slug}.jpg`;
-      const { error: uploadError } = await supabase.storage
-        .from('novel-covers')
-        .upload(fileName, buffer, { contentType: 'image/jpeg', upsert: true });
-
-      if (uploadError) {
-        logger.error({ slug, uploadError }, 'Failed to upload cover');
+      let publicUrl: string;
+      try {
+        publicUrl = await commitMirroredCover(String(novelId), slug, buffer);
+      } catch (commitErr) {
+        logger.error({ slug, commitErr }, 'Failed to upload cover');
         return res
           .status(HTTP_INTERNAL_ERROR)
           .json({ error: 'Failed to cache cover' });
       }
 
-      const { data: urlData } = supabase.storage
-        .from('novel-covers')
-        .getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;
-
-      await pool.query('UPDATE novels SET cover_img = $1 WHERE id = $2', [
-        publicUrl,
-        novelId,
-      ]);
-
-      // Mirroring works again for this slug — drop any cooldown so a recovered
-      // source isn't ignored for the rest of the window.
-      mirrorCooldown.delete(slug);
-
-      logger.info(
-        { slug, size_kb: Math.round(buffer.length / 1024) },
-        'Cached cover',
-      );
       res.setHeader('Cache-Control', 'public, max-age=86400');
       res.redirect(publicUrl);
     } catch (error) {
       handleDbError(res, error, 'Fetch/cache cover');
+    }
+  },
+);
+
+/**
+ * Userscript-assisted mirroring. images.novelarrow.com blocks Render's
+ * datacenter egress (see MIRROR_RETRY_COOLDOWN_MS above) but not a reader's
+ * own residential IP, and the userscript can reach past the CDN's missing
+ * CORS headers via GM_xmlhttpRequest. This is the endpoint it POSTs the
+ * bytes to so a real mirrored copy lands in the bucket — GET above still
+ * covers readers without the userscript installed, or novels it hasn't
+ * gotten to yet.
+ */
+router.post(
+  '/api/v1/covers/:novelId/upload',
+  validateApiKey,
+  validateNovelId,
+  async (req, res) => {
+    const { novelId } = req.params;
+    const { image_base64, content_type } = req.body as Record<string, unknown>;
+
+    if (!supabase) {
+      return res
+        .status(HTTP_INTERNAL_ERROR)
+        .json({ error: 'Storage not configured' });
+    }
+
+    try {
+      const novelResult = await pool.query<{ cover_img: string | null }>(
+        'SELECT cover_img FROM novels WHERE id = $1',
+        [novelId],
+      );
+
+      if (novelResult.rows.length === 0) {
+        return res.status(HTTP_NOT_FOUND).json({ error: 'Novel not found' });
+      }
+
+      const cachedCoverUrl = novelResult.rows[0].cover_img;
+
+      // Already mirrored — skip the Storage write. This is also the primary
+      // defense against redundant/abusive uploads: once a novel is mirrored
+      // once, every later call for it is a single cheap SELECT.
+      if (isMirroredCover(cachedCoverUrl)) {
+        return res.json({ alreadyMirrored: true, cover_img: cachedCoverUrl });
+      }
+
+      const userId = (req as AuthenticatedRequest).user.id;
+      const now = Date.now();
+      if (isUploadRateLimited(userId, now)) {
+        return res.status(429).json({ error: 'Too many upload attempts' });
+      }
+      recordUploadAttempt(userId, now);
+
+      if (
+        typeof image_base64 !== 'string' ||
+        !image_base64 ||
+        content_type !== 'image/jpeg'
+      ) {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: 'Invalid cover payload' });
+      }
+
+      let buffer: Buffer;
+      try {
+        buffer = Buffer.from(image_base64, 'base64');
+      } catch {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: 'Invalid base64 data' });
+      }
+
+      if (!isValidCoverUploadSize(buffer.length)) {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: 'Cover payload out of size bounds' });
+      }
+
+      if (!isJpegMagicBytes(buffer)) {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: 'Payload is not a valid JPEG' });
+      }
+
+      const slug = normalizeSlug(String(novelId));
+
+      let publicUrl: string;
+      try {
+        publicUrl = await commitMirroredCover(String(novelId), slug, buffer);
+      } catch (commitErr) {
+        logger.error({ slug, commitErr }, 'Failed to upload userscript cover');
+        return res
+          .status(HTTP_INTERNAL_ERROR)
+          .json({ error: 'Failed to cache cover' });
+      }
+
+      res.json({ alreadyMirrored: false, cover_img: publicUrl });
+    } catch (error) {
+      handleDbError(res, error, 'Upload cover');
     }
   },
 );

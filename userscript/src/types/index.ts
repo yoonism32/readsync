@@ -52,6 +52,12 @@ export interface AutoUpdatePayload {
   cover_url: string | null;
 }
 
+/** Response from POST /covers/:novelId/upload */
+export interface CoverUploadResult {
+  alreadyMirrored: boolean;
+  cover_img?: string;
+}
+
 export interface NovelUpdateMessage {
   type: 'NOVEL_UPDATE_COMPLETE';
   novelId: string;

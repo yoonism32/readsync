@@ -17,6 +17,7 @@ import {
   createHelp, toggleHelp, isRestored, clearRestored,
 } from './services/UIManager.js';
 import { postAutoUpdate } from './api/client.js';
+import { uploadCoverIfNeeded } from './services/CoverUploader.js';
 import type { NovelUpdateMessage } from './types/index.js';
 
 /* ===== Debug helper ===== */
@@ -377,6 +378,9 @@ async function autoUpdateNovelInfo(): Promise<void> {
       log('Novel info auto-updated successfully!', result);
       showAutoUpdateNotification('✅ Chapter info updated!', 'success');
       notifyOpener({ novelId, success: true, data: result });
+      // Best-effort, never awaited — must not delay the notification above
+      // or affect what Refresh All reports back to the opener.
+      void uploadCoverIfNeeded(novelId, payload.cover_url);
     } catch (err) {
       const status = (err as { status?: number }).status ?? 0;
       log('Auto-update failed:', err);

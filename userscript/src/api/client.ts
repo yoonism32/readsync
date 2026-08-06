@@ -1,5 +1,10 @@
 import { READSYNC_API_BASE, READSYNC_API_KEY } from '../config.js';
-import type { SyncPayload, CompareResult, AutoUpdatePayload } from '../types/index.js';
+import type {
+  SyncPayload,
+  CompareResult,
+  AutoUpdatePayload,
+  CoverUploadResult,
+} from '../types/index.js';
 
 export interface ProgressResult {
   updated: boolean;
@@ -55,6 +60,33 @@ export async function postAutoUpdate(payload: AutoUpdatePayload): Promise<unknow
     throw Object.assign(new Error(`HTTP ${res.status}: ${text}`), { status: res.status });
   }
   return res.json();
+}
+
+/** POST /api/v1/covers/:novelId/upload — hand the server real cover bytes
+ *  fetched from the reader's own connection, since it can't reach the source
+ *  itself (see CoverUploader.ts for why). */
+export async function postCoverUpload(
+  novelId: string,
+  imageBase64: string,
+  contentType: string,
+): Promise<CoverUploadResult> {
+  const res = await fetch(
+    `${READSYNC_API_BASE}/covers/${encodeURIComponent(novelId)}/upload`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        user_key: READSYNC_API_KEY,
+        image_base64: imageBase64,
+        content_type: contentType,
+      }),
+    },
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status}: ${text}`);
+  }
+  return res.json() as Promise<CoverUploadResult>;
 }
 
 /** POST /api/v1/novels/:novelId/reread — archive current run, start re-read */
