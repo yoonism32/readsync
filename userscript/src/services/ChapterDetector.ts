@@ -129,6 +129,10 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
     const candidates: number[] = [];
     let metaTitle: string | null = null;
     let lChapterTitle: string | null = null;
+    // Highest chapter number backed by a signal that names an actual
+    // chapter (meta or .l-chapter) — see the header-count comment below for
+    // why this must never lose to a bare count.
+    let namedNum = 0;
 
     // Strategy 0: og:novel:latest_chapter_name meta — server-rendered on
     // NovelArrow novel pages (name= attr) and NovelBin (property= attr).
@@ -144,6 +148,7 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
         metaTitle = titleMatch ? titleMatch[1].trim() : (content || null);
         log('Candidate from og:novel meta', { num, title: metaTitle });
         candidates.push(num);
+        namedNum = Math.max(namedNum, num);
       }
     }
 
@@ -164,6 +169,7 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
           log('Candidate from .l-chapter', { num: chapterNum, title: chapterTitle, source: numFromUrl ? 'url' : 'text' });
           lChapterTitle = chapterTitle;
           candidates.push(chapterNum);
+          namedNum = Math.max(namedNum, chapterNum);
         }
       }
     }
@@ -217,11 +223,30 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
 
     if (maxChapter > 0) candidates.push(maxChapter);
 
-    // Strategy 4: the header's "<N> Chapters" figure. On NovelArrow novel pages
-    // this is the only signal that sees past the first 30 rendered chapters.
+    /**
+     * Strategy 4: the header's "<N> Chapters" figure. Only trusted when
+     * nothing above already named a specific chapter (namedNum === 0) —
+     * "<N> Chapters" is a document COUNT, not a chapter NUMBER, and
+     * NovelArrow's numbering isn't 1:1 with it (bonus/side entries like
+     * "897_2" inflate the count past the true latest). Letting it win over a
+     * titled meta chapter is exactly what happened to three novels in
+     * production on 2026-08-06: immortality-through-array-formations (off by
+     * 1), i-can-see-through-all-things-information (off by 2), and
+     * longevity-by-picking-up-attributes-in-the-battlefield (off by 14) —
+     * all three ended up with a stored latest_chapter_num paired with a
+     * title that named a *different*, lower chapter, proving the header
+     * figure was never a real chapter. The damage was permanent: admin.ts's
+     * update guard never lets latest_chapter_num decrease, so "next chapter"
+     * navigation dead-ended at "No further chapters available" forever.
+     *
+     * It still needs to win when nothing names a chapter at all — a meta
+     * like "Epilogue" has no digits, and without the header NovelArrow's
+     * server-rendered chapter list (capped at the first 30, ascending) would
+     * report 30 for a 92-chapter novel forever.
+     */
     const headerCount = extractHeaderChapterCount();
-    if (headerCount) {
-      log('Candidate from header chapter count', { num: headerCount });
+    if (headerCount && namedNum === 0) {
+      log('Candidate from header chapter count (nothing named a chapter)', { num: headerCount });
       candidates.push(headerCount);
     }
 

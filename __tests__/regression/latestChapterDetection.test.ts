@@ -1,22 +1,30 @@
 /**
  * Regression tests for userscript latest-chapter detection on NovelArrow.
  *
- * Two production failures, both traced to `extractLatestChapterInfo` returning
- * at the first strategy that produced a number instead of taking the best one:
+ * Three production failures:
  *
- *  1. immortality-through-array-formations — the og:novel meta names the latest
- *     *free* chapter ("Chapter 2627 …", isFree:true) while premium chapters run
- *     ahead of it. The meta short-circuited the scan, so 2627 was reported for a
- *     novel the server had at 2635 and the monotonic guard rejected the update.
- *
- *  2. forced-to-be-my-sisters-lover-in-a-reverse-world — the meta reads
+ *  1. forced-to-be-my-sisters-lover-in-a-reverse-world — the meta reads
  *     "Epilogue" and contains no digits at all, so detection fell through to the
  *     DOM. But NovelArrow only server-renders `initialChapterList`, which is
  *     chapters 1–30 *ascending* — so it reported exactly 30 against a stored 92,
- *     and would have done so on every refresh forever.
+ *     and would have done so on every refresh forever. Fix: fall back to the
+ *     header's "<N> Chapters" figure when nothing else names a chapter.
  *
- * Both pages render the true size in the header as "<N> Chapters", which is what
- * detection now prefers.
+ *  2. (2026-08-06) That header-count fallback was then trusted too broadly — it
+ *     originally won over *any* smaller candidate, including a meta that named a
+ *     real, titled chapter. "<N> Chapters" is a document COUNT, not a chapter
+ *     NUMBER, and NovelArrow's numbering isn't 1:1 with it (bonus/side entries
+ *     like "897_2" inflate the count past the true latest). Three novels hit
+ *     this: immortality-through-array-formations (header 1 over the real
+ *     latest), i-can-see-through-all-things-information (2 over), and
+ *     longevity-by-picking-up-attributes-in-the-battlefield (14 over). All three
+ *     ended up with novels.latest_chapter_num paired with a title that named a
+ *     *different*, lower chapter — proof the header figure was never a real
+ *     chapter. The damage was permanent: admin.ts's update guard never lets
+ *     latest_chapter_num decrease, so "next chapter" navigation dead-ended at
+ *     "No further chapters available" forever. Fix: a titled meta chapter now
+ *     always outranks the bare header count; the count only fills gaps when
+ *     nothing names a chapter at all (failure #1 above).
  */
 import { describe, it, expect, afterEach } from 'vitest';
 import {
@@ -113,8 +121,14 @@ describe('extractHeaderChapterCount', () => {
   });
 });
 
-describe('extractLatestChapterInfo — header count beats a free-chapter meta', () => {
-  it('reports 2640, not the 2627 free-chapter meta (immortality regression)', () => {
+describe('extractLatestChapterInfo — a titled meta chapter beats the bare header count', () => {
+  it('reports 2627 from the meta, not 2640 from the header (immortality, corrected)', () => {
+    // Originally asserted 2640 on the theory that premium chapters ran ahead
+    // of a free-chapter-only meta. Production evidence on 2026-08-06 disproved
+    // that: novels.latest_chapter_num was 2645 with title "Chapter 68: Heart
+    // Skill of Causality" — which the site itself names as chapter 2644, not
+    // 2645. There was never a real chapter 2645; "2645 Chapters" just counts
+    // more documents than the numbering goes up to.
     stubPage({
       meta: 'Chapter 2627 - 62: Great Witch (2)',
       spans: ['2640 Chapters'],
@@ -126,9 +140,34 @@ describe('extractLatestChapterInfo — header count beats a free-chapter meta', 
     });
 
     const info = extractLatestChapterInfo();
-    expect(info.latestChapterNum).toBe(2640);
-    // The meta still names a real chapter — keep it rather than nulling the title.
+    expect(info.latestChapterNum).toBe(2627);
     expect(info.latestChapterTitle).toBe('62: Great Witch (2)');
+  });
+
+  it('reports 1527 from the meta, not 1529 from the header (i-can-see-through-all-things-information, 2026-08-06)', () => {
+    stubPage({
+      meta: 'Chapter 1527 900: Breaking Through the Heavenly Demon Origin Space by Force',
+      spans: ['1529 Chapters'],
+      pathname: '/novel/i-can-see-through-all-things-information',
+    });
+
+    const info = extractLatestChapterInfo();
+    expect(info.latestChapterNum).toBe(1527);
+    expect(info.latestChapterTitle).toBe(
+      '900: Breaking Through the Heavenly Demon Origin Space by Force',
+    );
+  });
+
+  it('reports 1086 from the meta, not 1100 from the header (longevity-by-picking-up-attributes-in-the-battlefield, 2026-08-06)', () => {
+    stubPage({
+      meta: 'Chapter 1086 - 460: Uniting Against Qin Court? (2)',
+      spans: ['1100 Chapters'],
+      pathname: '/novel/longevity-by-picking-up-attributes-in-the-battlefield',
+    });
+
+    const info = extractLatestChapterInfo();
+    expect(info.latestChapterNum).toBe(1086);
+    expect(info.latestChapterTitle).toBe('460: Uniting Against Qin Court? (2)');
   });
 });
 
