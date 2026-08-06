@@ -14,6 +14,10 @@ import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { validateNovelId } from '../middleware/validation.js';
 import { getBotStatus } from '../services/BotService.js';
+import {
+  isChapterRegression,
+  recordCorrectionAttempt,
+} from '../services/ChapterCorrection.js';
 import { parseTimeAgo } from '../services/NovelService.js';
 import type { AuthenticatedRequest, BotStatus } from '../types/index.js';
 
@@ -25,36 +29,6 @@ export type BotModule = {
 };
 
 let botModule: BotModule = {};
-
-/**
- * novelId → chapter_num seen once but not yet trusted as a correction.
- * A single scrape reporting fewer chapters than stored is rejected outright
- * (a flaky page load must never claw back real progress — see
- * isChapterRegression below). The SAME lower number reported twice, usually
- * two Refresh All runs apart, is treated as a genuine correction instead of
- * noise: a fluke won't repeat the exact same wrong number, but a systematic
- * overshoot (e.g. ChapterDetector's header-count fallback beating a titled
- * chapter — fixed 2026-08-06, see latestChapterDetection.test.ts) reports
- * the true count every time.
- */
-const pendingChapterCorrections = new Map<string, number>();
-
-export function isChapterRegression(
-  scrapedNum: number,
-  currentChapter: number | null,
-): boolean {
-  return currentChapter !== null && scrapedNum < currentChapter;
-}
-
-export function isConfirmedChapterCorrection(
-  pendingNum: number | undefined,
-  scrapedNum: number,
-  currentChapter: number | null,
-): boolean {
-  return (
-    isChapterRegression(scrapedNum, currentChapter) && pendingNum === scrapedNum
-  );
-}
 
 export function setBotModule(mod: BotModule): void {
   botModule = mod;
@@ -265,20 +239,15 @@ router.post(
       const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 
       const isRegression = isChapterRegression(scrapedNum, currentChapter);
-      const isConfirmedCorrection = isConfirmedChapterCorrection(
-        pendingChapterCorrections.get(novel_id as string),
+      const isConfirmedCorrection = recordCorrectionAttempt(
+        novel_id as string,
         scrapedNum,
         currentChapter,
       );
-      if (isRegression && !isConfirmedCorrection) {
-        pendingChapterCorrections.set(novel_id as string, scrapedNum);
-      } else {
-        pendingChapterCorrections.delete(novel_id as string);
-      }
 
       // Chapter number, title, and site-update-time only ever advance
       // together, unless $9 (a confirmed correction — see
-      // isConfirmedChapterCorrection) says a lower count has now been
+      // ../services/ChapterCorrection.ts) says a lower count has now been
       // scraped twice in a row and should be trusted over the stale one.
       // Genre/author/cover are independent facts and stay on COALESCE
       // regardless.

@@ -8,13 +8,13 @@ import {
 import pool, { withTransaction } from '../db/pool.js';
 import { requireAuthAPI, validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
-import { buildExport } from '../services/ExportService.js';
-import { getLatestStates, healDeadSiteUrl } from '../services/NovelService.js';
 import {
   handleValidationErrors,
   validateNovelId,
   validatePagination,
 } from '../middleware/validation.js';
+import { buildExport } from '../services/ExportService.js';
+import { getLatestStates, healDeadSiteUrl } from '../services/NovelService.js';
 import type { AuthenticatedRequest, NovelStatus } from '../types/index.js';
 
 const router = Router();
@@ -253,19 +253,26 @@ router.put(
         if (status === 'completed') {
           const meta = updateResult.rows[0];
           const currentRT = meta.current_read_through || 1;
-          const maxProgress = await client.query<{
-            max_chapter: number;
-            max_percent: string;
+          // Furthest-progressed snapshot, not most-recently-written — a
+          // synthetic completion row built from whichever device wrote last
+          // could archive and re-insert a *lower* chapter than the reader
+          // actually reached (same ordering bug as ExportService.ts).
+          const latestProgress = await client.query<{
+            chapter_num: number;
+            chapter_token: string;
+            url: string;
+            novel_id: string;
+            percent: string;
           }>(
-            'SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3',
+            'SELECT chapter_num, chapter_token, url, novel_id, percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 ORDER BY chapter_num DESC, percent DESC, created_at DESC LIMIT 1',
             [userId, novelId, currentRT],
           );
           const archiveEntry = {
             read_through: currentRT,
             started_at: meta.started_at,
             completed_at: new Date().toISOString(),
-            max_chapter: maxProgress.rows[0]?.max_chapter ?? 0,
-            max_percent: parseFloat(maxProgress.rows[0]?.max_percent ?? '0'),
+            max_chapter: latestProgress.rows[0]?.chapter_num ?? 0,
+            max_percent: parseFloat(latestProgress.rows[0]?.percent ?? '0'),
           };
           await client.query(
             `
@@ -277,10 +284,6 @@ router.put(
             [userId, novelId, currentRT, JSON.stringify(archiveEntry)],
           );
 
-          const latestProgress = await client.query(
-            'SELECT chapter_num, chapter_token, url, novel_id FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 ORDER BY created_at DESC LIMIT 1',
-            [userId, novelId, currentRT],
-          );
           if (latestProgress.rows.length > 0) {
             const lp = latestProgress.rows[0];
             await client.query(

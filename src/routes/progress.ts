@@ -18,6 +18,7 @@ import logger from '../logger.js';
 import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { handleValidationErrors } from '../middleware/validation.js';
+import { recordCorrectionAttempt } from '../services/ChapterCorrection.js';
 import {
   deriveNovelMainUrl,
   detectDeviceType,
@@ -27,6 +28,20 @@ import {
   parseChapterFromUrl,
 } from '../services/NovelService.js';
 import type { AuthenticatedRequest } from '../types/index.js';
+
+/**
+ * Is this a genuine reread, or a second device's first sync landing on an
+ * early chapter? deviceMaxChapter must come from the SAME device making
+ * this request — comparing against a novel-wide max let a brand-new
+ * device's first-ever sync (no prior progress at all) fabricate a
+ * completion on a read that was never finished.
+ */
+export function isAutoReread(
+  deviceMaxChapter: number,
+  currentChapterNum: number,
+): boolean {
+  return deviceMaxChapter - currentChapterNum >= AUTO_REREAD_CHAPTER_THRESHOLD;
+}
 
 export function createProgressRouter(io: SocketServer): Router {
   const router = Router();
@@ -163,14 +178,47 @@ export function createProgressRouter(io: SocketServer): Router {
               ],
             );
           } else {
+            // This UPDATE fires on every chapter read (far more often than
+            // admin.ts's novel-page auto-update), so it needs the same
+            // self-healing guard: a bare GREATEST() here previously meant any
+            // detection quirk that inflated latest_chapter_num could never be
+            // corrected through this path, even after admin.ts fixed it
+            // through its own. See src/services/ChapterCorrection.ts.
+            const novelRow = await client.query<{
+              latest_chapter_num: number | null;
+            }>('SELECT latest_chapter_num FROM novels WHERE id = $1', [
+              novel_id,
+            ]);
+            const currentChapterNum =
+              novelRow.rows[0]?.latest_chapter_num ?? null;
+            const isConfirmedCorrection =
+              latestChapterNum !== null &&
+              recordCorrectionAttempt(
+                novel_id,
+                latestChapterNum,
+                currentChapterNum,
+              );
+
             await client.query(
               `
               UPDATE novels SET
                 title = $2,
                 primary_url = COALESCE(primary_url, $3),
-                latest_chapter_num = GREATEST(COALESCE(latest_chapter_num, 0), COALESCE($4::integer, 0)),
-                latest_chapter_title = CASE WHEN $4::integer > COALESCE(latest_chapter_num, 0) THEN $5 ELSE latest_chapter_title END,
-                chapters_updated_at = CASE WHEN $4::integer > COALESCE(latest_chapter_num, 0) THEN CURRENT_TIMESTAMP ELSE chapters_updated_at END
+                latest_chapter_num = CASE
+                  WHEN $4::integer IS NULL THEN latest_chapter_num
+                  WHEN $4::integer >= COALESCE(latest_chapter_num, 0) OR $6::boolean THEN $4::integer
+                  ELSE latest_chapter_num
+                END,
+                latest_chapter_title = CASE
+                  WHEN $4::integer IS NULL THEN latest_chapter_title
+                  WHEN $4::integer > COALESCE(latest_chapter_num, 0) OR $6::boolean THEN $5
+                  ELSE latest_chapter_title
+                END,
+                chapters_updated_at = CASE
+                  WHEN $4::integer IS NULL THEN chapters_updated_at
+                  WHEN $4::integer > COALESCE(latest_chapter_num, 0) OR $6::boolean THEN CURRENT_TIMESTAMP
+                  ELSE chapters_updated_at
+                END
               WHERE id = $1
             `,
               [
@@ -179,6 +227,7 @@ export function createProgressRouter(io: SocketServer): Router {
                 baseNovelUrl,
                 latestChapterNum,
                 latestChapterTitle,
+                isConfirmedCorrection,
               ],
             );
           }
@@ -206,18 +255,22 @@ export function createProgressRouter(io: SocketServer): Router {
               ? metaResult.rows[0].current_read_through
               : 1;
 
-          // Auto-detect reread
+          // Auto-detect reread. Scoped to this device: a novel-wide max let
+          // a second device's first-ever sync for this novel (no history of
+          // its own) read as "500 chapters behind" and fabricate a false
+          // completion. A genuine reread happens on the same device that was
+          // previously caught up.
           const maxChapterResult = await client.query<{
             max_chapter: number;
             max_percent: string;
           }>(
-            'SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3',
-            [user_id, novel_id, currentReadThrough],
+            'SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 AND device_id = $4',
+            [user_id, novel_id, currentReadThrough, device_id],
           );
           const maxChapter = maxChapterResult.rows[0]?.max_chapter ?? 0;
 
           let autoReread = false;
-          if (maxChapter - chapterInfo.num >= AUTO_REREAD_CHAPTER_THRESHOLD) {
+          if (isAutoReread(maxChapter, chapterInfo.num)) {
             const meta = metaResult.rows[0];
             const archiveEntry = {
               read_through: currentReadThrough,
