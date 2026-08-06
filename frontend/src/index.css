@@ -308,18 +308,28 @@ p { margin: 0; }
    enough to read as intent and short enough not to feel broken. Leaving is
    undelayed — the card drops the moment you go, so the grid settles fast. */
 .card-lift {
-  transition: translate 180ms var(--ease-out-expo), border-color 180ms var(--ease-out-expo);
+  transition: scale 220ms var(--ease-out-expo), background-color 220ms var(--ease-out-expo),
+    border-color 220ms var(--ease-out-expo);
   transition-delay: 0ms;
+  transform-origin: center center;
+  /* z-index below needs a positioned element, or the scaled card is
+     overlapped by its later-painted neighbours. */
+  position: relative;
 }
 .card-lift:hover,
 .card-lift:focus-visible {
-  /* `translate`, not `transform`. These cards also carry .animate-fade-in,
-     whose `both` fill-mode makes its final keyframe (transform: translateY(0))
-     persist forever — and an animation outranks a normal declaration, so a
-     transform here was silently overridden and the card never moved.
-     `translate` is an independent longhand the animation doesn't touch. */
-  translate: 0 -4px;
+  /* Depth, not a hop: the card comes toward the reader rather than sliding
+     up the page. On a flat screen that IS scale — a translateZ with per-card
+     perspective resolves to the same thing, and would have to go through
+     `transform`, which .animate-fade-in's `both` fill-mode already owns and
+     would silently override. `scale` is an independent longhand, so it wins
+     cleanly. Elevation is reinforced by a lighter surface rather than a
+     shadow, because a halo on a dark background reads as glow, not height. */
+  scale: 1.06;
+  background-color: var(--color-bg-hover);
+  border-color: var(--color-border-accent);
   transition-delay: 200ms;
+  z-index: 1;
 }
 
 /* Muted → full text. For chrome controls that start legible, not faint. */
