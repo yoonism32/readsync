@@ -11,7 +11,7 @@ older docs were updated to match — see the git history and
 |---|---|---|
 | Backend API | Node.js, Express 5, TypeScript | `src/` → compiled to `dist/` |
 | Frontend | React 19, React Router 7, Vite, Tailwind 4, SWR | `frontend/` → served at `/app` |
-| Browser client | Tampermonkey userscript (Vite-built IIFE) | `userscript/` → `dist-userscript/readsync.user.js` |
+| Browser client | Userscript (Vite-built IIFE, GM-API based — works in Tampermonkey/Violentmonkey) | `userscript/` → `dist-userscript/readsync.user.js` |
 | Chapter-update bot | Puppeteer-extra + stealth, TypeScript | `bot/src/` — **not part of the deployed system, see below** |
 | Database | Postgres (Supabase-hosted) | 10 migrations in `src/db/migrations/` |
 | Realtime | Socket.IO | wired into `src/app.ts` |

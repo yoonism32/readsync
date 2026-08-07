@@ -1,14 +1,15 @@
 # ReadSync
 
-Cross-device reading progress sync for web novels. A Tampermonkey userscript
-tracks your scroll position on NovelArrow/NovelBin chapter pages and syncs it
-in real time to every other device you read on.
+Cross-device reading progress sync for web novels. A userscript (Tampermonkey,
+Violentmonkey, or any other GM-compatible manager) tracks your scroll position
+on NovelArrow/NovelBin chapter pages and syncs it in real time to every other
+device you read on.
 
 ## Stack
 
 - **Backend** — Node.js, Express 5, TypeScript (`src/`), Postgres (Supabase-hosted)
 - **Frontend** — React 19 SPA served at `/app` (`frontend/`)
-- **Browser client** — Tampermonkey userscript (`userscript/`)
+- **Browser client** — userscript, built for Tampermonkey/Violentmonkey (`userscript/`)
 - **Realtime** — Socket.IO, so progress updates appear live across open tabs/devices
 
 Full architecture, data flow, and auth model: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).

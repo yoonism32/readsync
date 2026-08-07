@@ -37,7 +37,8 @@ this file is the trimmed, current-facing view of it.
 - [ ] **Userscript isn't served.** `dist-userscript/` is gitignored and no
       route exposes it, so `build:all` builds it for nothing and updates
       are a manual reinstall. Serving it plus `@updateURL`/`@downloadURL`
-      would make Tampermonkey self-update.
+      would let it self-update in any GM-API manager (Tampermonkey,
+      Violentmonkey, etc.).
 - [ ] **API documentation (OpenAPI/Swagger)** for the endpoints in
       [API_REFERENCE.md](./API_REFERENCE.md).
 - [x] ~~**`SubPlan 2` in the My List query**~~ — **corrected: already
@@ -77,7 +78,7 @@ are the two still accepted.
 ## Product features — Tier 2: technically impressive
 
 - [ ] Offline-first PWA (service worker, IndexedDB, background sync queue)
-- [ ] Chrome Extension (Manifest V3), graduating from the Tampermonkey userscript
+- [ ] Chrome Extension (Manifest V3), graduating from the userscript
 - [ ] CLI tool (`readsync status|list|progress|sync|export`)
 - [ ] GraphQL API alongside REST
 - [ ] CRDTs for conflict resolution (replace last-write-wins with Automerge/Yjs)
