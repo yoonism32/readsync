@@ -145,7 +145,7 @@ router.post(
   },
 );
 
-router.post('/admin/force-refresh-all', async (_req, res) => {
+router.post('/admin/force-refresh-all', validateApiKey, async (_req, res) => {
   try {
     await pool.query(`UPDATE novels SET chapters_updated_at = NULL`);
     if (botModule.updateNovelChapters) {

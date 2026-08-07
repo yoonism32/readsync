@@ -6,6 +6,7 @@ import {
   BROWSER_TIMEOUT_MS, CLOUDFLARE_WAIT_MS,
   MIN_GLOBAL_GAP_MS, COOLDOWN_403_MS, COOLDOWN_429_MS,
 } from '../config.js';
+import { deriveNovelBaseUrl } from '../parseNovelInfo.js';
 
 puppeteer.use(StealthPlugin());
 
@@ -95,13 +96,7 @@ class NovelScraperClass {
 
     try {
       return await this.withBrowser(async (page) => {
-        // Extract base novel URL. NovelArrow chapter URLs are
-        // /chapter/<slug>/chapter-N-title → novel page is /novel/<slug>;
-        // NovelBin URLs just get the chapter suffix stripped.
-        const arrowChapter = novelUrl.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
-        const baseUrl = arrowChapter
-          ? `${arrowChapter[1]}/novel/${arrowChapter[2]}`
-          : novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
+        const baseUrl = deriveNovelBaseUrl(novelUrl);
 
         // Set realistic viewport
         await page.setViewport({ width: 1920, height: 1080 });

@@ -116,16 +116,6 @@ export interface NotificationsResponse {
   unread_count: number;
 }
 
-export interface BotStatus {
-  running: boolean;
-  lastRun: string | null;
-  lastRunSuccess: boolean;
-  novelsUpdated: number;
-  novelsChecked: number;
-  nextRun: string | null;
-  errors: string[];
-}
-
 export interface AuthStatus {
   authenticated: boolean;
   username?: string;

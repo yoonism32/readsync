@@ -26,6 +26,27 @@ export function parseTimeAgo(str: string | undefined): Date | null {
   return new Date(now.getTime() - val * ms[unit]);
 }
 
+/**
+ * Given a novel or chapter page URL, derive the novel's main/base page URL.
+ *
+ * userscript/src/services/ChapterDetector.ts has its own, more thorough
+ * version of this same derivation (extra NovelBin number-prefix fallback
+ * and a final slug-based fallback) for the browser/DOM scraping context —
+ * the two can't share a module without new cross-package build tooling, so
+ * keep them in sync by hand. See the parity test in
+ * __tests__/regression/novelBaseUrlDerivation.test.ts, which documents
+ * where the two currently agree and where they diverge (this version does
+ * not handle NovelBin's /slug/31-the-beginning number-prefix chapter URLs —
+ * only NovelArrow's /chapter/<slug>/chapter-N and the chapter-N suffix
+ * style are stripped here).
+ */
+export function deriveNovelBaseUrl(novelUrl: string): string {
+  const arrowChapter = novelUrl.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
+  return arrowChapter
+    ? `${arrowChapter[1]}/novel/${arrowChapter[2]}`
+    : novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
+}
+
 export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelInfo {
   try {
     const result: NovelInfo = {

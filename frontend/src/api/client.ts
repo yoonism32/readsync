@@ -297,13 +297,11 @@ export const settings = {
 };
 
 // ── Admin ─────────────────────────────────────────────────
-
-import type { BotStatus } from '../types/index.js';
+// Chapter-update bot automation is intentionally disabled in production —
+// see docs/ARCHITECTURE.md. No client methods for /admin/bot/* here; those
+// routes 503 until a bot module is deliberately wired back in.
 
 export const admin = {
-  botStatus: () => request<BotStatus>('/admin/bot/status'),
-  triggerBot: () => request('/admin/bot/trigger', { method: 'POST' }),
-  botProgress: () => request('/admin/bot/progress'),
   staleNovels: (hours?: number) => request('/admin/novels/stale', { qs: { hours } }),
 };
 

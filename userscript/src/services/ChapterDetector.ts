@@ -95,6 +95,37 @@ export function isChapterPath(pathname: string): boolean {
   return !!(pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment));
 }
 
+/**
+ * Given the current page URL, derive the novel's main/base page URL.
+ *
+ * bot/src/parseNovelInfo.ts has its own, simpler version of this same
+ * derivation (see NovelScraper.ts) for the Node/regex-on-HTML scraping
+ * context — the two can't share a module without new cross-package build
+ * tooling (userscript is Vite-bundled, bot is plain tsc with a rootDir
+ * restricted to bot/src, and neither is an npm workspace today), so keep
+ * them in sync by hand and see the parity test in
+ * __tests__/regression/novelBaseUrlDerivation.test.ts, which documents
+ * where the two currently agree and where they diverge.
+ */
+export function deriveNovelBaseUrl(currentUrl: string): string {
+  // NovelArrow: /chapter/<slug>/chapter-N-title → novel page is /novel/<slug>
+  const arrowMatch = currentUrl.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)\//);
+  if (arrowMatch) {
+    return `${arrowMatch[1]}/novel/${arrowMatch[2]}`;
+  }
+
+  let base = currentUrl
+    .replace(/\/c*chapter-?\d+.*$/, '')
+    .replace(/\/\d+[-][^/]*$/, '');
+
+  if (base === currentUrl) {
+    const baseMatch = currentUrl.match(/(https?:\/\/[^/]+\/(?:b|novel)\/[^/]+)\//);
+    if (baseMatch) base = baseMatch[1];
+  }
+
+  return base;
+}
+
 /* ===== Latest chapter detection ===== */
 
 // Module-level cache for the real chapter count fetched from the main novel page
@@ -255,22 +286,7 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
     if (headerCount === null && (maxChapter === 0 || maxChapter < 500)) {
       log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
 
-      let novelMainUrl = location.href;
-
-      // NovelArrow: /chapter/<slug>/chapter-N-title → novel page is /novel/<slug>
-      const arrowMatch = location.href.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)\//);
-      if (arrowMatch) {
-        novelMainUrl = `${arrowMatch[1]}/novel/${arrowMatch[2]}`;
-      } else {
-        novelMainUrl = location.href
-          .replace(/\/c*chapter-?\d+.*$/, '')
-          .replace(/\/\d+[-][^/]*$/, '');
-
-        if (novelMainUrl === location.href) {
-          const baseMatch = location.href.match(/(https?:\/\/[^/]+\/(?:b|novel)\/[^/]+)\//);
-          if (baseMatch) novelMainUrl = baseMatch[1];
-        }
-      }
+      const novelMainUrl = deriveNovelBaseUrl(location.href);
 
       fetch(novelMainUrl)
         .then(response => response.text())
