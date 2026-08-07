@@ -16,7 +16,11 @@ function errorDetail(error: unknown): string {
 }
 
 export function Manage() {
-  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
+  // Polls so progress synced from other devices/tabs shows up without a
+  // manual page reload — see docs/ARCHITECTURE.md.
+  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
+    refreshInterval: 60_000,
+  });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);

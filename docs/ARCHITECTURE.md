@@ -33,8 +33,21 @@ dist/server.js`) and the Dockerfile's production stage, which copies only
    writes a `progress_snapshots` row, and maintains a `reading_sessions` row
    (30-minute idle timeout closes a session).
 3. The route emits `progress:updated` over Socket.IO to that user's
-   `user:{id}` room, so any other open tab/device updates live.
-4. The React SPA (`frontend/`) reads the same data via SWR hooks hitting the
+   `user:{id}` room. **The React SPA does not consume this today** —
+   `socket.io-client` isn't even a frontend dependency, confirmed by grep.
+   The WebSocket layer is real and working server-side (it's what the
+   [second-screen companion](./ROADMAP.md#second-screen-companion--design-in-progress)
+   idea is designed around), but no current page listens for it.
+4. Instead, Dashboard/Explorer/Manage poll `/api/v1/novels` every 60s
+   (`refreshInterval` in their `useSWR` calls) to pick up progress synced
+   from other devices/tabs without a manual reload. MyList polls the same
+   endpoint every 3 minutes. This was a real bug until 2026-08-07 — those
+   three pages previously had `revalidateOnFocus: false` and no interval at
+   all, so newly-read chapters wouldn't appear until a hard page refresh.
+   See [ROADMAP.md](./ROADMAP.md) for wiring up the real WebSocket push
+   instead of polling, which was considered and deferred in favor of this
+   smaller fix.
+5. The React SPA (`frontend/`) reads the same data via SWR hooks hitting the
    `/api/v1/*` endpoints, and receives the same WebSocket events.
 
 ## Auth — two tiers, deliberately different

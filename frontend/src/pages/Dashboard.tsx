@@ -65,7 +65,12 @@ function MinorStat({ label, value, sub }: { label: string; value: string | numbe
 
 export function Dashboard() {
   const { data: stats, isLoading: statsLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
-  const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
+  // Polls so Continue Reading picks up progress synced from other devices/tabs
+  // without a manual page reload — see docs/ARCHITECTURE.md's note on why this
+  // is polling rather than the WebSocket push the backend already emits.
+  const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, {
+    refreshInterval: 60_000,
+  });
 
   const recentNovels = (novelsData ?? [])
     .filter(n => n.status === 'reading' && n.latest_read_at)

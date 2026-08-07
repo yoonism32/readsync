@@ -2,15 +2,17 @@
 
 Cross-device reading progress sync for web novels. A userscript (Tampermonkey,
 Violentmonkey, or any other GM-compatible manager) tracks your scroll position
-on NovelArrow/NovelBin chapter pages and syncs it in real time to every other
-device you read on.
+on NovelArrow/NovelBin chapter pages and syncs it to the server as you read;
+the dashboard picks up new progress via polling (every 60s on Dashboard/
+Explorer/Manage, every 3 minutes on My List).
 
 ## Stack
 
 - **Backend** — Node.js, Express 5, TypeScript (`src/`), Postgres (Supabase-hosted)
 - **Frontend** — React 19 SPA served at `/app` (`frontend/`)
 - **Browser client** — userscript, built for Tampermonkey/Violentmonkey (`userscript/`)
-- **Realtime** — Socket.IO, so progress updates appear live across open tabs/devices
+- **Realtime** — Socket.IO is wired server-side (used for the second-screen
+  companion idea) but the SPA doesn't consume it yet — see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
 Full architecture, data flow, and auth model: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
 

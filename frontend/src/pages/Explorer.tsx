@@ -52,7 +52,11 @@ export function Explorer() {
   const [view, setView] = useState<ViewMode>('grid');
   const [panelOpen, setPanelOpen] = useState(false);
 
-  const { data, isLoading } = useSWR<Novel[]>('/novels', fetchNovels, { revalidateOnFocus: false });
+  // Polls so progress synced from other devices/tabs shows up without a
+  // manual page reload — see docs/ARCHITECTURE.md.
+  const { data, isLoading } = useSWR<Novel[]>('/novels', fetchNovels, {
+    refreshInterval: 60_000,
+  });
   const novels = useMemo(() => data ?? [], [data]);
   const genres = useMemo(() => collectGenres(novels), [novels]);
   const activeCount = activeFilterCount(filters);
