@@ -1,6 +1,6 @@
 'use strict';
 
-import { STEP, AUTO_PIX, AUTO_MS, PCT_DECIMALS, RESTORE_LIMIT, IGNORE_LOW_PCT } from './config.js';
+import { STEP, AUTO_PIX, AUTO_MS, PCT_DECIMALS, RESTORE_LIMIT, IGNORE_LOW_PCT, CHAPTER_GRACE_MS } from './config.js';
 import { generateDeviceId, getDeviceLabel } from './services/DeviceManager.js';
 import {
   normalizePath, normalizeNovelId, isChapterPath,
@@ -84,6 +84,9 @@ new MutationObserver(() => recheckScrollEl()).observe(document.body, { childList
 let normalizedPath = normalizePath(location.pathname);
 let storeKey = `nb_scrollpos:${normalizedPath}`;
 let completionSynced = false;
+// Set by initForChapter on every load/SPA nav. Scroll position read within
+// CHAPTER_GRACE_MS of this is not trusted for syncing — see onAnyScroll.
+let chapterInitAt = Date.now();
 log('Normalization', { raw: location.pathname, normalizedPath, storeKey });
 
 /* ===== Shared sync context ===== */
@@ -140,6 +143,18 @@ function addProgressBar(): void {
 
     if (isRestored()) { clearRestored(); return; }
 
+    // Scroll position right after landing on a chapter can be transiently
+    // wrong (site-side scroll-restoration quirks, lazy-loaded content still
+    // growing scrollHeight under an unmoved scrollTop) — the completion
+    // fast-path below fires an unconditional, un-debounced sync the instant
+    // it sees >=90%, and the server's max-progress guard would then lock a
+    // bogus reading in permanently. Let the bar/pill keep moving, but don't
+    // treat any of this as real progress until it's had time to settle.
+    if (Date.now() - chapterInitAt < CHAPTER_GRACE_MS) {
+      log('within chapter grace period, ignoring scroll for sync', { current });
+      return;
+    }
+
     const prev = parseFloat(localStorage.getItem(storeKey) ?? '0');
 
     if (current >= RESTORE_LIMIT) {
@@ -181,20 +196,24 @@ function initForChapter(reason: string): void {
   storeKey = `nb_scrollpos:${normalizedPath}`;
   syncCtx.pageLoadTime = Date.now();
   completionSynced = false;
+  chapterInitAt = Date.now();
   recheckScrollEl();
   clearRestored();
   maybeShowRestore(storeKey, () => page, pctNow);
   log('chapter init', { reason, normalizedPath, storeKey });
 
-  // iOS fix: always register an early heartbeat (even at 0%). One pending
-  // heartbeat at a time — rapid A/D presses must not stack syncs.
+  // iOS fix: always register a heartbeat (even at 0%) so a chapter visit is
+  // recorded even if scroll events are unreliable. Fires just after the
+  // grace period above so it reads a settled pctNow() rather than a
+  // transient post-load scroll position. One pending heartbeat at a time —
+  // rapid A/D presses must not stack syncs.
   if (heartbeatTimer) clearTimeout(heartbeatTimer);
   heartbeatTimer = setTimeout(() => {
     heartbeatTimer = null;
     const pct = pctNow();
-    log('early heartbeat', { reason, pct });
+    log('heartbeat', { reason, pct });
     void syncProgress(pct, syncCtx);
-  }, 800);
+  }, CHAPTER_GRACE_MS + 200);
 }
 
 /* ===== SPA route-change watcher =====

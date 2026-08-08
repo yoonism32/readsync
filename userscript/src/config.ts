@@ -18,6 +18,10 @@ export const IGNORE_LOW_PCT = 1;        // ignore saving tiny noise at very top
 export const QUIET_SYNC = true;         // silent on successful syncs; still shows errors
 export const SYNC_DEBOUNCE_MS = 500;    // Wait 0.5s before syncing progress (much faster)
 export const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
+// Scroll position right after landing on a chapter can be transiently wrong
+// (site-side scroll-restoration quirks, lazy-loaded content still shifting
+// scrollHeight) — ignore scroll-driven syncs until this much time has passed.
+export const CHAPTER_GRACE_MS = 5000;
 
 /* ===== ReadSync API ===== */
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
