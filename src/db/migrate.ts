@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import logger from '../logger.js';
 import pool from './pool.js';
+import { splitSqlStatements } from './sqlSplitter.js';
 
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
@@ -71,11 +72,7 @@ export async function runMigrations(): Promise<void> {
     if (applied.has(file)) continue;
 
     const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
-    const statements = sql
-      .split(';')
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => `${s};`);
+    const statements = splitSqlStatements(sql);
 
     const hasConcurrent = statements.some((s) => /CONCURRENTLY/i.test(s));
 

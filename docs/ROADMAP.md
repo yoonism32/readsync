@@ -23,11 +23,6 @@ this file is the trimmed, current-facing view of it.
       frontend. Considered and deferred in favor of polling on 2026-08-07 —
       revisit if 60s isn't fresh enough in practice, or when the
       second-screen companion idea below gets built (it needs this anyway).
-- [ ] **Harden the migration runner.** `migrate.ts` splits files on `;`, so
-      any `DO` block, function body, or semicolon inside a comment breaks
-      it — this crashed a deploy on 2026-08-04. Make it dollar-quote aware
-      (~20 lines) and the whole class disappears. A split-simulation check
-      exists as an ad-hoc script; fold it into the test suite.
 - [ ] **Rotate off the legacy anon key.** Don't rotate the JWT secret — it
       invalidates `service_role` too, which Storage depends on. Migrate to
       publishable/secret keys: create a secret key → update
