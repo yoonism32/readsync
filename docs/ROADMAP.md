@@ -46,11 +46,6 @@ this file is the trimmed, current-facing view of it.
 - [ ] **`tab.closed` counts as success** (`useRefreshAll.ts`) — any
       external close is banked as a win with no scrape. Deliberately left;
       a test documents the behaviour if you want to flip it.
-- [ ] **Userscript isn't served.** `dist-userscript/` is gitignored and no
-      route exposes it, so `build:all` builds it for nothing and updates
-      are a manual reinstall. Serving it plus `@updateURL`/`@downloadURL`
-      would let it self-update in any GM-API manager (Tampermonkey,
-      Violentmonkey, etc.).
 - [ ] **API documentation (OpenAPI/Swagger)** for the endpoints in
       [API_REFERENCE.md](./API_REFERENCE.md).
 - [x] ~~**`SubPlan 2` in the My List query**~~ — **corrected: already

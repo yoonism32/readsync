@@ -13,12 +13,15 @@ healthCheckPath: /health
 `npm run build:all` does, in order: compile `src/` with `tsc`, copy SQL
 migrations into `dist/db/migrations/`, install and build `frontend/`
 (output lands in `public/app/`), then install and build `userscript/`
-(output lands in `dist-userscript/readsync.user.js`, distributed to users
-manually — it isn't served by the app itself).
+(output lands in `dist-userscript/readsync.user.js`). `GET /readsync.user.js`
+serves that file directly (see `src/routes/userscript.ts`), and the built
+header carries `@updateURL`/`@downloadURL` pointing at that same route, so
+GM-API managers (Tampermonkey, Violentmonkey) self-update once the userscript
+version (`userscript/package.json`) is bumped and redeployed.
 
 `Dockerfile` mirrors this for container deploys: the production stage
-copies only `dist/`, `public/`, `package.json`, and pruned `node_modules`.
-Nothing under `bot/` or `dist-bot/` is included — see
+copies `dist/`, `public/`, `dist-userscript/`, `package.json`, and pruned
+`node_modules`. Nothing under `bot/` or `dist-bot/` is included — see
 [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production).
 
 There is no `start:legacy` anymore — the old root-level `server.js` and its

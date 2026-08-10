@@ -32,6 +32,7 @@ import { createProgressRouter } from './routes/progress.js';
 import sessionsRouter from './routes/sessions.js';
 import settingsRouter from './routes/settings.js';
 import statsRouter from './routes/stats.js';
+import userscriptRouter from './routes/userscript.js';
 import { authenticateSocket } from './websocket/auth.js';
 import { registerSocketHandlers } from './websocket/handlers.js';
 
@@ -144,6 +145,7 @@ export function createApp(): {
   app.use(settingsRouter);
   app.use(coversRouter);
   app.use(adminRouter);
+  app.use(userscriptRouter);
 
   // ── SPA catch-all (React app at /app/*) ──────────────────────────────────────
 

@@ -37,6 +37,7 @@ USER appuser
 
 COPY --from=build --chown=appuser:appgroup /app/dist ./dist
 COPY --from=build --chown=appuser:appgroup /app/public ./public
+COPY --from=build --chown=appuser:appgroup /app/dist-userscript ./dist-userscript
 COPY --from=build --chown=appuser:appgroup /app/node_modules ./node_modules
 COPY --from=build --chown=appuser:appgroup /app/package.json ./
 

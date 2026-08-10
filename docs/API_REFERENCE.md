@@ -149,3 +149,9 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 | POST | `/admin/force-refresh-all` | `validateApiKey` | **Was unauthenticated** — fixed; see `__tests__/regression/adminAuth.test.ts` |
 | GET | `/api/v1/admin/bot/progress` | `validateApiKey` | DB portion works; bot-status portion is a stub in production |
 | POST | `/api/v1/admin/novels/auto-update` | `validateApiKey` | Called by the userscript's "Update All" flow, not the bot |
+
+## userscript.ts (factory: `createUserscriptRouter(path?)`)
+
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/readsync.user.js` | — | Serves `dist-userscript/readsync.user.js`; `Cache-Control: no-cache` and no auth so GM-API managers (Tampermonkey, Violentmonkey) can poll `@updateURL`/`@downloadURL` outside any session; `404` if the userscript hasn't been built |
