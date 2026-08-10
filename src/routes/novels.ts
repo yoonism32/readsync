@@ -629,6 +629,37 @@ router.put(
   },
 );
 
+// PUT /api/v1/novels/:novelId/rating
+router.put(
+  '/api/v1/novels/:novelId/rating',
+  [
+    param('novelId').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }),
+    body('rating').isFloat({ min: 0, max: 5 }),
+    handleValidationErrors,
+  ],
+  validateApiKey,
+  validateNovelId,
+  async (req: Request, res: Response) => {
+    // Snap to the nearest half-star so client float drift can't write an
+    // off-grid value (e.g. 3.3 from a rounding bug in a future client).
+    const snapped = Math.round((req.body as { rating: number }).rating * 2) / 2;
+    // 0 means "clear the rating" — the DB stores that as NULL (the existing
+    // "unrated" convention; see the COALESCE(m.rating, 0) read paths above),
+    // not literal 0, which the half-star CHECK constraint rejects.
+    const ratingToStore = snapped === 0 ? null : snapped;
+    const userId = (req as AuthenticatedRequest).user.id;
+    try {
+      await pool.query(
+        `INSERT INTO user_novel_meta (user_id, novel_id, rating, updated_at) VALUES ($1, $2, $3, CURRENT_TIMESTAMP) ON CONFLICT (user_id, novel_id) DO UPDATE SET rating = EXCLUDED.rating, updated_at = CURRENT_TIMESTAMP`,
+        [userId, req.params.novelId, ratingToStore],
+      );
+      res.json({ success: true, rating: snapped });
+    } catch (error) {
+      handleDbError(res, error, 'Update novel rating');
+    }
+  },
+);
+
 // POST /api/v1/novels/bulk-status
 router.post(
   '/api/v1/novels/bulk-status',

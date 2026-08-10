@@ -70,7 +70,10 @@ export function normalizeNovel(raw: RawNovel): Novel {
     genre: raw.genre,
     status: raw.status,
     favorite: raw.favorite,
-    rating: raw.rating,
+    // pg returns NUMERIC columns as strings, not numbers (unlike the
+    // INTEGER rating used to be) — same reason percent/chapter_num below
+    // go through toNumber.
+    rating: toNumber(raw.rating),
     notes: raw.notes,
     latest_chapter_num: raw.latest_chapter_num,
     latest_chapter_title: raw.latest_chapter_title,

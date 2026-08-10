@@ -143,6 +143,12 @@ export const novels = {
       body: { notes },
     }),
 
+  setRating: (novelId: string, rating: number) =>
+    request(`/novels/${encodeURIComponent(novelId)}/rating`, {
+      method: 'PUT',
+      body: { rating },
+    }),
+
   startReread: (novelId: string) =>
     request(`/novels/${encodeURIComponent(novelId)}/reread`, { method: 'POST' }),
 

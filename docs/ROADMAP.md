@@ -116,7 +116,6 @@ survived two rounds of review against the actual codebase:
 
 - [ ] **NovelUpdates reading-list bridge** — two-way sync so the two lists don't drift
 - [ ] **Time-boxed reading sprints** — opt-in 7-day challenges with a completion badge
-- [ ] **Half-star rating** — a star-click control on the novel page (no rating UI exists today)
 - [ ] **Weekly data-health digest** — auto-corrections, cooldown'd mirrors, rejected regressions from the past week, surfaced proactively
 - [ ] **Accessible reader overlay** — dyslexia-friendly font/spacing toggle + ARIA live-region sync announcements, injected on the source page
 - [ ] **Second-screen companion view** — ambient status display (not a reading surface); design in progress, see below

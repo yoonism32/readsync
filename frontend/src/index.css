@@ -40,6 +40,15 @@
   --color-text-muted:   #8e9a96;
   --color-text-faint:   #4e5754;
 
+  /* Rating gold — deliberately not --color-warning below: that token is
+     flat Tailwind amber-400 at 96% saturation, which reads as an
+     off-the-shelf default sitting next to the hand-tuned crimson (53%)
+     and teal (62%) above. This antique gold sits at 62% saturation —
+     in line with the rest of the palette — while keeping the universal
+     "stars = gold" affordance. 8.53:1 against --color-bg (AAA). */
+  --color-gold:         #d2a241;
+  --color-gold-bright:  #dab66c;
+
   /* Semantic */
   --color-success:        #34d0ba;
   --color-success-dim:    rgba(52,208,186,0.12);

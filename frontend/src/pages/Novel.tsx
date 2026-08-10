@@ -12,6 +12,7 @@ import { NotesPanel } from '../components/NotesPanel.js';
 import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
 import { EditProgress } from '../components/EditProgress.js';
+import { RateNovel } from '../components/RateNovel.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { StarIcon, ExternalLinkIcon, CrownIcon } from '../components/Icon.js';
 import type { Novel } from '../types/index.js';
@@ -95,6 +96,9 @@ export function NovelPage() {
               <HiatusBadge novel={novel} />
             </div>
             {novel.author && <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 8 }}>by {novel.author}</p>}
+            <div style={{ marginBottom: 8 }}>
+              <RateNovel novel={novel} />
+            </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <StatusBadge status={novel.status} />
               {novel.genre && (
