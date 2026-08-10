@@ -41,8 +41,8 @@ From `.env.example`:
 | `PORT` | HTTP port (defaults to 3000) |
 | `DATABASE_URL` | Postgres connection string (Supabase) |
 | `NODE_ENV` | `development` / `production` |
-| `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` | Supabase project credentials |
-| `BOT_DISABLED`, `API_KEY` | **Not read anywhere in current code** — see [DATABASE.md](./DATABASE.md#known-dead-config) |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Supabase project credentials (Storage access — `BackupService.ts`, `covers.ts`) |
+| `BOT_DISABLED`, `API_KEY`, `SUPABASE_ANON_KEY` | **Not read anywhere in current code** — see [DATABASE.md](./DATABASE.md#known-dead-config) |
 
 ## Local development
 

@@ -35,9 +35,13 @@ Postgres, Supabase-hosted. Schema is defined by 10 sequential migrations in
 
 ## Known dead config
 
-`.env.example` lists `BOT_DISABLED` and `API_KEY` — neither is read anywhere
-in `src/` or `bot/` today (confirmed by grep). They're vestigial from an
-earlier version of the auth/bot design; the actual bot-off mechanism is
-described in [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production),
+`.env.example` lists `BOT_DISABLED`, `API_KEY`, and `SUPABASE_ANON_KEY` —
+none is read anywhere in `src/` or `bot/` today (confirmed by grep). The
+first two are vestigial from an earlier version of the auth/bot design;
+the actual bot-off mechanism is described in
+[ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production),
 and the actual data-plane auth is the per-user `api_key` column on `users`,
-not an env var.
+not an env var. `SUPABASE_ANON_KEY` was never wired up — the only Supabase
+credential the backend actually uses is `SUPABASE_SERVICE_KEY` (Storage
+access in `BackupService.ts`/`covers.ts`); the `SUPABASE_KEY` export in
+`config.ts` that fell back to it was deleted as dead code alongside this.
