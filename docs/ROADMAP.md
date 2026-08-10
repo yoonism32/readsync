@@ -23,19 +23,6 @@ this file is the trimmed, current-facing view of it.
       frontend. Considered and deferred in favor of polling on 2026-08-07 —
       revisit if 60s isn't fresh enough in practice, or when the
       second-screen companion idea below gets built (it needs this anyway).
-- [ ] **Rotate the legacy `service_role` key.** 2026-08-10 audit: the
-      `SUPABASE_ANON_KEY` half of this was already moot — it was dead
-      config (removed, see [DATABASE.md](./DATABASE.md#known-dead-config))
-      and a modern `sb_publishable_...` key already exists project-side.
-      What's actually still legacy and load-bearing is
-      `SUPABASE_SERVICE_KEY` (a JWT `service_role` key), used directly by
-      `BackupService.ts` and `covers.ts` for Storage access. Don't rotate
-      the JWT secret — it invalidates `service_role` too. Steps: generate
-      a new secret key in Supabase (Project Settings → API Keys — dashboard
-      only, no API for this) → update `SUPABASE_SERVICE_KEY` on Render →
-      verify covers + backups → deactivate the legacy key. Both systems run
-      in parallel, so no downtime window. Pre-rotation DB backup:
-      `~/Backups/readsync/readsync-pre-key-rotation-20260810-211905.sql`.
 - [ ] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
       reset per novel. Can no longer override a larger value, and Refresh
       All is immune (fresh tab per novel), but browsing several novels in
