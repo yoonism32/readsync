@@ -11,6 +11,25 @@ this file is the trimmed, current-facing view of it.
 
 ## Ops & infrastructure
 
+- [ ] **Switch the DB pool to Supabase's transaction-mode pooler.**
+      2026-08-11 incident: a production deploy crashed on startup with
+      `EMAXCONNSESSION` — `DATABASE_URL` goes through the session-mode
+      pooler (port 5432), capped at 15 concurrent clients project-wide,
+      several of which are permanently held by Supabase-internal processes
+      (`pg_cron`, `postgres_exporter`, PostgREST, Storage). `PG_POOL_MAX`
+      defaulted to 20 — this app alone could request more connections than
+      the pooler could ever grant it, independent of any external load.
+      Immediate mitigation shipped same day: `PG_POOL_MAX` default lowered
+      to 10 (`src/config.ts`). The real fix is switching to the
+      transaction-mode pooler (port 6543), which hands out a physical
+      connection per-transaction instead of per-client-lifetime — matches
+      this app's actual usage (`withTransaction`, `pool.query()` one-shots)
+      and doesn't have the same low hard cap. Needs deliberate testing
+      before flipping: transaction mode doesn't support session-scoped
+      features (prepared statements across calls, `SET` persisting outside
+      a transaction, session-level `LISTEN`) — audit `src/` for anything
+      that assumes connection affinity across separate `pool.query()` calls
+      before switching.
 - [ ] **Wire up real WebSocket updates in the SPA.** Discovered 2026-08-07:
       the backend emits `progress:updated` over Socket.IO on every accepted
       sync, but the frontend has never consumed it — `socket.io-client`

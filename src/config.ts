@@ -6,7 +6,15 @@ export const NODE_ENV = process.env.NODE_ENV ?? 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
 
 // ── Database pool ────────────────────────────────────────────────────────────
-export const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX ?? '20', 10);
+// DATABASE_URL goes through Supabase's session-mode pooler (port 5432),
+// which caps this project at 15 concurrent clients total — and several of
+// those 15 are permanently held by Supabase-internal processes (pg_cron,
+// postgres_exporter, PostgREST, Storage), not available to this app. The
+// previous default of 20 let this app alone request more connections than
+// the pooler could ever grant it. Crashed a production deploy on
+// 2026-08-11 (EMAXCONNSESSION) once local dev connection churn tipped an
+// already-oversubscribed pool over the edge. 10 leaves headroom.
+export const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX ?? '10', 10);
 export const PG_IDLE_TIMEOUT_MS = parseInt(
   process.env.PG_IDLE_TIMEOUT ?? '30000',
   10,
