@@ -18,6 +18,7 @@ const Settings  = lazy(() => import('./pages/Settings.js').then(m => ({ default:
 const Admin     = lazy(() => import('./pages/Admin.js').then(m => ({ default: m.Admin })));
 const Manage    = lazy(() => import('./pages/Manage.js').then(m => ({ default: m.Manage })));
 const History   = lazy(() => import('./pages/History.js').then(m => ({ default: m.History })));
+const Stats     = lazy(() => import('./pages/Stats.js').then(m => ({ default: m.Stats })));
 
 function PageFallback() {
   return (
@@ -90,6 +91,7 @@ export default function App() {
                     <Route path="novel/:novelId" element={<NovelPage />} />
                     <Route path="explorer" element={<Explorer />} />
                     <Route path="history" element={<History />} />
+                    <Route path="stats" element={<Stats />} />
                     <Route path="manage" element={<Manage />} />
                     <Route path="settings" element={<Settings />} />
                     <Route path="admin" element={<Admin />} />

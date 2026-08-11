@@ -6,7 +6,7 @@ import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
-  WrenchIcon, ShieldIcon, LogOutIcon, ClockIcon,
+  WrenchIcon, ShieldIcon, LogOutIcon, ClockIcon, BarChartIcon,
 } from './Icon.js';
 
 interface Props {
@@ -20,6 +20,7 @@ const NAV: NavItem[] = [
   { to: '/dashboard',label: 'Dashboard', Icon: DashboardIcon },
   { to: '/explorer', label: 'Explorer',  Icon: SearchIcon },
   { to: '/history',  label: 'History',   Icon: ClockIcon },
+  { to: '/stats',    label: 'Stats',     Icon: BarChartIcon },
   { to: '/manage',   label: 'Manage',    Icon: WrenchIcon },
   { to: '/settings', label: 'Settings',  Icon: GearIcon },
   { to: '/admin',    label: 'Admin',     Icon: ShieldIcon },

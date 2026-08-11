@@ -56,13 +56,9 @@ this file is the trimmed, current-facing view of it.
 ## Product features — Tier 1: deferred specs (infra already exists)
 
 All new UI goes in `frontend/`. Build order: F12 → F11 → F13 → F14 per the
-original doc, though F12/F13 were declined (see changelog) — F11 and F14
-are the two still accepted.
+original doc, though F12/F13 were declined (see changelog) — F14 is the
+one still open (F11 shipped 2026-08-11).
 
-- [ ] **F11 — Full stats page** (`/app/stats`). `GET /api/v1/stats/summary`
-      and `/stats/daily` already exist; needs one new `/stats/breakdown`
-      endpoint (busiest hour, per-device split, weekday) plus
-      `frontend/src/pages/Stats.tsx`.
 - [ ] **F14 — Reading Wrapped.** Ship in December. `computeStreaks` already
       exists. **Scope caveat:** production progress history is thin before
       December 2025 (DB was wiped for space in late 2025) — scope the first

@@ -114,12 +114,13 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 
 ## stats.ts
 
-| Method | Path | Auth |
-|---|---|---|
-| GET | `/api/v1/stats/summary` | `validateApiKey` |
-| GET | `/api/v1/stats/library` | `validateApiKey` |
-| GET | `/api/v1/stats/daily` | `validateApiKey` |
-| GET | `/api/v1/stats/novels/:novelId` | `validateApiKey` |
+| Method | Path | Auth | Notes |
+|---|---|---|---|
+| GET | `/api/v1/stats/summary` | `validateApiKey` | |
+| GET | `/api/v1/stats/library` | `validateApiKey` | |
+| GET | `/api/v1/stats/daily` | `validateApiKey` | |
+| GET | `/api/v1/stats/breakdown` | `validateApiKey` | Reading time by hour-of-day, weekday, and device — `frontend/src/pages/Stats.tsx` |
+| GET | `/api/v1/stats/novels/:novelId` | `validateApiKey` | |
 
 ## settings.ts
 

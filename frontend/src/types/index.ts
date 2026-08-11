@@ -101,6 +101,12 @@ export interface StatsSummary {
   active_devices: number;
 }
 
+export interface StatsBreakdown {
+  by_hour: { hour: number; sessions: number; seconds: number }[];
+  by_weekday: { weekday: number; label: string; sessions: number; seconds: number }[];
+  by_device: { device_id: string; device_label: string; sessions: number; seconds: number }[];
+}
+
 export interface AppNotification {
   id: number;
   novel_id: string;

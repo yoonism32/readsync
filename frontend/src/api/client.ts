@@ -182,7 +182,7 @@ export const devices = {
 
 // ── Stats ─────────────────────────────────────────────────
 
-import type { StatsSummary } from '../types/index.js';
+import type { StatsBreakdown, StatsSummary } from '../types/index.js';
 
 export const stats = {
   summary: () => request<StatsSummary>('/stats/summary'),
@@ -190,6 +190,7 @@ export const stats = {
     request('/stats/daily', { qs: params as Record<string, string> }),
   novel: (novelId: string) =>
     request(`/stats/novels/${encodeURIComponent(novelId)}`),
+  breakdown: () => request<StatsBreakdown>('/stats/breakdown'),
 };
 
 // ── Bookmarks ─────────────────────────────────────────────

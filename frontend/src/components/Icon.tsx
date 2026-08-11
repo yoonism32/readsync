@@ -190,6 +190,17 @@ export function RefreshIcon({ size = 16, className = '', style }: IconProps) {
   );
 }
 
+export function BarChartIcon({ size = 16, className = '' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" focusable="false">
+      <path d="M3 3v18h18"/>
+      <rect width="4" height="7" x="7" y="11" rx="1"/>
+      <rect width="4" height="11" x="13" y="7" rx="1"/>
+      <rect width="4" height="4" x="19" y="14" rx="1"/>
+    </svg>
+  );
+}
+
 export function BotIcon({ size = 16, className = '' }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true" focusable="false">

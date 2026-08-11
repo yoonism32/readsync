@@ -8,6 +8,7 @@ import pool from '../db/pool.js';
 import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { validateNovelId } from '../middleware/validation.js';
+import { fillBuckets } from '../services/StatsBreakdown.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -201,6 +202,78 @@ router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     handleDbError(res, error, 'Get daily statistics');
+  }
+});
+
+const WEEKDAY_LABELS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+];
+
+router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const [hourly, weekday, byDevice] = await Promise.all([
+      pool.query(
+        `SELECT EXTRACT(HOUR FROM start_time)::int AS hour,
+                COUNT(*) AS sessions,
+                COALESCE(SUM(time_spent_seconds), 0) AS seconds
+         FROM reading_sessions
+         WHERE user_id = $1 AND end_time IS NOT NULL
+         GROUP BY hour`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT EXTRACT(DOW FROM start_time)::int AS weekday,
+                COUNT(*) AS sessions,
+                COALESCE(SUM(time_spent_seconds), 0) AS seconds
+         FROM reading_sessions
+         WHERE user_id = $1 AND end_time IS NOT NULL
+         GROUP BY weekday`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT d.id AS device_id, d.device_label,
+                COUNT(rs.*) AS sessions,
+                COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds
+         FROM reading_sessions rs
+         JOIN devices d ON d.id = rs.device_id
+         WHERE rs.user_id = $1 AND rs.end_time IS NOT NULL
+         GROUP BY d.id, d.device_label
+         ORDER BY seconds DESC`,
+        [user_id],
+      ),
+    ]);
+
+    const by_hour = fillBuckets(hourly.rows, 24, (r) => r.hour).map((b) => ({
+      hour: b.index,
+      sessions: b.sessions,
+      seconds: b.seconds,
+    }));
+
+    const by_weekday = fillBuckets(weekday.rows, 7, (r) => r.weekday).map((b) => ({
+      weekday: b.index,
+      label: WEEKDAY_LABELS[b.index],
+      sessions: b.sessions,
+      seconds: b.seconds,
+    }));
+
+    const by_device = byDevice.rows.map((r) => ({
+      device_id: r.device_id as string,
+      device_label: r.device_label as string,
+      sessions: Number(r.sessions),
+      seconds: Number(r.seconds),
+    }));
+
+    res.json({ by_hour, by_weekday, by_device });
+  } catch (error) {
+    handleDbError(res, error, 'Get statistics breakdown');
   }
 });
 
