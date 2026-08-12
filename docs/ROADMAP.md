@@ -34,14 +34,53 @@ this file is the trimmed, current-facing view of it.
       the backend emits `progress:updated` over Socket.IO on every accepted
       sync, but the frontend has never consumed it — `socket.io-client`
       isn't even a dependency. Dashboard/Explorer/Manage/My List currently
-      poll `/api/v1/novels` instead (60s / 60s / 60s / 3min) as a cheaper
-      fix for stale "Continue Reading" data. Replacing the poll with a real
-      socket listener would make updates instant and cut the polling
-      requests, at the cost of adding connection lifecycle + auth (the
-      `api_key` handshake `src/websocket/auth.ts` already expects) to the
-      frontend. Considered and deferred in favor of polling on 2026-08-07 —
-      revisit if 60s isn't fresh enough in practice, or when the
-      second-screen companion idea below gets built (it needs this anyway).
+      poll `/api/v1/novels` instead (all four now 3min, see the egress
+      incident below) as a cheaper fix for stale "Continue Reading" data.
+      Replacing the poll with a real socket listener would make updates
+      instant and remove this polling traffic entirely — including its
+      contribution to Supabase egress — at the cost of adding connection
+      lifecycle + auth (the `api_key` handshake `src/websocket/auth.ts`
+      already expects) to the frontend. Considered and deferred in favor of
+      polling on 2026-08-07; the 2026-08-12 egress incident is a second,
+      stronger reason to revisit — or do it alongside the second-screen
+      companion idea below (it needs this anyway).
+- [ ] **2026-08-12 incident: Supabase Fair Use Policy warning (free-tier
+      egress).** Four independent causes, all mitigated same day, none of
+      them real usage growth:
+      1. Cover uploads (`src/routes/covers.ts`) had no `cacheControl`, so
+         Storage's 1-hour default applied to immutable, slug-addressed
+         JPEGs served via 302-redirect to every reader's `<img>` tag —
+         fixed with `cacheControl: '31536000'`.
+      2. The userscript's cross-device conflict checker
+         (`ProgressSync.ts`) polled `/api/v1/compare` every 2s forever,
+         including in backgrounded tabs (no Page Visibility guard) — fixed:
+         20s interval, skipped while hidden, immediate check on refocus.
+      3. Dashboard/Explorer/Manage polled `/api/v1/novels` every 60s
+         (shipped 2026-08-07 for the stale-data fix above) — bumped to
+         3min, matching My List's already-safe cadence.
+      Mitigated, not eliminated — the real fix for #3 is the WebSocket item
+      directly above it; #1/#2 are structurally sound now. Verify no repeat
+      warning after a full billing cycle (next check: ~2026-09-11).
+- [ ] **2026-08-12 incident: chapter-count corruption via nav-link
+      false-positive.** `extractLatestChapterInfo()` had no way to tell a
+      chapter page's "Next Chapter" nav link (current + 1) apart from a real
+      latest-chapter signal; its network fallback to the novel's main page
+      was gated behind a flat `maxChapter < 500`, so any novel past chapter
+      500 skipped it. The same wrong nav-derived number then repeated on
+      every scroll-sync, and the server's "same wrong number twice = trust
+      it" self-healing correction (built for a different bug class,
+      `ChapterCorrection.ts`) confirmed it and overwrote a correct stored
+      value. Hit one novel in production (`eternal-life-by-daily-divination`,
+      669 → 656); corrected via direct SQL. Fixed: the fallback now also
+      fires when the local candidate isn't meaningfully ahead of the chapter
+      being read (`CHAPTER_PAGE_NAV_LOOKAHEAD = 5`, `config.ts`).
+      **Residual risk, flagged in code review:** this narrows the failure
+      window rather than eliminating it — a lookahead of 5 is tuned to
+      "Next Chapter" specifically; any nav widget on any supported site that
+      legitimately jumps further ahead (batch-jump control, persistent
+      chapter-list sidebar) reproduces the same failure mode for a wider
+      gap. No structural backstop (e.g. periodic re-validation against the
+      main page independent of the local heuristic) exists yet.
 - [ ] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
       reset per novel. Can no longer override a larger value, and Refresh
       All is immune (fresh tab per novel), but browsing several novels in
