@@ -17,11 +17,27 @@ export const IGNORE_LOW_PCT = 1;        // ignore saving tiny noise at very top
 /* ===== Sync behaviour ===== */
 export const QUIET_SYNC = true;         // silent on successful syncs; still shows errors
 export const SYNC_DEBOUNCE_MS = 500;    // Wait 0.5s before syncing progress (much faster)
-export const COMPARE_CHECK_MS = 2000;   // Check for conflicts every 2s (more frequent)
+export const COMPARE_CHECK_MS = 20000;  // Check for conflicts every 20s — this is a
+                                         // perpetual poll for as long as a chapter/novel
+                                         // tab stays open (paused while hidden, see
+                                         // ProgressSync.ts), so it must stay well above
+                                         // "instant"; a cross-device jump prompt doesn't
+                                         // need sub-second freshness.
 // Scroll position right after landing on a chapter can be transiently wrong
 // (site-side scroll-restoration quirks, lazy-loaded content still shifting
 // scrollHeight) — ignore scroll-driven syncs until this much time has passed.
 export const CHAPTER_GRACE_MS = 5000;
+
+/* ===== Latest-chapter detection ===== */
+// "Next Chapter" nav links (and similar nearby-chapter widgets) put a
+// chapter page's locally-detected max a few numbers above whatever chapter
+// the reader is currently on — never near the novel's true latest release.
+// Treating that as "good enough" without confirming against the novel's
+// main page is what let a 656-chapter local read mask a true latest of 669
+// (2026-08-12 incident, eternal-life-by-daily-divination). This narrows
+// that failure window rather than eliminating it: any nav pattern jumping
+// further ahead than this would reproduce it.
+export const CHAPTER_PAGE_NAV_LOOKAHEAD = 5;
 
 /* ===== ReadSync API ===== */
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';

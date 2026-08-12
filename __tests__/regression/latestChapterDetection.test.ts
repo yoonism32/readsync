@@ -26,7 +26,7 @@
  *     always outranks the bare header count; the count only fills gaps when
  *     nothing names a chapter at all (failure #1 above).
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   extractHeaderChapterCount,
   extractLatestChapterInfo,
@@ -52,11 +52,13 @@ const globalRef = globalThis as unknown as {
   document?: unknown;
   location?: unknown;
   fetch?: unknown;
+  DOMParser?: unknown;
 };
 const original = {
   document: globalRef.document,
   location: globalRef.location,
   fetch: globalRef.fetch,
+  DOMParser: globalRef.DOMParser,
 };
 
 function stubPage({
@@ -92,7 +94,28 @@ afterEach(() => {
   globalRef.document = original.document;
   globalRef.location = original.location;
   globalRef.fetch = original.fetch;
+  globalRef.DOMParser = original.DOMParser;
 });
+
+/** Minimal DOMParser stub — just enough for the main-page fallback's
+ *  meta-tag lookup on a plain HTML string with no real DOM available. */
+function stubDOMParser(): void {
+  globalRef.DOMParser = class {
+    parseFromString(html: string) {
+      const metaMatch = html.match(
+        /<meta[^>]*(?:name|property)="og:novel:latest_chapter_name"[^>]*content="([^"]*)"/,
+      );
+      const metaEl: ElementStub | null = metaMatch
+        ? { textContent: null, getAttribute: (n) => (n === 'content' ? metaMatch[1] : null) }
+        : null;
+      return {
+        querySelector: (selector: string) =>
+          selector.includes('og:novel:latest_chapter_name') ? metaEl : null,
+        querySelectorAll: () => [],
+      };
+    }
+  };
+}
 
 describe('extractHeaderChapterCount', () => {
   it('reads the "<N> Chapters" header span', () => {
@@ -218,5 +241,55 @@ describe('extractLatestChapterInfo — fallbacks preserved', () => {
   it('returns null when the page carries no chapter signal at all', () => {
     stubPage({ spans: ['Ranking'], links: [], pathname: '/novel/slug' });
     expect(extractLatestChapterInfo().latestChapterNum).toBeNull();
+  });
+});
+
+describe('extractLatestChapterInfo — a chapter page\'s nav links must not mask a higher true latest', () => {
+  it('does not let a "Next Chapter" link (656) permanently mask the true latest (669) while reading chapter 655 of a 669-chapter novel', async () => {
+    // Production incident 2026-08-12 (eternal-life-by-daily-divination):
+    // a chapter-reading page has no og:novel meta and no "<N> Chapters"
+    // header (those only render on the novel's main page) — the only local
+    // signal is nav links, and "Next Chapter" points to 656. The old flat
+    // `maxChapter < 500` gate treated 656 as "good enough" and skipped the
+    // main-page fallback fetch that would find the true latest (669). The
+    // same wrong 656 then repeated on every scroll-triggered sync, and the
+    // server's "same wrong number twice in a row" self-healing correction
+    // (ChapterCorrection.ts) trusted it and overwrote the correct stored
+    // 669 with 656.
+    vi.resetModules();
+    const fresh = await import('../../userscript/src/services/ChapterDetector.js');
+
+    let fetchCalled = false;
+    const mainPageHtml = `<html><head>
+      <meta name="og:novel:latest_chapter_name" content="Chapter 669 - 323: Astounding Array Dao">
+    </head></html>`;
+    stubPage({
+      links: [
+        { href: 'https://novelarrow.com/chapter/eternal-life-by-daily-divination/chapter-654-prev' },
+        { href: 'https://novelarrow.com/chapter/eternal-life-by-daily-divination/chapter-656-next' },
+      ],
+      pathname: '/chapter/eternal-life-by-daily-divination/chapter-655-current',
+    });
+    globalRef.fetch = () => {
+      fetchCalled = true;
+      return Promise.resolve({ text: () => Promise.resolve(mainPageHtml) });
+    };
+    stubDOMParser();
+
+    // The very first sync on the page can't know 656 is wrong yet (the
+    // fallback fetch is fire-and-forget, so this call returns before it
+    // resolves) — but passing the reader's current chapter must be enough
+    // to trigger the fallback at all, which the flat 500 threshold didn't.
+    fresh.extractLatestChapterInfo(655);
+    expect(fetchCalled).toBe(true);
+
+    // Let the fire-and-forget main-page fetch resolve, then sync again —
+    // as every real reading session does within the next scroll-debounce
+    // tick. From here on the true latest must win, so 656 never repeats
+    // twice in a row and never gets "confirmed" server-side.
+    await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(fresh.extractLatestChapterInfo(655).latestChapterNum).toBe(669);
   });
 });

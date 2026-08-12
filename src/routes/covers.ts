@@ -139,9 +139,19 @@ async function commitMirroredCover(
   }
 
   const fileName = `${slug}.jpg`;
+  // cacheControl is unset by default, which leaves Storage's own edge cache
+  // at its 1-hour default — every reader's <img> hits Supabase Storage
+  // directly (see the redirect below), so a short cache there means the same
+  // immutable, slug-addressed file gets re-pulled from origin far more than
+  // needed. Covers are only ever replaced by re-uploading under a new slug,
+  // so a 1-year cache is safe.
   const { error: uploadError } = await supabase.storage
     .from('novel-covers')
-    .upload(fileName, buffer, { contentType: 'image/jpeg', upsert: true });
+    .upload(fileName, buffer, {
+      contentType: 'image/jpeg',
+      upsert: true,
+      cacheControl: '31536000',
+    });
 
   if (uploadError) {
     throw new Error(`upload_failed: ${uploadError.message}`);

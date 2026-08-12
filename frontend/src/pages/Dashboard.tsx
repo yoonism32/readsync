@@ -68,8 +68,10 @@ export function Dashboard() {
   // Polls so Continue Reading picks up progress synced from other devices/tabs
   // without a manual page reload — see docs/ARCHITECTURE.md's note on why this
   // is polling rather than the WebSocket push the backend already emits.
+  // 3 minutes (matching MyList) rather than 60s: an open tab polls forever,
+  // and every full-library refetch counts as Supabase DB egress.
   const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, {
-    refreshInterval: 60_000,
+    refreshInterval: 3 * 60_000,
   });
 
   const recentNovels = (novelsData ?? [])

@@ -1,3 +1,4 @@
+import { CHAPTER_PAGE_NAV_LOOKAHEAD } from '../config.js';
 import type { ChapterInfo, LatestChapterInfo } from '../types/index.js';
 
 const LOG_TAG = 'ReadSync';
@@ -151,7 +152,9 @@ export function extractHeaderChapterCount(root: ParentNode = document): number |
   return null;
 }
 
-export function extractLatestChapterInfo(): LatestChapterInfo {
+export function extractLatestChapterInfo(
+  currentChapterNum: number | null = null,
+): LatestChapterInfo {
   try {
     // Every strategy below contributes a *candidate* and the largest wins.
     // Returning at the first strategy that produced a number is what let a
@@ -283,8 +286,17 @@ export function extractLatestChapterInfo(): LatestChapterInfo {
 
     // Only worth a network round-trip when the header gave us nothing — on a
     // novel page it always does, so this now fires mainly on chapter pages.
-    if (headerCount === null && (maxChapter === 0 || maxChapter < 500)) {
-      log('Local detection seems limited, trying main page fetch', { localMax: maxChapter });
+    // A flat "< 500" threshold isn't enough there: on a chapter page,
+    // `maxChapter` mostly comes from "Next Chapter" nav (current + 1), so a
+    // reader anywhere past chapter 500 always clears it without local
+    // detection ever having found the true latest.
+    const localDetectionUnreliable =
+      maxChapter === 0 ||
+      maxChapter < 500 ||
+      (currentChapterNum != null &&
+        maxChapter <= currentChapterNum + CHAPTER_PAGE_NAV_LOOKAHEAD);
+    if (headerCount === null && localDetectionUnreliable) {
+      log('Local detection seems limited, trying main page fetch', { localMax: maxChapter, currentChapterNum });
 
       const novelMainUrl = deriveNovelBaseUrl(location.href);
 

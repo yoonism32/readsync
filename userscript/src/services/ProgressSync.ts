@@ -36,7 +36,7 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
   log('parseChapterEnhanced result (syncProgress)', chapterInfo);
   if (!chapterInfo) return;
 
-  const latestChapterInfo = extractLatestChapterInfo();
+  const latestChapterInfo = extractLatestChapterInfo(chapterInfo.num);
 
   const payload: SyncPayload = {
     user_key: READSYNC_API_KEY,
@@ -134,7 +134,7 @@ export function sendFinal(percent: number, ctx: SyncContext): void {
   try {
     const chapterInfo = parseChapterEnhanced(location.pathname);
     if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
-    const latestChapterInfo = extractLatestChapterInfo();
+    const latestChapterInfo = extractLatestChapterInfo(chapterInfo.num);
     const payload: SyncPayload = {
       user_key: READSYNC_API_KEY,
       device_id: ctx.deviceId,
@@ -169,16 +169,40 @@ export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
   }
 }
 
+/** Runs the interval tick unless the tab is backgrounded. Without this, a
+ *  chapter tab left open (a normal way to keep one's place) polls the
+ *  server forever regardless of whether anyone's looking at it — this was
+ *  the single largest source of Supabase egress/DB load in the project. */
+function checkIfVisible(ctx: SyncContext): void {
+  if (document.hidden) return;
+  void checkForSyncConflict(ctx);
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible' && visibleCtx) checkIfVisible(visibleCtx);
+}
+
+// Set once startConflictChecker runs (once per page life — see boot() in
+// main.ts) so onVisibilityChange can reach ctx without capturing a fresh
+// closure that cleanup() couldn't remove.
+let visibleCtx: SyncContext | null = null;
+
 export function startConflictChecker(ctx: SyncContext): void {
+  visibleCtx = ctx;
   setTimeout(() => {
-    void checkForSyncConflict(ctx);
-    compareInterval = setInterval(() => { void checkForSyncConflict(ctx); }, COMPARE_CHECK_MS);
+    checkIfVisible(ctx);
+    compareInterval = setInterval(() => checkIfVisible(ctx), COMPARE_CHECK_MS);
     log('conflict checker started', { intervalMs: COMPARE_CHECK_MS });
   }, 1000);
+
+  // Catch up immediately on refocus instead of waiting up to
+  // COMPARE_CHECK_MS for the next tick.
+  document.addEventListener('visibilitychange', onVisibilityChange);
 }
 
 export function cleanup(): void {
   cancelPendingSync();
   if (compareInterval) clearInterval(compareInterval);
+  document.removeEventListener('visibilitychange', onVisibilityChange);
   log('beforeunload cleanup');
 }

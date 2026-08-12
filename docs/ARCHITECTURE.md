@@ -38,15 +38,16 @@ dist/server.js`) and the Dockerfile's production stage, which copies only
    The WebSocket layer is real and working server-side (it's what the
    [second-screen companion](./ROADMAP.md#second-screen-companion--design-in-progress)
    idea is designed around), but no current page listens for it.
-4. Instead, Dashboard/Explorer/Manage poll `/api/v1/novels` every 60s
-   (`refreshInterval` in their `useSWR` calls) to pick up progress synced
-   from other devices/tabs without a manual reload. MyList polls the same
-   endpoint every 3 minutes. This was a real bug until 2026-08-07 — those
-   three pages previously had `revalidateOnFocus: false` and no interval at
-   all, so newly-read chapters wouldn't appear until a hard page refresh.
-   See [ROADMAP.md](./ROADMAP.md) for wiring up the real WebSocket push
-   instead of polling, which was considered and deferred in favor of this
-   smaller fix.
+4. Instead, Dashboard/Explorer/Manage/MyList all poll `/api/v1/novels`
+   every 3 minutes (`refreshInterval` in their `useSWR` calls) to pick up
+   progress synced from other devices/tabs without a manual reload. Those
+   pages previously had `revalidateOnFocus: false` and no interval at all
+   (until 2026-08-07), so newly-read chapters wouldn't appear until a hard
+   page refresh; a 60s interval fixed that but, left running on open tabs
+   indefinitely, contributed to a Supabase egress warning (2026-08-12) —
+   3 minutes is the current compromise. See [ROADMAP.md](./ROADMAP.md) for
+   wiring up the real WebSocket push instead of polling, which is the
+   actual fix and remains deferred.
 5. The React SPA (`frontend/`) reads the same data via SWR hooks hitting the
    `/api/v1/*` endpoints, and receives the same WebSocket events.
 

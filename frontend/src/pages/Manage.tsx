@@ -17,9 +17,11 @@ function errorDetail(error: unknown): string {
 
 export function Manage() {
   // Polls so progress synced from other devices/tabs shows up without a
-  // manual page reload — see docs/ARCHITECTURE.md.
+  // manual page reload — see docs/ARCHITECTURE.md. 3 minutes (matching
+  // MyList): an open tab polls forever, and every full-library refetch
+  // counts as Supabase DB egress.
   const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
-    refreshInterval: 60_000,
+    refreshInterval: 3 * 60_000,
   });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
