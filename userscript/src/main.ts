@@ -267,9 +267,25 @@ function navigate(direction: 'next' | 'previous'): void {
   let link: HTMLAnchorElement | HTMLButtonElement | null =
     document.querySelector(direction === 'next' ? '#next_chap' : '#prev_chap');
 
-  // Stage 2: NovelArrow — hydrated links to adjacent chapters of this novel.
-  // Chapter URLs are /chapter/<slug>/chapter-N-<title>, so find the anchor
-  // whose chapter number is exactly current±1 (numeric URL building 404s here).
+  // Stage 2: NovelArrow reader icon buttons (the circular prev/next controls) —
+  // no href, no text, only aria-label/title. Tried first because clicking one
+  // is exactly what a user click does: an in-place SPA route change to
+  // whatever chapter the server actually named as prevChapter/nextChapter,
+  // no reload, and correct even across numbering gaps (bonus/split chapters)
+  // that the number-guessing stage below can't account for.
+  if (!link) {
+    link = document.querySelector(direction === 'next'
+      ? 'button[aria-label="Next chapter" i],button[title="Next chapter" i]'
+      : 'button[aria-label="Previous chapter" i],button[title="Previous chapter" i]');
+    if (link?.hasAttribute('disabled')) link = null;
+  }
+
+  // Stage 3: NovelArrow — hydrated links to adjacent chapters of this novel,
+  // as a fallback for when Stage 2's button isn't present/found. Chapter URLs
+  // are /chapter/<slug>/chapter-N-<title>, so find the anchor whose chapter
+  // number is exactly current±1 (numeric URL building 404s here) — this can
+  // disagree with the server's real prevChapter/nextChapter across numbering
+  // gaps, which is exactly why Stage 2 is preferred when available.
   if (!link) {
     const arrowMatch = location.pathname.match(/^\/chapter\/([^/]+)\/chapter-?(\d+)/i);
     if (arrowMatch) {
@@ -282,14 +298,6 @@ function navigate(direction: 'next' | 'previous'): void {
           return m !== null && parseInt(m[1], 10) === targetNum;
         }) ?? null;
     }
-  }
-
-  // Stage 3: NovelArrow reader icon buttons — no href, no text, only aria-label/title
-  if (!link) {
-    link = document.querySelector(direction === 'next'
-      ? 'button[aria-label="Next chapter" i],button[title="Next chapter" i]'
-      : 'button[aria-label="Previous chapter" i],button[title="Previous chapter" i]');
-    if (link?.hasAttribute('disabled')) link = null;
   }
 
   // Stage 4: rel="next"/"prev"
