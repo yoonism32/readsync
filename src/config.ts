@@ -51,6 +51,12 @@ export const SESSION_IDLE_SECONDS = 1800;
 export const SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT = 10;
 export const DEVICE_BEHIND_THRESHOLD_PERCENT = 20;
 export const AUTO_REREAD_CHAPTER_THRESHOLD = 50;
+// Genuine rereads restart at/near chapter 1. A big backward chapter delta
+// landing mid-book is far more likely to be a stale/reloaded browser tab
+// replaying an old page than an intentional restart, so auto-reread only
+// silently fires this close to the start — anything else falls through to
+// the explicit behind_chapter rejection + confirm-banner flow instead.
+export const AUTO_REREAD_MAX_START_CHAPTER = 5;
 
 // ── Time constants (ms) ──────────────────────────────────────────────────────
 export const MS_PER_SECOND = 1_000;

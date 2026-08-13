@@ -6,6 +6,7 @@ import { backups as backupsApi, novels as novelsApi, settings as settingsApi, fo
 import type { BackupsStatus, Prefs, LibraryHealth } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
 import { BookOpenIcon, DashboardIcon, ClockIcon, BotIcon } from '../components/Icon.js';
+import { useNow } from '../hooks/useNow.js';
 
 const quickLinkStyle: React.CSSProperties = {
   textDecoration: 'none',
@@ -21,6 +22,7 @@ function readNotificationPermission(): string {
 }
 
 export function Settings() {
+  useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const [notificationPermission, setNotificationPermission] = useState(readNotificationPermission);
   const { data: lastRefreshData } = useSWR(
     'settings-last-refresh',

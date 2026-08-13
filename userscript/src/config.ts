@@ -23,6 +23,13 @@ export const COMPARE_CHECK_MS = 20000;  // Check for conflicts every 20s — thi
                                          // ProgressSync.ts), so it must stay well above
                                          // "instant"; a cross-device jump prompt doesn't
                                          // need sub-second freshness.
+// Scroll-driven syncs can be delayed or missed (e.g. a backgrounded window's
+// scroll/timer delivery), leaving the Dashboard stuck on a stale percent
+// with no self-correction. The 20s compare tick above already fetches this
+// device's last-synced percent — if the live DOM position is more than this
+// far ahead, push it too, piggybacking on the existing interval instead of
+// adding a new one. Keep it above scroll jitter/rounding noise.
+export const HEARTBEAT_SYNC_MIN_DELTA_PCT = 2;
 // Scroll position right after landing on a chapter can be transiently wrong
 // (site-side scroll-restoration quirks, lazy-loaded content still shifting
 // scrollHeight) — ignore scroll-driven syncs until this much time has passed.

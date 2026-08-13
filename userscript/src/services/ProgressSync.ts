@@ -1,4 +1,4 @@
-import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC } from '../config.js';
+import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC, HEARTBEAT_SYNC_MIN_DELTA_PCT } from '../config.js';
 import { postProgress, beaconProgress, compareProgress, postReread } from '../api/client.js';
 import { showPeekBanner } from './UIManager.js';
 import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
@@ -13,6 +13,7 @@ interface SyncContext {
   deviceLabel: string;
   pageLoadTime: number;
   getScrollEl: () => Element;
+  getPercent: () => number;
   updateBadgeStatus: (text: string, isError?: boolean) => void;
   showSyncBanner: (globalState: import('../types/index.js').GlobalState) => void;
 }
@@ -154,6 +155,19 @@ export function sendFinal(percent: number, ctx: SyncContext): void {
   }
 }
 
+/**
+ * This tick's /compare call already fetched this device's last-synced
+ * percent for free — if the live scroll position has pulled ahead of it (a
+ * scroll-driven sync got delayed or missed), it should be pushed now instead
+ * of leaving the Dashboard stuck on a stale value until the next scroll.
+ * Pure so it's testable without mocking location/network — see
+ * checkForSyncConflict for where it's actually applied.
+ */
+export function shouldHeartbeatSync(livePercent: number, syncedPercent: number | null | undefined): boolean {
+  if (syncedPercent == null) return false;
+  return livePercent - syncedPercent > HEARTBEAT_SYNC_MIN_DELTA_PCT;
+}
+
 export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
   const novelId = normalizeNovelId(location.href);
   if (!novelId) return;
@@ -163,6 +177,11 @@ export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
     log('compare JSON', result);
     if (result.should_prompt_jump && result.global_state) {
       ctx.showSyncBanner(result.global_state);
+    }
+    const live = ctx.getPercent();
+    if (shouldHeartbeatSync(live, result.device_state?.percent)) {
+      log('heartbeat catch-up sync', { live, synced: result.device_state?.percent });
+      void syncProgress(live, ctx);
     }
   } catch (error) {
     console.warn(`[${LOG_TAG}] Failed to check for conflicts`, error);

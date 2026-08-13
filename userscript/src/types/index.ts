@@ -31,6 +31,7 @@ export interface SyncPayload {
 export interface CompareResult {
   should_prompt_jump: boolean;
   global_state: GlobalState | null;
+  device_state: GlobalState | null;
 }
 
 /** The "ahead" device state returned by /compare */

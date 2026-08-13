@@ -3,6 +3,7 @@ import { body } from 'express-validator';
 import type { Server as SocketServer } from 'socket.io';
 import {
   AUTO_REREAD_CHAPTER_THRESHOLD,
+  AUTO_REREAD_MAX_START_CHAPTER,
   CHAPTER_RESTART_THRESHOLD_PERCENT,
   HTTP_BAD_REQUEST,
   HTTP_NOT_FOUND,
@@ -31,16 +32,25 @@ import type { AuthenticatedRequest } from '../types/index.js';
 
 /**
  * Is this a genuine reread, or a second device's first sync landing on an
- * early chapter? deviceMaxChapter must come from the SAME device making
- * this request — comparing against a novel-wide max let a brand-new
- * device's first-ever sync (no prior progress at all) fabricate a
- * completion on a read that was never finished.
+ * early chapter — or a stale/reloaded tab replaying an old page? deviceMaxChapter
+ * must come from the SAME device making this request — comparing against a
+ * novel-wide max let a brand-new device's first-ever sync (no prior progress
+ * at all) fabricate a completion on a read that was never finished. A big
+ * backward chapter delta alone isn't enough either: a browser silently
+ * reloading a long-backgrounded tab produces the exact same signal as an
+ * intentional restart. Genuine rereads restart at/near chapter 1, so this
+ * only fires that close to the start; anything else (e.g. a stale tab
+ * waking up mid-book) falls through to the explicit behind_chapter
+ * rejection + confirm-banner flow instead.
  */
 export function isAutoReread(
   deviceMaxChapter: number,
   currentChapterNum: number,
 ): boolean {
-  return deviceMaxChapter - currentChapterNum >= AUTO_REREAD_CHAPTER_THRESHOLD;
+  return (
+    deviceMaxChapter - currentChapterNum >= AUTO_REREAD_CHAPTER_THRESHOLD &&
+    currentChapterNum <= AUTO_REREAD_MAX_START_CHAPTER
+  );
 }
 
 export function createProgressRouter(io: SocketServer): Router {

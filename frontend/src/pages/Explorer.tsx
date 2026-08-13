@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { fetchNovels, coverUrl, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
+import { useNow } from '../hooks/useNow.js';
 import { Spinner } from '../components/Spinner.js';
 import { SearchIcon } from '../components/Icon.js';
 import { FilterPopover } from '../components/FilterPopover.js';
@@ -466,6 +467,7 @@ function GridCard({ novel, index }: { novel: Novel; index: number }) {
 }
 
 function ListRow({ novel, index }: { novel: Novel; index: number }) {
+  useNow(); // ticks so the "Xm ago" label below advances without a data refetch
   return (
     <Link
       to={`/novel/${encodeURIComponent(novel.novel_id)}`}

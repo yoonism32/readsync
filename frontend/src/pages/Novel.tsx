@@ -15,9 +15,11 @@ import { EditProgress } from '../components/EditProgress.js';
 import { RateNovel } from '../components/RateNovel.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { StarIcon, ExternalLinkIcon, CrownIcon } from '../components/Icon.js';
+import { useNow } from '../hooks/useNow.js';
 import type { Novel } from '../types/index.js';
 
 export function NovelPage() {
+  useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const { novelId } = useParams<{ novelId: string }>();
   const { data: novelsData, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels);
   const novel = novelsData?.find(n => n.novel_id === novelId);

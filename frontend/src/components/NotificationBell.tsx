@@ -4,10 +4,12 @@ import useSWR from 'swr';
 import { notifications as notificationsApi, formatTimestamp } from '../api/client.js';
 import type { NotificationsResponse } from '../types/index.js';
 import { BellIcon } from './Icon.js';
+import { useNow } from '../hooks/useNow.js';
 
 const POLL_MS = 60_000;
 
 export function NotificationBell() {
+  useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();

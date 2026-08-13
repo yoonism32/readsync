@@ -89,21 +89,22 @@ let completionSynced = false;
 let chapterInitAt = Date.now();
 log('Normalization', { raw: location.pathname, normalizedPath, storeKey });
 
+/* ===== Percent helper ===== */
+const pctNow = (): number => {
+  const h = Math.max(1, page.scrollHeight - page.clientHeight);
+  const frac = (page as HTMLElement).scrollTop / h;
+  return Math.max(0, Math.min(100, frac * 100));
+};
+
 /* ===== Shared sync context ===== */
 const syncCtx = {
   deviceId: READSYNC_DEVICE_ID,
   deviceLabel: READSYNC_DEVICE_LABEL,
   pageLoadTime: Date.now(),
   getScrollEl: () => page,
+  getPercent: pctNow,
   updateBadgeStatus,
   showSyncBanner,
-};
-
-/* ===== Percent helper ===== */
-const pctNow = (): number => {
-  const h = Math.max(1, page.scrollHeight - page.clientHeight);
-  const frac = (page as HTMLElement).scrollTop / h;
-  return Math.max(0, Math.min(100, frac * 100));
 };
 
 /* ===== Hash-based resume (#nbp=xx.x) ===== */

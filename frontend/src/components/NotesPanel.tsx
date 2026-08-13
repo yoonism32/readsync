@@ -2,6 +2,7 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import { notes as notesApi, formatTimestamp } from '../api/client.js';
 import { Spinner } from './Spinner.js';
+import { useNow } from '../hooks/useNow.js';
 import type { Note } from '../types/index.js';
 
 interface NotesPanelProps {
@@ -37,6 +38,7 @@ function ChapterPill({ chapter }: { chapter: number }) {
 }
 
 function NoteRow({ note, onChanged }: { note: Note; onChanged: () => void }) {
+  useNow(); // ticks so the "Xm ago" label below advances without a data refetch
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(note.note_text);
   const [chapter, setChapter] = useState(note.chapter_num?.toString() ?? '');

@@ -7,6 +7,7 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
+import { useNow } from '../hooks/useNow.js';
 import type { Novel, StatsSummary } from '../types/index.js';
 
 /** Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero. */
@@ -64,6 +65,7 @@ function MinorStat({ label, value, sub }: { label: string; value: string | numbe
 }
 
 export function Dashboard() {
+  useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const { data: stats, isLoading: statsLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
   // Polls so Continue Reading picks up progress synced from other devices/tabs
   // without a manual page reload — see docs/ARCHITECTURE.md's note on why this
