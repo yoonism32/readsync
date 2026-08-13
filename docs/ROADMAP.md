@@ -30,20 +30,23 @@ this file is the trimmed, current-facing view of it.
       a transaction, session-level `LISTEN`) — audit `src/` for anything
       that assumes connection affinity across separate `pool.query()` calls
       before switching.
-- [ ] **Wire up real WebSocket updates in the SPA.** Discovered 2026-08-07:
-      the backend emits `progress:updated` over Socket.IO on every accepted
-      sync, but the frontend has never consumed it — `socket.io-client`
-      isn't even a dependency. Dashboard/Explorer/Manage/My List currently
-      poll `/api/v1/novels` instead (all four now 3min, see the egress
-      incident below) as a cheaper fix for stale "Continue Reading" data.
-      Replacing the poll with a real socket listener would make updates
-      instant and remove this polling traffic entirely — including its
-      contribution to Supabase egress — at the cost of adding connection
-      lifecycle + auth (the `api_key` handshake `src/websocket/auth.ts`
-      already expects) to the frontend. Considered and deferred in favor of
-      polling on 2026-08-07; the 2026-08-12 egress incident is a second,
-      stronger reason to revisit — or do it alongside the second-screen
-      companion idea below (it needs this anyway).
+- [x] **Wire up real WebSocket updates in the SPA.** Done 2026-08-13.
+      Discovered 2026-08-07: the backend emitted `progress:updated` over
+      Socket.IO on every accepted sync, but the frontend never consumed it.
+      Fixed by adding a second emit, `chapters:updated`, to
+      `POST /api/v1/admin/novels/auto-update` (`src/routes/admin.ts`,
+      converted to a router factory taking `io`, mirroring
+      `createProgressRouter(io)`), and wiring the frontend to consume both:
+      `frontend/src/hooks/useSocket.ts` opens one connection per
+      authenticated tab (reusing the same `api_key` as HTTP auth), and
+      `frontend/src/components/Layout.tsx` subscribes both events to
+      `mutate('/novels')`, invalidation-only — SWR remains the single
+      source of truth. Dashboard/Explorer/Manage/My List keep a poll as a
+      fallback for a silently-dead socket, but it's now 30 minutes instead
+      of the primary path. See [ARCHITECTURE.md](./ARCHITECTURE.md#data-flow-reading-progress-sync)
+      for the full data flow. The second-screen companion idea below can
+      now build directly on this rather than needing to add socket wiring
+      itself.
 - [ ] **2026-08-12 incident: Supabase Fair Use Policy warning (free-tier
       egress).** Four independent causes, all mitigated same day, none of
       them real usage growth:
@@ -58,8 +61,9 @@ this file is the trimmed, current-facing view of it.
       3. Dashboard/Explorer/Manage polled `/api/v1/novels` every 60s
          (shipped 2026-08-07 for the stale-data fix above) — bumped to
          3min, matching My List's already-safe cadence.
-      Mitigated, not eliminated — the real fix for #3 is the WebSocket item
-      directly above it; #1/#2 are structurally sound now. Verify no repeat
+      Mitigated at the time, and #3's real fix — the WebSocket item above —
+      shipped 2026-08-13, so polling is now a 30-minute fallback rather than
+      the primary path; #1/#2 are structurally sound. Verify no repeat
       warning after a full billing cycle (next check: ~2026-09-11).
 - [ ] **2026-08-12 incident: chapter-count corruption via nav-link
       false-positive.** `extractLatestChapterInfo()` had no way to tell a

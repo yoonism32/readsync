@@ -67,13 +67,11 @@ function MinorStat({ label, value, sub }: { label: string; value: string | numbe
 export function Dashboard() {
   useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const { data: stats, isLoading: statsLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
-  // Polls so Continue Reading picks up progress synced from other devices/tabs
-  // without a manual page reload — see docs/ARCHITECTURE.md's note on why this
-  // is polling rather than the WebSocket push the backend already emits.
-  // 3 minutes (matching MyList) rather than 60s: an open tab polls forever,
-  // and every full-library refetch counts as Supabase DB egress.
+  // Live updates come from the socket in Layout.tsx (chapters:updated /
+  // progress:updated → mutate('/novels')); this 30-minute interval is only a
+  // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
   const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, {
-    refreshInterval: 3 * 60_000,
+    refreshInterval: 30 * 60_000,
   });
 
   const recentNovels = (novelsData ?? [])

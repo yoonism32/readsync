@@ -86,9 +86,12 @@ export function MyList() {
   const [page, setPage] = useState(1);
   const [showFailures, setShowFailures] = useState(false);
 
+  // Live updates come from the socket in Layout.tsx (chapters:updated /
+  // progress:updated → mutate('/novels')); this 30-minute interval is only a
+  // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
   const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
     revalidateOnFocus: false,
-    refreshInterval: 3 * 60_000,
+    refreshInterval: 30 * 60_000,
   });
   const { data: tagData } = useSWR<CategoryAssignment[]>('categories-all', () => categoriesApi.all(), { revalidateOnFocus: false });
   const refresh = useRefreshAll();

@@ -33,21 +33,27 @@ dist/server.js`) and the Dockerfile's production stage, which copies only
    writes a `progress_snapshots` row, and maintains a `reading_sessions` row
    (30-minute idle timeout closes a session).
 3. The route emits `progress:updated` over Socket.IO to that user's
-   `user:{id}` room. **The React SPA does not consume this today** —
-   `socket.io-client` isn't even a frontend dependency, confirmed by grep.
-   The WebSocket layer is real and working server-side (it's what the
-   [second-screen companion](./ROADMAP.md#second-screen-companion--design-in-progress)
-   idea is designed around), but no current page listens for it.
-4. Instead, Dashboard/Explorer/Manage/MyList all poll `/api/v1/novels`
-   every 3 minutes (`refreshInterval` in their `useSWR` calls) to pick up
-   progress synced from other devices/tabs without a manual reload. Those
-   pages previously had `revalidateOnFocus: false` and no interval at all
-   (until 2026-08-07), so newly-read chapters wouldn't appear until a hard
-   page refresh; a 60s interval fixed that but, left running on open tabs
-   indefinitely, contributed to a Supabase egress warning (2026-08-12) —
-   3 minutes is the current compromise. See [ROADMAP.md](./ROADMAP.md) for
-   wiring up the real WebSocket push instead of polling, which is the
-   actual fix and remains deferred.
+   `user:{id}` room. `POST /api/v1/admin/novels/auto-update`
+   (`src/routes/admin.ts`, called by the userscript during the "Refresh All
+   Novels" flow) emits a second event, `chapters:updated`, to the same room
+   whenever it detects a new chapter — both are wired via a router-factory
+   pattern (`createProgressRouter(io)` / `createAdminRouter(io)` in
+   `src/app.ts`), matching try/catch style so a WebSocket hiccup never fails
+   the HTTP response the userscript is waiting on.
+4. The React SPA consumes both events: `frontend/src/hooks/useSocket.ts`
+   opens one Socket.IO connection per authenticated tab (reusing the same
+   `api_key` as HTTP auth), and `frontend/src/components/Layout.tsx` — the
+   single mount point shared by every routed page — subscribes to
+   `chapters:updated` and `progress:updated`, calling SWR's
+   `mutate('/novels')` on either. This is deliberately invalidation-only:
+   neither event patches state directly, so the existing `/novels` SWR
+   cache stays the single source of truth. Dashboard/Explorer/Manage/MyList
+   still poll `/api/v1/novels` as a fallback, but at 30 minutes instead of
+   3 — a safety net for a silently-dead socket (e.g. a proxy that kills
+   idle WebSockets without a clean `disconnect`), not the primary update
+   path anymore. The 3-minute interval had itself contributed to a Supabase
+   egress warning (2026-08-12); see [ROADMAP.md](./ROADMAP.md) for that
+   incident writeup.
 5. The React SPA (`frontend/`) reads the same data via SWR hooks hitting the
    `/api/v1/*` endpoints, and receives the same WebSocket events.
 

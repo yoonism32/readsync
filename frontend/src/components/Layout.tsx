@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { auth, hasApiKey, setApiKey } from '../api/client.js';
+import { useSocket } from '../hooks/useSocket.js';
 import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
@@ -30,6 +31,23 @@ export function Layout({ children }: Props) {
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
   const [keyMissing, setKeyMissing] = useState(false);
+  const socket = useSocket();
+
+  // Push-based library refresh: the poll interval in Dashboard/Explorer/
+  // Manage/MyList is now just a safety net for a silently-dead socket, not
+  // the primary update path. Both events are invalidation-only signals —
+  // neither carries enough to patch state directly, so SWR stays the single
+  // source of truth and this never becomes a second, divergent data path.
+  useEffect(() => {
+    if (!socket) return;
+    const refreshNovels = () => { void mutate('/novels'); };
+    socket.on('chapters:updated', refreshNovels);
+    socket.on('progress:updated', refreshNovels);
+    return () => {
+      socket.off('chapters:updated', refreshNovels);
+      socket.off('progress:updated', refreshNovels);
+    };
+  }, [socket, mutate]);
 
   useEffect(() => {
     if (hasApiKey()) return;

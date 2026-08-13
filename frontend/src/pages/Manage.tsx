@@ -16,12 +16,11 @@ function errorDetail(error: unknown): string {
 }
 
 export function Manage() {
-  // Polls so progress synced from other devices/tabs shows up without a
-  // manual page reload — see docs/ARCHITECTURE.md. 3 minutes (matching
-  // MyList): an open tab polls forever, and every full-library refetch
-  // counts as Supabase DB egress.
+  // Live updates come from the socket in Layout.tsx (chapters:updated /
+  // progress:updated → mutate('/novels')); this 30-minute interval is only a
+  // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
   const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
-    refreshInterval: 3 * 60_000,
+    refreshInterval: 30 * 60_000,
   });
   const [query, setQuery] = useState('');
   const [busy, setBusy] = useState<string | null>(null);

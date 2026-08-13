@@ -17,7 +17,7 @@ import {
 import pool from './db/pool.js';
 import { globalErrorHandler } from './middleware/errorHandler.js';
 import { normalizeBody } from './middleware/normalizeBody.js';
-import adminRouter from './routes/admin.js';
+import { createAdminRouter } from './routes/admin.js';
 import authRouter from './routes/auth.js';
 import bookmarksRouter from './routes/bookmarks.js';
 import coversRouter from './routes/covers.js';
@@ -144,7 +144,7 @@ export function createApp(): {
   app.use(statsRouter);
   app.use(settingsRouter);
   app.use(coversRouter);
-  app.use(adminRouter);
+  app.use(createAdminRouter(io));
   app.use(userscriptRouter);
 
   // ── SPA catch-all (React app at /app/*) ──────────────────────────────────────
