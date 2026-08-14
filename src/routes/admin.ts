@@ -203,6 +203,7 @@ export function createAdminRouter(io: SocketServer): Router {
         novel_id,
         chapter_num,
         chapter_title,
+        chapter_verified,
         genres,
         author,
         update_time_raw,
@@ -254,6 +255,7 @@ export function createAdminRouter(io: SocketServer): Router {
           novel_id as string,
           scrapedNum,
           currentChapter,
+          chapter_verified === true,
         );
 
         // Chapter number, title, and site-update-time only ever advance

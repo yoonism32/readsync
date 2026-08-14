@@ -46,6 +46,16 @@ export const CHAPTER_GRACE_MS = 5000;
 // further ahead than this would reproduce it.
 export const CHAPTER_PAGE_NAV_LOOKAHEAD = 5;
 
+// Sanity-check upper bound for a parsed chapter NUMBER (extractChapterNum,
+// extractChapterFromUrl, getCurrentChapterFromContent, parseChapterEnhanced)
+// — rejects obvious garbage matches (a stray 4/5-digit ID or year caught by
+// a loose regex), not a real ceiling on novel length. The longest tracked
+// novel today is ~7,600 chapters; this was previously hardcoded at 10,000,
+// which would have silently dropped detection for any novel that crossed
+// it. Kept well above any real web novel's length rather than raised to
+// match "whatever the current max is" again.
+export const MAX_CHAPTER_NUM = 100000;
+
 /* ===== ReadSync API ===== */
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
 // const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';

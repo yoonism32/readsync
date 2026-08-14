@@ -393,6 +393,7 @@ async function autoUpdateNovelInfo(): Promise<void> {
       novel_id: novelId,
       chapter_num: latestChapterInfo.latestChapterNum,
       chapter_title: latestChapterInfo.latestChapterTitle,
+      chapter_verified: latestChapterInfo.verified,
       genres: extractGenres(),
       author: extractAuthor(),
       update_time_raw: extractUpdateTime(),

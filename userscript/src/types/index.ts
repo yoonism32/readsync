@@ -12,6 +12,15 @@ export interface ChapterInfo {
 export interface LatestChapterInfo {
   latestChapterNum: number | null;
   latestChapterTitle: string | null;
+  /**
+   * True when latestChapterNum is corroborated by an authoritative signal
+   * (a titled meta/.l-chapter chapter name, the novel's own header count, or
+   * a confirmed main-page fetch) rather than resting solely on the generic
+   * any-link-containing-"chapter" scan — the strategy that mistook a "Next
+   * Chapter" nav link for the novel's latest chapter. See
+   * ChapterCorrection.ts for how this gates backward corrections.
+   */
+  verified: boolean;
 }
 
 export interface SyncPayload {
@@ -23,6 +32,7 @@ export interface SyncPayload {
   seconds_on_page: number;
   latest_chapter_num: number | null;
   latest_chapter_title: string | null;
+  latest_chapter_verified: boolean;
   current_chapter_num: number;
   current_chapter_source: string;
 }
@@ -47,6 +57,7 @@ export interface AutoUpdatePayload {
   novel_id: string;
   chapter_num: number;
   chapter_title: string | null;
+  chapter_verified: boolean;
   genres: string | null;
   author: string | null;
   update_time_raw: string | null;

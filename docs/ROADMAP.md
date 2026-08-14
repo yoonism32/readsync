@@ -30,6 +30,18 @@ this file is the trimmed, current-facing view of it.
       a transaction, session-level `LISTEN`) — audit `src/` for anything
       that assumes connection affinity across separate `pool.query()` calls
       before switching.
+      **Code audit complete (2026-08-15), no blockers found:** no
+      `LISTEN`/`NOTIFY`, no advisory locks, no `CREATE TEMP TABLE`, no
+      manual `PREPARE`/`EXECUTE`. All 9 direct `pool.connect()` checkouts
+      are correctly scoped — either the shared `withTransaction()` helper
+      (`src/db/pool.ts`) or a single client held for one logical unit of
+      work and released in a `finally`. `DATABASE_URL`/`PG_POOL_MAX` are
+      env vars (`src/config.ts`), not hardcoded, so the actual switch is a
+      deployment-config change (port 5432 → 6543), not a code change.
+      **Remaining steps:** flip `DATABASE_URL` to the transaction-mode
+      pooler in the deployment env, verify `PG_POOL_MAX` against Supabase's
+      transaction-pooler `pool_size` for this project's tier, deploy, and
+      monitor. Rollback is trivial (revert the connection-string env var).
 - [x] **Wire up real WebSocket updates in the SPA.** Done 2026-08-13.
       Discovered 2026-08-07: the backend emitted `progress:updated` over
       Socket.IO on every accepted sync, but the frontend never consumed it.
@@ -65,32 +77,54 @@ this file is the trimmed, current-facing view of it.
       shipped 2026-08-13, so polling is now a 30-minute fallback rather than
       the primary path; #1/#2 are structurally sound. Verify no repeat
       warning after a full billing cycle (next check: ~2026-09-11).
-- [ ] **2026-08-12 incident: chapter-count corruption via nav-link
-      false-positive.** `extractLatestChapterInfo()` had no way to tell a
-      chapter page's "Next Chapter" nav link (current + 1) apart from a real
-      latest-chapter signal; its network fallback to the novel's main page
-      was gated behind a flat `maxChapter < 500`, so any novel past chapter
-      500 skipped it. The same wrong nav-derived number then repeated on
-      every scroll-sync, and the server's "same wrong number twice = trust
-      it" self-healing correction (built for a different bug class,
-      `ChapterCorrection.ts`) confirmed it and overwrote a correct stored
-      value. Hit one novel in production (`eternal-life-by-daily-divination`,
-      669 → 656); corrected via direct SQL. Fixed: the fallback now also
-      fires when the local candidate isn't meaningfully ahead of the chapter
-      being read (`CHAPTER_PAGE_NAV_LOOKAHEAD = 5`, `config.ts`).
-      **Residual risk, flagged in code review:** this narrows the failure
-      window rather than eliminating it — a lookahead of 5 is tuned to
-      "Next Chapter" specifically; any nav widget on any supported site that
-      legitimately jumps further ahead (batch-jump control, persistent
-      chapter-list sidebar) reproduces the same failure mode for a wider
-      gap. No structural backstop (e.g. periodic re-validation against the
-      main page independent of the local heuristic) exists yet.
+- [x] **2026-08-12 incident: chapter-count corruption via nav-link
+      false-positive.** Done 2026-08-15. `extractLatestChapterInfo()` had no
+      way to tell a chapter page's "Next Chapter" nav link (current + 1)
+      apart from a real latest-chapter signal; its network fallback to the
+      novel's main page was gated behind a flat `maxChapter < 500`, so any
+      novel past chapter 500 skipped it. The same wrong nav-derived number
+      then repeated on every scroll-sync, and the server's "same wrong
+      number twice = trust it" self-healing correction (built for a
+      different bug class, `ChapterCorrection.ts`) confirmed it and
+      overwrote a correct stored value. Hit one novel in production
+      (`eternal-life-by-daily-divination`, 669 → 656); corrected via direct
+      SQL. First fix: the fallback now also fires when the local candidate
+      isn't meaningfully ahead of the chapter being read
+      (`CHAPTER_PAGE_NAV_LOOKAHEAD = 5`, `config.ts`) — closes the exact
+      "Next Chapter" repro.
+      **Structural fix (closes the residual risk flagged in code review):**
+      the gap was that `ChapterCorrection.ts` trusted any locally-derived
+      number once it repeated twice, and a deterministic scraper bug
+      reproduces the same wrong number every time — repetition alone was
+      never proof of correctness, only proof of non-randomness.
+      `extractLatestChapterInfo()` now returns a `verified` flag, true only
+      when the winning candidate is corroborated by an authoritative signal
+      (a titled meta/`.l-chapter` name, the header count, or a confirmed
+      main-page fetch) rather than the generic any-link-containing-"chapter"
+      scan alone. `ChapterCorrection.ts` trusts a verified regression on the
+      first sighting; unverified regressions still require the original
+      two-sighting rule as a fallback. See `ChapterCorrection.ts`,
+      `ChapterDetector.ts`, and `__tests__/regression/chapterCorrection.test.ts`.
+      **Historical audit (2026-08-15):** checked all 136 novels (115 past
+      the vulnerable 500-chapter threshold) against 79,610 progress
+      snapshots for two corruption signatures — a nav-link-style stored
+      title (`%next chapter%` / `%next%` / empty) and `latest_chapter_num`
+      landing exactly one past a real reader's synced chapter ≥499. Zero
+      matches. `eternal-life-by-daily-divination` is the only novel that was
+      ever hit, and it's already corrected (now `676`, a real titled
+      chapter).
 - [ ] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
       reset per novel. Can no longer override a larger value, and Refresh
       All is immune (fresh tab per novel), but browsing several novels in
       one tab can still surface a stale count.
-- [ ] **`extractChapterNum` caps at < 10000** — silently drops novels past
-      10k chapters. Not hit today (max is ~7,600).
+- [x] **`extractChapterNum` caps at < 10000** — Done 2026-08-15. All 6
+      chapter-number sanity-check sites in `ChapterDetector.ts`
+      (`extractChapterNum`, `extractChapterFromUrl`,
+      `getCurrentChapterFromContent`, `parseChapterEnhanced`) now use a
+      shared `MAX_CHAPTER_NUM = 100000` constant (`config.ts`) instead of
+      the hardcoded `10000`. `extractHeaderChapterCount`'s separate
+      document-count check (already `< 100000`, a different concept) is
+      untouched.
 - [ ] **`tab.closed` counts as success** (`useRefreshAll.ts`) — any
       external close is banked as a win with no scrape. Deliberately left;
       a test documents the behaviour if you want to flip it.

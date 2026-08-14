@@ -75,8 +75,12 @@ describe('extractChapterNum', () => {
     expect(extractChapterNum('nothing here')).toBeNull();
   });
 
-  it('rejects a number at/above the 10000 upper bound', () => {
-    expect(extractChapterNum('Chapter 99999')).toBeNull();
+  it('accepts a chapter number above the old 10000 bound (raised to MAX_CHAPTER_NUM)', () => {
+    expect(extractChapterNum('Chapter 12345')).toBe(12345);
+  });
+
+  it('rejects a number at/above the MAX_CHAPTER_NUM upper bound', () => {
+    expect(extractChapterNum('Chapter 999999')).toBeNull();
   });
 });
 

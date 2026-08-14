@@ -125,6 +125,8 @@ export function createProgressRouter(io: SocketServer): Router {
       const latestChapterTitle =
         ((req.body as Record<string, unknown>)
           .latest_chapter_title as string) || null;
+      const latestChapterVerified =
+        (req.body as Record<string, unknown>).latest_chapter_verified === true;
 
       try {
         const result = await withTransaction(async (client) => {
@@ -207,6 +209,7 @@ export function createProgressRouter(io: SocketServer): Router {
                 novel_id,
                 latestChapterNum,
                 currentChapterNum,
+                latestChapterVerified,
               );
 
             await client.query(

@@ -48,6 +48,7 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
     seconds_on_page: Math.floor((Date.now() - ctx.pageLoadTime) / 1000),
     latest_chapter_num: latestChapterInfo.latestChapterNum,
     latest_chapter_title: latestChapterInfo.latestChapterTitle,
+    latest_chapter_verified: latestChapterInfo.verified,
     current_chapter_num: chapterInfo.num,
     current_chapter_source: chapterInfo.source,
   };
@@ -145,6 +146,7 @@ export function sendFinal(percent: number, ctx: SyncContext): void {
       seconds_on_page: Math.floor((Date.now() - ctx.pageLoadTime) / 1000),
       latest_chapter_num: latestChapterInfo.latestChapterNum,
       latest_chapter_title: latestChapterInfo.latestChapterTitle,
+      latest_chapter_verified: latestChapterInfo.verified,
       current_chapter_num: chapterInfo.num,
       current_chapter_source: chapterInfo.source,
     };

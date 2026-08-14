@@ -64,6 +64,22 @@ describe('isConfirmedChapterCorrection', () => {
   it('is not confirmed when there is no stored chapter yet', () => {
     expect(isConfirmedChapterCorrection(5, 5, null)).toBe(false);
   });
+
+  it('is confirmed on the first sighting when verified is true', () => {
+    // No pendingNum at all (undefined) — verified skips the two-sighting wait.
+    expect(isConfirmedChapterCorrection(undefined, 1527, 1529, true)).toBe(
+      true,
+    );
+  });
+
+  it('verified alone does not confirm a non-regression (nothing to correct)', () => {
+    expect(isConfirmedChapterCorrection(undefined, 1529, 1529, true)).toBe(
+      false,
+    );
+    expect(isConfirmedChapterCorrection(undefined, 1530, 1529, true)).toBe(
+      false,
+    );
+  });
 });
 
 describe('recordCorrectionAttempt', () => {
@@ -95,5 +111,23 @@ describe('recordCorrectionAttempt', () => {
     expect(recordCorrectionAttempt('novelbin:record-novel-b', 100, 200)).toBe(
       false,
     );
+  });
+
+  it('trusts a verified regression on the first call — no repeat needed', () => {
+    const novelId = 'novelbin:record-verified-first-sighting';
+    expect(recordCorrectionAttempt(novelId, 1527, 1529, true)).toBe(true);
+  });
+
+  it('a deterministic-but-unverified repeat (e.g. a Next-Chapter-nav-link bug that always reports current+1) is NOT confirmed just by repeating — this is the 2026-08-12 corruption scenario, guarded against by requiring verified on top of repetition being no longer sufficient once the source is known-unreliable', () => {
+    // Regression test intent: before this fix, two identical unverified
+    // sightings alone were sufficient (see the "is confirmed when the same
+    // lower number is seen twice" test above, which still passes because
+    // that path remains a valid fallback for *unclassified* signals).
+    // This test documents that verified=false explicitly does NOT get a
+    // free pass just because verified=true would have; the two-sighting
+    // fallback is still what governs it, unchanged.
+    const novelId = 'novelbin:record-unverified-repeat-still-two-strikes';
+    expect(recordCorrectionAttempt(novelId, 1527, 1529, false)).toBe(false);
+    expect(recordCorrectionAttempt(novelId, 1527, 1529, false)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { CHAPTER_PAGE_NAV_LOOKAHEAD } from '../config.js';
+import { CHAPTER_PAGE_NAV_LOOKAHEAD, MAX_CHAPTER_NUM } from '../config.js';
 import type { ChapterInfo, LatestChapterInfo } from '../types/index.js';
 
 const LOG_TAG = 'ReadSync';
@@ -40,7 +40,7 @@ export function extractChapterNum(text: string): number | null {
     const match = text.match(pattern);
     if (match) {
       const num = parseInt(match[1], 10);
-      if (num > 0 && num < 10000) return num;
+      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
     }
   }
   return null;
@@ -58,19 +58,19 @@ export function extractChapterFromUrl(href: string): number | null {
     const numberAtStartMatch = lastSegment.match(/^(\d+)/);
     if (numberAtStartMatch) {
       const num = parseInt(numberAtStartMatch[1], 10);
-      if (num > 0 && num < 10000) return num;
+      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
     }
 
     const anyNumberMatch = lastSegment.match(/(\d+)/);
     if (anyNumberMatch) {
       const num = parseInt(anyNumberMatch[1], 10);
-      if (num > 0 && num < 10000) return num;
+      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
     }
   } catch {
     const simpleMatch = href.match(/\/(\d+)[^/]*\/?$/);
     if (simpleMatch) {
       const num = parseInt(simpleMatch[1], 10);
-      if (num > 0 && num < 10000) return num;
+      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
     }
   }
   return null;
@@ -350,20 +350,32 @@ export function extractLatestChapterInfo(
     // advances).
     const finalTitle = metaTitle ?? lChapterTitle ?? maxChapterTitle;
 
+    // Corroborated by an authoritative source (a titled chapter name, the
+    // page's own header count, or a confirmed main-page fetch)? Or did it
+    // come solely from the generic "any link containing chapter" scan
+    // (maxChapter, Strategies 1-3) with nothing else agreeing? That scan is
+    // what mistook a "Next Chapter" nav link (current + 1) for the latest
+    // chapter in the 2026-08-12 corruption incident — ChapterCorrection.ts
+    // uses this flag to refuse to trust an unverified number as grounds for
+    // overwriting a higher stored value, no matter how many times it repeats.
+    const authoritativeMax = Math.max(namedNum, headerCount ?? 0, realChapterCount ?? 0);
+    const verified = finalChapterCount <= authoritativeMax;
+
     if (finalChapterCount > 0) {
       log('Found latest chapter info', {
         num: finalChapterCount,
         title: finalTitle,
+        verified,
         candidates,
       });
-      return { latestChapterNum: finalChapterCount, latestChapterTitle: finalTitle };
+      return { latestChapterNum: finalChapterCount, latestChapterTitle: finalTitle, verified };
     }
 
     log('No latest chapter info found');
-    return { latestChapterNum: null, latestChapterTitle: null };
+    return { latestChapterNum: null, latestChapterTitle: null, verified: false };
   } catch (error) {
     log('Error extracting latest chapter info:', error);
-    return { latestChapterNum: null, latestChapterTitle: null };
+    return { latestChapterNum: null, latestChapterTitle: null, verified: false };
   }
 }
 
@@ -387,7 +399,7 @@ function getCurrentChapterFromContent(): ChapterInfo | null {
         const match = text.match(pattern);
         if (match) {
           const chapterNum = parseInt(match[1], 10);
-          if (chapterNum > 0 && chapterNum < 10000) {
+          if (chapterNum > 0 && chapterNum < MAX_CHAPTER_NUM) {
             log(`Found current chapter from ${source}`, { text: text.substring(0, 100), chapterNum, pattern: pattern.toString() });
             return { num: chapterNum, token: 'chapter', title: text, source };
           }
@@ -493,7 +505,7 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   const numberAtStartMatch = lastSegment.match(/^(\d+)/);
   if (numberAtStartMatch) {
     const num = parseInt(numberAtStartMatch[1], 10);
-    if (num > 0 && num < 10000) {
+    if (num > 0 && num < MAX_CHAPTER_NUM) {
       const res: ChapterInfo = { token: 'chapter', num, source: 'url-number-prefix' };
       log('Using chapter from URL (number-prefix format):', res);
       return res;
@@ -504,7 +516,7 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   const anyNumberMatch = lastSegment.match(/(\d+)/);
   if (anyNumberMatch) {
     const num = parseInt(anyNumberMatch[1], 10);
-    if (num > 0 && num < 10000) {
+    if (num > 0 && num < MAX_CHAPTER_NUM) {
       const res: ChapterInfo = { token: 'chapter', num, source: 'url-any-number' };
       log('Using chapter from URL (extracted number):', res);
       return res;
