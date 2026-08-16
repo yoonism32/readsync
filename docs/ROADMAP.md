@@ -11,7 +11,8 @@ this file is the trimmed, current-facing view of it.
 
 ## Ops & infrastructure
 
-- [ ] **Switch the DB pool to Supabase's transaction-mode pooler.**
+- [x] **Switch the DB pool to Supabase's transaction-mode pooler.** Done
+      2026-08-17.
       2026-08-11 incident: a production deploy crashed on startup with
       `EMAXCONNSESSION` — `DATABASE_URL` goes through the session-mode
       pooler (port 5432), capped at 15 concurrent clients project-wide,
@@ -38,10 +39,18 @@ this file is the trimmed, current-facing view of it.
       work and released in a `finally`. `DATABASE_URL`/`PG_POOL_MAX` are
       env vars (`src/config.ts`), not hardcoded, so the actual switch is a
       deployment-config change (port 5432 → 6543), not a code change.
-      **Remaining steps:** flip `DATABASE_URL` to the transaction-mode
-      pooler in the deployment env, verify `PG_POOL_MAX` against Supabase's
-      transaction-pooler `pool_size` for this project's tier, deploy, and
-      monitor. Rollback is trivial (revert the connection-string env var).
+      `.env` and the Render `DATABASE_URL` env var both flipped to the
+      transaction-pooler port (`aws-1-eu-west-2.pooler.supabase.com:6543`,
+      same host/user as the session pooler — Supavisor exposes both modes
+      on one host, only the port differs). Connectivity verified locally
+      via a direct `pg` client connection (Postgres 17.6, query succeeded)
+      before the Render change; Render redeployed on env var save.
+      `PG_POOL_MAX` deliberately left at 10 rather than raised — that value
+      was already proven safe under the *more* restrictive session-pooler
+      cap, so it only gains headroom under transaction mode, never loses
+      it. Raising it is a separate, lower-risk follow-up once prod has run
+      stable for a while, not something this switch required.
+      Rollback, if ever needed: revert the port back to `:5432` on Render.
 - [x] **Wire up real WebSocket updates in the SPA.** Done 2026-08-13.
       Discovered 2026-08-07: the backend emitted `progress:updated` over
       Socket.IO on every accepted sync, but the frontend never consumed it.
