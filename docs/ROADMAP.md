@@ -158,6 +158,80 @@ this file is the trimmed, current-facing view of it.
       framing no longer applies since legacy is deleted, but nothing was
       ever built for the current stack either).
 
+## Future site support
+
+- [ ] **Add wtr-lab.com as a supported site.** Motivation: has novels not
+      available on NovelBin/NovelArrow (community-requested AI machine
+      translations, mostly Chinese web novels). Not started — this is
+      research only, from a 2026-08-15 feasibility spike (LLM council +
+      hands-on browser inspection). **Blocked on all three of:**
+      1. **Architecture prerequisite.** There is no site-adapter
+         abstraction today — all site-specific logic (URL regex, DOM
+         selectors, meta-tag parsing, base-URL derivation) is hand-branched
+         directly inside `ChapterDetector.ts` (~630 lines) and hand-mirrored
+         in a second, simpler scraper (`bot/src/services/NovelScraper.ts` /
+         `parseNovelInfo.ts`) that can't share code with it (different build
+         systems). Two sites already broke this twice (2026-08-06 header-count
+         corruption, 2026-08-12 nav-link corruption) despite NovelArrow being
+         essentially a clone of NovelBin's URL/DOM conventions. wtr-lab shares
+         none of those conventions. A third site should not be hand-branched
+         into the same file — extract a real adapter interface first.
+      2. **Data-model conflict, not just new detection logic.** Confirmed via
+         browser spike: wtr-lab gates chapters behind an AI-translation
+         "unlock" system independent of raw chapter count (e.g. a 656-chapter
+         novel showing "AI-UNLOCK PROGRESS 50/656 — 606 chapters locked").
+         Navigating directly to a locked chapter URL (`chapter-656` on that
+         novel) does **not** 404 — it silently SPA-redirects back to the
+         novel's overview page. Unlocking is a per-reader, payment-gated
+         action, not a fixed novel-level property. ReadSync's entire model
+         assumes one novel-level "latest chapter" (`novels.latest_chapter_num`)
+         that's the same for every reader and always the next thing to read —
+         that assumption is false on wtr-lab. Also confirmed a second,
+         separate numbering hazard already familiar from NovelArrow's dual-
+         numbered titles: the TOC lists chapters as `#656` (sequential/URL
+         index) vs. `660` (raw source chapter number) — the two diverge.
+         There is no `og:novel:*`-style meta tag (or equivalent) at all on
+         wtr-lab, so the single most-trusted signal in the current detection
+         logic (`namedNum` / Strategy 0) has nothing to key off; detection
+         would need to be designed from scratch, not adapted. "Next"/"Prev"
+         are `<button>`s wired to client-side routing, not `<a href>` links,
+         so the existing nav-link-href heuristic (the one responsible for the
+         2026-08-12 incident) has nothing to read here either.
+      3. **ToS / robots.txt conflict for any automated polling.** wtr-lab's
+         `robots.txt` explicitly disallows crawling `/*/novel/*/chapter-*`
+         and `/api*`. Its Terms of Use (v1.0, §2.2 Acceptable Use Policy)
+         explicitly prohibits using "software or automated agents or scripts
+         to... generate automated searches, requests, or queries to the
+         Site." This lands most directly on the server-side bot verification
+         scraper (periodic background `fetch()` calls from Node, not a human
+         browsing) and is murkier but not clearly safe for the userscript's
+         own background polling (e.g. the 20s cross-device conflict check,
+         the main-page latest-chapter fetch fallback) — both look like
+         "automated... requests" even though they originate from a real
+         logged-in user's browser session. Not evaluated by a lawyer; treat
+         as a real blocker to resolve (e.g. read-only manual chapter entry
+         with no background fetches) before writing any detection code, not
+         just an engineering risk.
+      **Not a blocker, contrary to initial assumption:** a bare `fetch()` to
+      `https://wtr-lab.com/` returns HTTP 403 (bot-detection on non-browser
+      requests), but every page loads normally through actual browser
+      navigation — home, novel list (`/en/novel-list`), novel page
+      (`/en/novel/<id>/<slug>`), and an unlocked chapter (`/chapter-1`) all
+      rendered cleanly with no challenge/CAPTCHA. The userscript's real
+      browser context is not blocked; only bare server-side fetches are.
+      URL scheme (`/en/novel/<id>/<slug>/chapter-<N>`, numeric novel ID) is
+      simpler than NovelArrow's (no required title-slug on the chapter URL
+      itself), and the reader's `Ch. N / Total` display is a cleaner signal
+      than NovelArrow's ambiguous header-count text — so once the three
+      blockers above are resolved, the actual detection code may be less
+      work than NovelArrow was.
+      **Recommendation (LLM council + spike, 2026-08-15):** don't build yet.
+      If revisited: resolve the ToS question first (item 3) since it may
+      rule out automated polling entirely regardless of architecture; then
+      decide whether ReadSync's data model can represent a per-reader
+      unlock-gated "latest chapter" before extracting the adapter interface
+      that would make a third site addition safe.
+
 ## Product features — Tier 1: deferred specs (infra already exists)
 
 All new UI goes in `frontend/`. Build order: F12 → F11 → F13 → F14 per the
