@@ -29,7 +29,7 @@ export function ProgressBar({ percent, showLabel = false, size = 'sm', className
           style={{
             width: `${clamped}%`,
             height: '100%',
-            background: clamped >= 100
+            background: Math.round(clamped) >= 100
               ? 'var(--color-success)'
               : 'linear-gradient(90deg, var(--color-accent-dim), var(--color-accent))',
             borderRadius: 'inherit',

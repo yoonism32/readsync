@@ -9,7 +9,7 @@ import {
 } from './services/ChapterDetector.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
-  drainOfflineQueue,
+  drainOfflineQueue, reconcileScrollPosition,
 } from './services/ProgressSync.js';
 import {
   injectBadge, updateBadgeStatus, updatePill, notify,
@@ -83,7 +83,13 @@ new MutationObserver(() => recheckScrollEl()).observe(document.body, { childList
 /* ===== Per-chapter state (reset by initForChapter on SPA navigation) ===== */
 let normalizedPath = normalizePath(location.pathname);
 let storeKey = `nb_scrollpos:${normalizedPath}`;
-let completionSynced = false;
+// High-water mark, not a one-shot latch: without it, the first scroll event
+// to cross RESTORE_LIMIT (typically 90-99.x%, never exactly 100) fires once
+// and then never syncs again for this chapter — freezing the stored percent
+// short of the literal 100 a reader who kept scrolling to the true bottom
+// actually reached. -1 so a completion at exactly 0 (theoretically
+// impossible given RESTORE_LIMIT, but keeps the comparison honest) still fires.
+let lastCompletionSynced = -1;
 // Set by initForChapter on every load/SPA nav. Scroll position read within
 // CHAPTER_GRACE_MS of this is not trusted for syncing — see onAnyScroll.
 let chapterInitAt = Date.now();
@@ -162,8 +168,11 @@ function addProgressBar(): void {
       // Sync immediately (not debounced) so the completion is recorded even
       // if the user navigates away or closes the tab right after — the
       // debounce would otherwise be cancelled by the SPA chapter reset.
-      if (!completionSynced) {
-        completionSynced = true;
+      // High-water mark (not a one-shot latch): re-fires as long as the
+      // reader keeps scrolling further, so 90% -> 95% -> literal 100% each
+      // get their own sync instead of only the first crossing being kept.
+      if (current > lastCompletionSynced) {
+        lastCompletionSynced = current;
         log('completion threshold reached, syncing', { current });
         void syncProgress(current, syncCtx);
       }
@@ -196,11 +205,15 @@ function initForChapter(reason: string): void {
   normalizedPath = normalizePath(location.pathname);
   storeKey = `nb_scrollpos:${normalizedPath}`;
   syncCtx.pageLoadTime = Date.now();
-  completionSynced = false;
+  lastCompletionSynced = -1;
   chapterInitAt = Date.now();
   recheckScrollEl();
   clearRestored();
   maybeShowRestore(storeKey, () => page, pctNow);
+  // Fire-and-forget: the banner above already rendered instantly from
+  // localStorage, this self-corrects it within ~1s if the DB has a
+  // further-along snapshot for this exact chapter (see reconcileScrollPosition).
+  void reconcileScrollPosition(syncCtx);
   log('chapter init', { reason, normalizedPath, storeKey });
 
   // iOS fix: always register a heartbeat (even at 0%) so a chapter visit is

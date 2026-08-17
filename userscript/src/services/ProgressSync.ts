@@ -1,9 +1,9 @@
-import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC, HEARTBEAT_SYNC_MIN_DELTA_PCT } from '../config.js';
+import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC, HEARTBEAT_SYNC_MIN_DELTA_PCT, RESTORE_LIMIT } from '../config.js';
 import { postProgress, beaconProgress, compareProgress, postReread } from '../api/client.js';
-import { showPeekBanner } from './UIManager.js';
+import { showPeekBanner, maybeShowRestore } from './UIManager.js';
 import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
-import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId, isChapterPath } from './ChapterDetector.js';
-import type { SyncPayload } from '../types/index.js';
+import { parseChapterEnhanced, extractLatestChapterInfo, normalizeUrl, normalizeNovelId, normalizePath, isChapterPath } from './ChapterDetector.js';
+import type { SyncPayload, GlobalState } from '../types/index.js';
 
 const LOG_TAG = 'ReadSync';
 const log = (...args: unknown[]) => { try { console.debug(`[${LOG_TAG}]`, ...args); } catch { /* */ } };
@@ -170,6 +170,35 @@ export function shouldHeartbeatSync(livePercent: number, syncedPercent: number |
   return livePercent - syncedPercent > HEARTBEAT_SYNC_MIN_DELTA_PCT;
 }
 
+/**
+ * The restore banner (and the localStorage value behind it) is populated
+ * purely from this device's own scroll history and never checked against
+ * the server — so it can show a stale, low percent for a chapter that's
+ * already far along in the DB (another sync, another device, or the
+ * completion-sync latch elsewhere on this chapter). deviceState is this
+ * device's own /compare snapshot, so it's only trusted when it names the
+ * exact chapter currently open — a later chapter's state must not stomp a
+ * legitimately low position on this one (that cross-chapter case is what
+ * the separate jump banner already covers).
+ */
+function reconcileLocalScroll(deviceState: GlobalState | null | undefined, ctx: SyncContext): void {
+  if (!deviceState) return;
+  const chapterInfo = parseChapterEnhanced(location.pathname);
+  if (!chapterInfo || deviceState.chapter_num !== chapterInfo.num) return;
+
+  const storeKey = `nb_scrollpos:${normalizePath(location.pathname)}`;
+  const cached = parseFloat(localStorage.getItem(storeKey) ?? '0');
+  if (deviceState.percent <= cached) return;
+
+  log('reconciling stale local scroll position with server', { cached, server: deviceState.percent, storeKey });
+  if (deviceState.percent >= RESTORE_LIMIT) {
+    localStorage.removeItem(storeKey);
+  } else {
+    localStorage.setItem(storeKey, deviceState.percent.toFixed(2));
+  }
+  maybeShowRestore(storeKey, ctx.getScrollEl, ctx.getPercent);
+}
+
 export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
   const novelId = normalizeNovelId(location.href);
   if (!novelId) return;
@@ -185,8 +214,27 @@ export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
       log('heartbeat catch-up sync', { live, synced: result.device_state?.percent });
       void syncProgress(live, ctx);
     }
+    reconcileLocalScroll(result.device_state, ctx);
   } catch (error) {
     console.warn(`[${LOG_TAG}] Failed to check for conflicts`, error);
+  }
+}
+
+/**
+ * Fired once, fire-and-forget, right after initForChapter renders the
+ * restore banner from localStorage alone — self-corrects within about a
+ * second if the DB already has a further-along snapshot for this chapter,
+ * instead of only every COMPARE_CHECK_MS (or never, since the periodic
+ * checker's own reconciliation only runs while the tab stays open).
+ */
+export async function reconcileScrollPosition(ctx: SyncContext): Promise<void> {
+  const novelId = normalizeNovelId(location.href);
+  if (!novelId) return;
+  try {
+    const result = await compareProgress(novelId, ctx.deviceId);
+    reconcileLocalScroll(result.device_state, ctx);
+  } catch (error) {
+    console.warn(`[${LOG_TAG}] Failed to reconcile scroll position on init`, error);
   }
 }
 

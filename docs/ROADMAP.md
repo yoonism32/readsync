@@ -255,7 +255,7 @@ one still open (F11 shipped 2026-08-11).
 ## Product features — Tier 3: signature
 
 - [ ] Reading Time Machine (scrubable animated timeline of the whole library)
-- [ ] Ghost positions (faint markers showing where other devices left off)
+- [x] DB-latest reconciliation on chapter load (userscript checks the server's latest snapshot for the current chapter before trusting a cached localStorage scroll position, overwriting it if the server is ahead) — 2026-08-17
 - [ ] Live reading indicator (Socket.IO is already in place)
 
 ## Product features — Tier 4: power-user (full specs in `future_ideas.md` §9–17)
