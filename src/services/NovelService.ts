@@ -124,9 +124,14 @@ export async function getLatestStates(
   // device made "Remove device" in Settings silently hide every chapter read
   // there, which once hid 62k snapshots across 117 novels. `active` now only
   // decides which devices are listed in Settings.
+  // Explicit column list, not p.*: this endpoint is called on every progress
+  // sync, GET progress, and compare poll (~700k calls/2wk per query), and
+  // p.* was pulling id/user_id/novel_id/chapter_slug_extra/seconds_on_page/
+  // read_through_num over the wire for every row despite none of them being
+  // read below. device_last_seen was selected but never consumed either.
   const globalResult = await client.query(
     `
-    SELECT p.*, d.device_label, d.last_seen AS device_last_seen
+    SELECT p.device_id, p.chapter_num, p.chapter_token, p.percent, p.url, p.created_at, d.device_label
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
     WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3
@@ -138,7 +143,7 @@ export async function getLatestStates(
 
   const deviceResult = await client.query(
     `
-    SELECT DISTINCT ON (p.device_id) p.*, d.device_label
+    SELECT DISTINCT ON (p.device_id) p.device_id, p.chapter_num, p.chapter_token, p.percent, p.url, p.created_at, d.device_label
     FROM progress_snapshots p
     JOIN devices d ON p.device_id = d.id
     WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3

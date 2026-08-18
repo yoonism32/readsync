@@ -86,6 +86,32 @@ this file is the trimmed, current-facing view of it.
       shipped 2026-08-13, so polling is now a 30-minute fallback rather than
       the primary path; #1/#2 are structurally sound. Verify no repeat
       warning after a full billing cycle (next check: ~2026-09-11).
+- [ ] **2026-08-18 incident: egress back at 9GB/5GB six days after the
+      08-12 "fixed same day" — the billing-cycle-verify plan has now been
+      falsified twice.** `pg_stat_statements` (14-day window, since 08-04)
+      showed the app's direct Postgres traffic via Supavisor — not
+      Storage/REST — as dominant: `getLatestStates()` in
+      `NovelService.ts` (backing `POST/GET /api/v1/progress` and
+      `GET /api/v1/compare`) was called ~689k times each for two queries,
+      and `GET /api/v1/novels`'s `latest_activity` query was called 32,931
+      times returning 4.54M total rows. Root cause: `progress:updated`
+      (emitted on every progress sync, i.e. every scroll-throttled ping)
+      triggered `mutate('/novels')` in `Layout.tsx` — a full re-run of the
+      expensive per-novel-list query on every single sync ping, not just on
+      reconnects as first suspected. Fixed same day: (1) `getLatestStates()`
+      now selects explicit columns instead of `p.*`/`d.*` — `id`, `user_id`,
+      `novel_id`, `chapter_slug_extra`, `seconds_on_page`,
+      `read_through_num`, and the never-consumed `device_last_seen` were
+      going over the wire on every one of those ~1.4M calls for nothing; (2)
+      the `progress:updated` → `mutate('/novels')` refresh in `Layout.tsx`
+      is now debounced 5s so a burst of pings from one reading session
+      collapses into one revalidation. `pg_stat_statements` reset
+      2026-08-18 for a clean sample. The 08-16 Storage cache-control
+      backfill's live-verification failure (still showing `no-cache` after
+      the fix) remains unresolved and separate from this. Verify call
+      volume actually dropped before trusting another "fixed" — this
+      project still has no egress alarm short of a human staring at the
+      dashboard, which is the real gap across all three incidents.
 - [x] **2026-08-12 incident: chapter-count corruption via nav-link
       false-positive.** Done 2026-08-15. `extractLatestChapterInfo()` had no
       way to tell a chapter page's "Next Chapter" nav link (current + 1)

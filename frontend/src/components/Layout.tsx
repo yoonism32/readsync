@@ -41,11 +41,26 @@ export function Layout({ children }: Props) {
   useEffect(() => {
     if (!socket) return;
     const refreshNovels = () => { void mutate('/novels'); };
+
+    // progress:updated fires on every scroll-throttled sync ping from an
+    // active reading session. Refetching the full per-novel list (the
+    // latest_activity query, ~138 rows/call) on each ping was the largest
+    // single egress contributor found in the 2026-08-18 incident (32,931
+    // calls / 4.54M rows over 14 days). Debounce so a burst of pings from
+    // one session collapses into one revalidation instead of one per ping.
+    const PROGRESS_REFRESH_DEBOUNCE_MS = 5000;
+    let progressTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedRefreshNovels = () => {
+      if (progressTimer) clearTimeout(progressTimer);
+      progressTimer = setTimeout(refreshNovels, PROGRESS_REFRESH_DEBOUNCE_MS);
+    };
+
     socket.on('chapters:updated', refreshNovels);
-    socket.on('progress:updated', refreshNovels);
+    socket.on('progress:updated', debouncedRefreshNovels);
     return () => {
       socket.off('chapters:updated', refreshNovels);
-      socket.off('progress:updated', refreshNovels);
+      socket.off('progress:updated', debouncedRefreshNovels);
+      if (progressTimer) clearTimeout(progressTimer);
     };
   }, [socket, mutate]);
 
