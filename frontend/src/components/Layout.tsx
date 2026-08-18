@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { auth, hasApiKey, setApiKey } from '../api/client.js';
-import { useSocket } from '../hooks/useSocket.js';
+import { useSocket, disconnectSocket, reconnectSocket } from '../hooks/useSocket.js';
 import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
@@ -59,6 +59,7 @@ export function Layout({ children }: Props) {
       .then(res => {
         if (res.api_key) {
           setApiKey(res.api_key);
+          reconnectSocket();
           void mutate(() => true);
         } else {
           setKeyMissing(true);
@@ -69,6 +70,7 @@ export function Layout({ children }: Props) {
 
   async function handleLogout() {
     await auth.logout();
+    disconnectSocket();
     await mutate('auth-status');
     navigate('/login');
   }
