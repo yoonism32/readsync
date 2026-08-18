@@ -64,18 +64,30 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
       ctx.updateBadgeStatus('🔁 Re-read started');
     }
     // Quiet peek: the server kept the bookmark where it was because
-    // we're on an earlier chapter. Offer an explicit re-read instead.
+    // we're on an earlier chapter. Offer an explicit re-read instead —
+    // but only if the rejection is still about the chapter on screen (see
+    // isRejectionStale: an un-debounced completion sync fired on the old
+    // chapter right as the reader navigated can resolve late, after the new
+    // chapter's own heartbeat already landed and moved the bookmark past it).
     if (result && !result.updated && result.rejected_reason === 'behind_chapter') {
-      const novelId = normalizeNovelId(location.href);
-      if (novelId) {
-        showPeekBanner(novelId, () => {
-          void postReread(novelId)
-            .then(() => {
-              ctx.updateBadgeStatus('🔁 Re-read started');
-              void syncProgress(percent, ctx);
-            })
-            .catch(() => ctx.updateBadgeStatus('⚠️ Re-read failed', true));
+      const liveChapterNum = parseChapterEnhanced(location.pathname)?.num ?? null;
+      if (isRejectionStale(chapterInfo.num, liveChapterNum)) {
+        log('Suppressing peek banner — stale rejection for a chapter no longer on screen', {
+          rejectedChapter: chapterInfo.num,
+          currentChapter: liveChapterNum,
         });
+      } else {
+        const novelId = normalizeNovelId(location.href);
+        if (novelId) {
+          showPeekBanner(novelId, () => {
+            void postReread(novelId)
+              .then(() => {
+                ctx.updateBadgeStatus('🔁 Re-read started');
+                void syncProgress(percent, ctx);
+              })
+              .catch(() => ctx.updateBadgeStatus('⚠️ Re-read failed', true));
+          });
+        }
       }
     }
     // Back online — drain anything queued while offline.
@@ -168,6 +180,21 @@ export function sendFinal(percent: number, ctx: SyncContext): void {
 export function shouldHeartbeatSync(livePercent: number, syncedPercent: number | null | undefined): boolean {
   if (syncedPercent == null) return false;
   return livePercent - syncedPercent > HEARTBEAT_SYNC_MIN_DELTA_PCT;
+}
+
+/**
+ * A behind_chapter rejection is server truth about the chapter it was sent
+ * for, but the reader may have already moved on by the time the response
+ * lands — the completion sync in main.ts's onAnyScroll fires immediately
+ * and un-debounced right as a chapter finishes, and cancelPendingSync()
+ * (called on every SPA nav) only clears the debounce timer, not an
+ * already-in-flight request. If that late response arrives after the new
+ * chapter's own heartbeat has already synced and moved the bookmark ahead,
+ * showing the peek banner on today's chapter would misattribute a
+ * rejection that was really about the chapter just left behind.
+ */
+export function isRejectionStale(rejectedChapterNum: number, currentChapterNum: number | null): boolean {
+  return currentChapterNum !== rejectedChapterNum;
 }
 
 /**
