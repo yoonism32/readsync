@@ -367,6 +367,25 @@ p { margin: 0; }
   background-color: var(--color-bg-hover);
 }
 
+/* The Progress header's sort-mode toggle. Invisible until the header is
+   hovered/focused, so it doesn't compete with the column label for a reader
+   who never needs it — except once switched away from the default, where it
+   stays visible (.active) as the only sign the mode isn't what it used to be. */
+.progress-mode-toggle {
+  opacity: 0;
+  color: var(--color-text-faint);
+  transition: opacity 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo);
+}
+.th-progress:hover .progress-mode-toggle,
+.th-progress:focus-within .progress-mode-toggle,
+.progress-mode-toggle.active {
+  opacity: 1;
+}
+.progress-mode-toggle:hover,
+.progress-mode-toggle:focus-visible {
+  color: var(--color-text);
+}
+
 .link-accent {
   transition: color 150ms var(--ease-out-expo);
 }

@@ -10,7 +10,7 @@ import { Spinner } from '../components/Spinner.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
 import type { SmartFilterId } from '../lib/smartFilters.js';
-import { sortValue, updatedAt } from '../lib/novelSort.js';
+import { compareNovels, updatedAt } from '../lib/novelSort.js';
 import type { SortKey } from '../lib/novelSort.js';
 import type { CategoryAssignment, Novel, NovelStatus } from '../types/index.js';
 
@@ -81,6 +81,10 @@ export function MyList() {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('last_read');
   const [sortAsc, setSortAsc] = useState(false);
+  // Which metric the Progress column header sorts by — defaults to
+  // completion ratio ("how close to done"), not raw chapters read, since
+  // that's what a column literally labeled "Progress" implies.
+  const [progressMode, setProgressMode] = useState<SortKey>('completion');
   const [smartFilter, setSmartFilter] = useState<SmartFilterId | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
@@ -122,14 +126,7 @@ export function MyList() {
       const q = search.toLowerCase();
       list = list.filter(n => n.title.toLowerCase().includes(q));
     }
-    const dir = sortAsc ? 1 : -1;
-    return [...list].sort((a, b) => {
-      const va = sortValue(a, sortKey);
-      const vb = sortValue(b, sortKey);
-      if (va < vb) return -dir;
-      if (va > vb) return dir;
-      return 0;
-    });
+    return [...list].sort((a, b) => compareNovels(a, b, sortKey, sortAsc));
   }, [novels, tab, search, sortKey, sortAsc, smartFilter, taggedNovelIds]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -172,6 +169,18 @@ export function MyList() {
       setSortAsc(key === 'title');
     }
     setPage(1);
+  };
+
+  /** Swaps what "Progress" means (completion % vs. raw chapters read). If
+   *  that column is the one currently driving the sort, re-sort immediately
+   *  in the same direction; otherwise just remember the choice for next click. */
+  const toggleProgressMode = () => {
+    const next: SortKey = progressMode === 'completion' ? 'progress' : 'completion';
+    setProgressMode(next);
+    if (sortKey === 'completion' || sortKey === 'progress') {
+      setSortKey(next);
+      setPage(1);
+    }
   };
 
   if (isLoading) {
@@ -373,7 +382,21 @@ export function MyList() {
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <Th label="Cover" />
                     <Th label="Title" sortable active={sortKey === 'title'} asc={sortAsc} onClick={() => changeSort('title')} align="left" />
-                    <Th label="Progress" sortable active={sortKey === 'progress'} asc={sortAsc} onClick={() => changeSort('progress')} />
+                    <Th
+                      label="Progress"
+                      sortable
+                      active={sortKey === progressMode}
+                      asc={sortAsc}
+                      onClick={() => changeSort(progressMode)}
+                      toggle={{
+                        active: progressMode === 'progress',
+                        symbol: progressMode === 'completion' ? '#' : '%',
+                        title: progressMode === 'completion'
+                          ? 'Sorting by % complete — click to sort by chapters read instead'
+                          : 'Sorting by chapters read — click to sort by % complete instead',
+                        onClick: toggleProgressMode,
+                      }}
+                    />
                     <Th label="Continue" />
                     <Th label="Status" />
                     <Th label="Last read" sortable active={sortKey === 'last_read'} asc={sortAsc} onClick={() => changeSort('last_read')} />
@@ -415,13 +438,17 @@ export function MyList() {
 
 /* ── Table pieces ─────────────────────────────────────────── */
 
-function Th({ label, sortable, active, asc, onClick, align = 'center' }: {
+function Th({ label, sortable, active, asc, onClick, align = 'center', toggle }: {
   label: string; sortable?: boolean; active?: boolean; asc?: boolean;
   onClick?: () => void; align?: 'left' | 'center';
+  /** Optional sort-mode switch rendered next to the label, hidden until the
+   *  header is hovered/focused (see .progress-mode-toggle in index.css). */
+  toggle?: { active: boolean; symbol: string; title: string; onClick: () => void };
 }) {
   return (
     <th
       onClick={sortable ? onClick : undefined}
+      className={toggle ? 'th-progress' : undefined}
       style={{
         padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap',
         fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
@@ -430,6 +457,21 @@ function Th({ label, sortable, active, asc, onClick, align = 'center' }: {
       }}
     >
       {label}{active && (asc ? ' ▲' : ' ▼')}
+      {toggle && (
+        <button
+          type="button"
+          className={`progress-mode-toggle${toggle.active ? ' active' : ''}`}
+          onClick={e => { e.stopPropagation(); toggle.onClick(); }}
+          title={toggle.title}
+          aria-label={toggle.title}
+          style={{
+            marginLeft: 6, background: 'none', border: 'none', padding: 0,
+            fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer', verticalAlign: 'middle',
+          }}
+        >
+          {toggle.symbol}
+        </button>
+      )}
     </th>
   );
 }
