@@ -34,6 +34,17 @@ export const HEARTBEAT_SYNC_MIN_DELTA_PCT = 2;
 // (site-side scroll-restoration quirks, lazy-loaded content still shifting
 // scrollHeight) — ignore scroll-driven syncs until this much time has passed.
 export const CHAPTER_GRACE_MS = 5000;
+// The completion fast-path (>= RESTORE_LIMIT) re-fires on every scroll tick
+// that nudges percent upward, un-debounced — necessary so 90% -> 100% each
+// get their own high-water-mark sync (see lastCompletionSynced in main.ts),
+// but sub-percent scroll ticks meant dozens of near-duplicate syncs per
+// chapter. Confirmed in the 2026-08-20 egress incident: one device alone
+// produced 11,129 syncs in 24h, 39% of them (4,378) already >=90% re-firing
+// against another >=90% ping. Throttling to this delta collapses that tail
+// to roughly 5 syncs per chapter instead of dozens; the true final position
+// on leaving the chapter is still captured independently by sendFinal's
+// unload beacon, so nothing is lost — just de-spammed.
+export const COMPLETION_SYNC_MIN_DELTA_PCT = 2;
 
 /* ===== Latest-chapter detection ===== */
 // "Next Chapter" nav links (and similar nearby-chapter widgets) put a

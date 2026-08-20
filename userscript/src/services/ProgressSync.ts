@@ -183,6 +183,25 @@ export function shouldHeartbeatSync(livePercent: number, syncedPercent: number |
 }
 
 /**
+ * Once a chapter has crossed RESTORE_LIMIT, main.ts's onAnyScroll fires an
+ * un-debounced completion sync on every scroll tick that nudges the percent
+ * upward — needed so 90% -> 95% -> 100% each land their own sync instead of
+ * only the first crossing being kept (see lastCompletionSynced), but a raw
+ * "any increase" check let sub-percent scroll jitter fire dozens of
+ * near-duplicate syncs per chapter (2026-08-20 egress incident: 39% of one
+ * device's daily syncs were already->=90% re-fires). Throttle to a minimum
+ * delta instead — lastSyncedPct starts at -1 per chapter (see main.ts), so
+ * the first crossing always clears any realistic threshold on its own.
+ */
+export function shouldSyncCompletion(
+  currentPct: number,
+  lastSyncedPct: number,
+  minDeltaPct: number,
+): boolean {
+  return currentPct - lastSyncedPct > minDeltaPct;
+}
+
+/**
  * A behind_chapter rejection is server truth about the chapter it was sent
  * for, but the reader may have already moved on by the time the response
  * lands — the completion sync in main.ts's onAnyScroll fires immediately
@@ -207,8 +226,22 @@ export function isRejectionStale(rejectedChapterNum: number, currentChapterNum: 
  * exact chapter currently open — a later chapter's state must not stomp a
  * legitimately low position on this one (that cross-chapter case is what
  * the separate jump banner already covers).
+ *
+ * showBanner distinguishes the two call sites: checkForSyncConflict's 20s
+ * poll runs for as long as a chapter tab stays open and visible, so letting
+ * it pop the restore UI mid-read means the banner can resurface every tick
+ * for the rest of the session — reported live as a banner that "keeps
+ * popping up" while actively scrolling. Data correctness (keeping
+ * localStorage caught up to the server) still matters on every tick so a
+ * later real chapter-load reconciliation has an accurate value to show —
+ * only the UI popup is restricted to that one-time load moment
+ * (reconcileScrollPosition, fired once from initForChapter).
  */
-function reconcileLocalScroll(deviceState: GlobalState | null | undefined, ctx: SyncContext): void {
+function reconcileLocalScroll(
+  deviceState: GlobalState | null | undefined,
+  ctx: SyncContext,
+  showBanner: boolean,
+): void {
   if (!deviceState) return;
   const chapterInfo = parseChapterEnhanced(location.pathname);
   if (!chapterInfo || deviceState.chapter_num !== chapterInfo.num) return;
@@ -217,13 +250,15 @@ function reconcileLocalScroll(deviceState: GlobalState | null | undefined, ctx: 
   const cached = parseFloat(localStorage.getItem(storeKey) ?? '0');
   if (deviceState.percent <= cached) return;
 
-  log('reconciling stale local scroll position with server', { cached, server: deviceState.percent, storeKey });
+  log('reconciling stale local scroll position with server', { cached, server: deviceState.percent, storeKey, showBanner });
   if (deviceState.percent >= RESTORE_LIMIT) {
     localStorage.removeItem(storeKey);
   } else {
     localStorage.setItem(storeKey, deviceState.percent.toFixed(2));
   }
-  maybeShowRestore(storeKey, ctx.getScrollEl, ctx.getPercent);
+  if (showBanner) {
+    maybeShowRestore(storeKey, ctx.getScrollEl, ctx.getPercent);
+  }
 }
 
 export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
@@ -241,7 +276,9 @@ export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
       log('heartbeat catch-up sync', { live, synced: result.device_state?.percent });
       void syncProgress(live, ctx);
     }
-    reconcileLocalScroll(result.device_state, ctx);
+    // Silent data reconciliation only — see reconcileLocalScroll's comment
+    // for why this recurring tick must never pop the restore UI.
+    reconcileLocalScroll(result.device_state, ctx, false);
   } catch (error) {
     console.warn(`[${LOG_TAG}] Failed to check for conflicts`, error);
   }
@@ -259,7 +296,7 @@ export async function reconcileScrollPosition(ctx: SyncContext): Promise<void> {
   if (!novelId) return;
   try {
     const result = await compareProgress(novelId, ctx.deviceId);
-    reconcileLocalScroll(result.device_state, ctx);
+    reconcileLocalScroll(result.device_state, ctx, true);
   } catch (error) {
     console.warn(`[${LOG_TAG}] Failed to reconcile scroll position on init`, error);
   }

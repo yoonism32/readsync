@@ -354,3 +354,30 @@ Shipped for now: a simple delayed card-lift on hover. If revisited:
 If picking one: A — it's the only one that reduces clicks where the most
 browsing happens, and it forces the card restructure B and C would
 eventually want too.
+
+## Misc
+
+- [ ] **Close the stale-sync race in `ProgressSync.ts` properly (AbortController
+      or generation counter), not just its worst symptom.** 2026-08-18 fix
+      (`a8d43f7`) stops a late-arriving `behind_chapter` rejection from
+      showing the peek banner on a chapter the reader has since navigated
+      past — root cause: the completion sync in `main.ts`'s `onAnyScroll`
+      fires immediately and un-debounced, and `cancelPendingSync()` (called
+      on every SPA nav) only clears the debounce timer, never an
+      already-in-flight request. The shipped fix (`isRejectionStale`) only
+      gates the banner. Code review on that fix flagged two things it
+      doesn't cover: (1) a stale-but-*successful* late response for the old
+      chapter still unconditionally triggers `ctx.updateBadgeStatus`
+      ('📡 Synced' / '🔁 Re-read started') — cosmetic badge flicker, not a
+      misleading persistent banner, so lower priority; (2) `isRejectionStale`
+      only compares chapter numbers, not novel identity — if the reader
+      switches to a *different* novel within the same sub-second race window
+      and it happens to be on the same chapter number, the check reports
+      "not stale" and the banner could misfire attributed to the new novel.
+      Both are narrow/low-frequency. The structurally clean fix is threading
+      an `AbortSignal` through `api/client.ts`'s fetch call and wiring actual
+      cancellation into `initForChapter`/SPA-nav detection (distinguishing
+      `AbortError` from real network failures in the existing 4xx-vs-offline
+      catch branch) — closes both gaps in one shot, but is meaningfully more
+      invasive than the shipped fix. Not blocking; pick up if the badge
+      flicker or cross-novel case is ever actually observed.

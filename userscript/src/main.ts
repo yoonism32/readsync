@@ -1,6 +1,6 @@
 'use strict';
 
-import { STEP, AUTO_PIX, AUTO_MS, PCT_DECIMALS, RESTORE_LIMIT, IGNORE_LOW_PCT, CHAPTER_GRACE_MS } from './config.js';
+import { STEP, AUTO_PIX, AUTO_MS, PCT_DECIMALS, RESTORE_LIMIT, IGNORE_LOW_PCT, CHAPTER_GRACE_MS, COMPLETION_SYNC_MIN_DELTA_PCT } from './config.js';
 import { generateDeviceId, getDeviceLabel } from './services/DeviceManager.js';
 import {
   normalizePath, normalizeNovelId, isChapterPath,
@@ -9,7 +9,7 @@ import {
 } from './services/ChapterDetector.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
-  drainOfflineQueue, reconcileScrollPosition,
+  drainOfflineQueue, reconcileScrollPosition, shouldSyncCompletion,
 } from './services/ProgressSync.js';
 import {
   injectBadge, updateBadgeStatus, updatePill, notify,
@@ -168,10 +168,14 @@ function addProgressBar(): void {
       // Sync immediately (not debounced) so the completion is recorded even
       // if the user navigates away or closes the tab right after — the
       // debounce would otherwise be cancelled by the SPA chapter reset.
-      // High-water mark (not a one-shot latch): re-fires as long as the
-      // reader keeps scrolling further, so 90% -> 95% -> literal 100% each
-      // get their own sync instead of only the first crossing being kept.
-      if (current > lastCompletionSynced) {
+      // High-water mark (not a one-shot latch): re-fires as the reader keeps
+      // scrolling further, so 90% -> 95% -> literal 100% each get their own
+      // sync — but throttled by COMPLETION_SYNC_MIN_DELTA_PCT so sub-percent
+      // scroll ticks don't each fire their own un-debounced request (see
+      // shouldSyncCompletion). The true final position is still captured
+      // independently by sendFinal's unload beacon regardless of this
+      // throttle, so nothing is lost — just de-spammed.
+      if (shouldSyncCompletion(current, lastCompletionSynced, COMPLETION_SYNC_MIN_DELTA_PCT)) {
         lastCompletionSynced = current;
         log('completion threshold reached, syncing', { current });
         void syncProgress(current, syncCtx);

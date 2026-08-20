@@ -380,6 +380,33 @@ export function createProgressRouter(io: SocketServer): Router {
             if (chapterInfo.num < prev.chapter_num) {
               shouldUpdate = false;
               rejectedReason = 'behind_chapter';
+              // Diagnostic for the 2026-08-20 "peek banner on a brand-new
+              // chapter" report: this should only fire when chapterInfo.num
+              // is genuinely behind prev.chapter_num for THIS device+novel+
+              // read-through, but the user says it sometimes fires on a
+              // chapter they've never visited. Capturing full context here
+              // (including whether chapterInfo came from the client's
+              // current_chapter_num or a server-side URL parse) so the next
+              // occurrence can be diagnosed from logs instead of guessed at.
+              // Remove once root-caused.
+              logger.warn(
+                {
+                  user_id,
+                  device_id,
+                  novel_id,
+                  novel_url,
+                  chapterNum: chapterInfo.num,
+                  chapterSource: (req.body as Record<string, unknown>)
+                    .current_chapter_num
+                    ? 'client_current_chapter_num'
+                    : 'server_url_parse',
+                  prevChapterNum: prev.chapter_num,
+                  prevPercent: prev.percent,
+                  percentValue,
+                  readThrough: currentReadThrough,
+                },
+                'behind_chapter rejection (diagnostic)',
+              );
             }
             if (
               percentValue <= CHAPTER_RESTART_THRESHOLD_PERCENT &&
