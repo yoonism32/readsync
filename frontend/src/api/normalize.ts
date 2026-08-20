@@ -47,9 +47,12 @@ const toNumber = (v: unknown): number => {
   return Number.isFinite(n) ? n : 0;
 };
 
-export function normalizeNovel(raw: RawNovel): Novel {
-  const g = raw.latest_global;
-  const perDevice = raw.latest_per_device ?? {};
+function deriveProgressFields(
+  latest_global: RawLatestProgress | null,
+  latest_per_device: Record<string, RawLatestProgress> | null,
+) {
+  const g = latest_global;
+  const perDevice = latest_per_device ?? {};
 
   const devices_reading: DeviceProgress[] = Object.entries(perDevice).map(
     ([device_id, d]) => ({
@@ -62,6 +65,18 @@ export function normalizeNovel(raw: RawNovel): Novel {
     }),
   );
 
+  return {
+    latest_chapter: g ? toNumber(g.chapter_num) : null,
+    latest_percent: g ? toNumber(g.percent) : null,
+    latest_url: g?.url ?? null,
+    latest_device_id: g?.device_id ?? null,
+    latest_device_label: g?.device_label ?? null,
+    latest_read_at: g?.ts ?? null,
+    devices_reading,
+  };
+}
+
+export function normalizeNovel(raw: RawNovel): Novel {
   return {
     novel_id: raw.novel_id,
     title: raw.title,
@@ -85,12 +100,30 @@ export function normalizeNovel(raw: RawNovel): Novel {
     completed_at: raw.completed_at,
     current_read_through: raw.current_read_through,
     read_history: raw.read_history ?? [],
-    latest_chapter: g ? toNumber(g.chapter_num) : null,
-    latest_percent: g ? toNumber(g.percent) : null,
-    latest_url: g?.url ?? null,
-    latest_device_id: g?.device_id ?? null,
-    latest_device_label: g?.device_label ?? null,
-    latest_read_at: g?.ts ?? null,
-    devices_reading,
+    ...deriveProgressFields(raw.latest_global, raw.latest_per_device),
+  };
+}
+
+/**
+ * Patches a cached Novel's progress-derived fields from a `progress:updated`
+ * socket payload — same derivation as normalizeNovel, scoped to the single
+ * novel a sync just touched, so the SWR cache updates without a /novels
+ * refetch. Everything else on the novel is untouched: a progress sync can't
+ * change title/chapters/favorite/etc.
+ */
+export function applyProgressUpdate(
+  novel: Novel,
+  update: {
+    latest_global: RawLatestProgress | null;
+    latest_per_device: Record<string, RawLatestProgress> | null;
+    current_read_through: number;
+    last_activity: string | null;
+  },
+): Novel {
+  return {
+    ...novel,
+    current_read_through: update.current_read_through,
+    last_activity: update.last_activity ?? novel.last_activity,
+    ...deriveProgressFields(update.latest_global, update.latest_per_device),
   };
 }

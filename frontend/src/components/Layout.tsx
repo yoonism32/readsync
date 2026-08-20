@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { auth, hasApiKey, setApiKey } from '../api/client.js';
+import { applyProgressUpdate } from '../api/normalize.js';
+import type { RawLatestProgress } from '../api/normalize.js';
 import { useSocket, disconnectSocket, reconnectSocket } from '../hooks/useSocket.js';
+import type { Novel } from '../types/index.js';
 import { NotificationBell } from './NotificationBell.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
@@ -43,24 +46,47 @@ export function Layout({ children }: Props) {
     const refreshNovels = () => { void mutate('/novels'); };
 
     // progress:updated fires on every scroll-throttled sync ping from an
-    // active reading session. Refetching the full per-novel list (the
-    // latest_activity query, ~138 rows/call) on each ping was the largest
-    // single egress contributor found in the 2026-08-18 incident (32,931
-    // calls / 4.54M rows over 14 days). Debounce so a burst of pings from
-    // one session collapses into one revalidation instead of one per ping.
-    const PROGRESS_REFRESH_DEBOUNCE_MS = 5000;
-    let progressTimer: ReturnType<typeof setTimeout> | null = null;
-    const debouncedRefreshNovels = () => {
-      if (progressTimer) clearTimeout(progressTimer);
-      progressTimer = setTimeout(refreshNovels, PROGRESS_REFRESH_DEBOUNCE_MS);
+    // active reading session, already scoped to one novel_id, and its
+    // payload already carries getLatestStates()'s full latest_global/
+    // latest_per_device — everything the /novels list needs for that one
+    // row (see src/routes/progress.ts, src/services/NovelService.ts). A
+    // full mutate('/novels') refetch here (even debounced) re-ran the
+    // ~140-row nested-JSON query on every ping and was the largest single
+    // egress contributor found in the 2026-08-18 and 2026-08-20 incidents.
+    // Patch the matching row in place instead: zero HTTP requests, zero
+    // Postgres reads, no staleness window to trade off against DB load.
+    const applyProgressPatch = (payload: {
+      novel_id: string;
+      latest_global: RawLatestProgress | null;
+      latest_per_device: Record<string, RawLatestProgress> | null;
+      read_through: number;
+      timestamp: string;
+    }) => {
+      void mutate<Novel[]>(
+        '/novels',
+        current =>
+          current?.map(n =>
+            n.novel_id === payload.novel_id
+              ? applyProgressUpdate(n, {
+                  latest_global: payload.latest_global,
+                  latest_per_device: payload.latest_per_device,
+                  current_read_through: payload.read_through,
+                  last_activity: payload.timestamp,
+                })
+              : n,
+          ),
+        { revalidate: false },
+      );
     };
 
+    // chapters:updated means the novel's chapter count/title changed (a
+    // scrape found a new release) — that's not in the progress payload, so
+    // this one still needs a real refetch.
     socket.on('chapters:updated', refreshNovels);
-    socket.on('progress:updated', debouncedRefreshNovels);
+    socket.on('progress:updated', applyProgressPatch);
     return () => {
       socket.off('chapters:updated', refreshNovels);
-      socket.off('progress:updated', debouncedRefreshNovels);
-      if (progressTimer) clearTimeout(progressTimer);
+      socket.off('progress:updated', applyProgressPatch);
     };
   }, [socket, mutate]);
 
