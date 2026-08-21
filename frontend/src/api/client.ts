@@ -310,7 +310,36 @@ export const settings = {
 
 export const admin = {
   staleNovels: (hours?: number) => request('/admin/novels/stale', { qs: { hours } }),
+  probeNovelArrow: (urls: string[]) =>
+    request<NovelArrowProbeResponse>('/admin/diagnostics/novelarrow', {
+      method: 'POST',
+      body: { urls },
+    }),
 };
+
+export interface NovelArrowProbeResult {
+  slug: string;
+  url: string;
+  status: number;
+  elapsed_ms: number;
+  decoded_bytes?: number;
+  title?: string | null;
+  latest_chapter?: string | null;
+  cf_ray?: string | null;
+  cf_mitigated?: string | null;
+  challenge_script_present?: boolean;
+  challenged?: boolean;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface NovelArrowProbeResponse {
+  summary: string;
+  tested_at: string;
+  batch_size: number;
+  batch_delay_ms: number;
+  results: NovelArrowProbeResult[];
+}
 
 // ── Utilities (ported from shared.js) ────────────────────
 
