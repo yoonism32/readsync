@@ -5,8 +5,9 @@ import { generateDeviceId, getDeviceLabel } from './services/DeviceManager.js';
 import {
   normalizePath, normalizeNovelId, isChapterPath,
   parseChapterEnhanced, buildChapterPath,
-  extractLatestChapterInfo, extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl,
+  extractLatestChapterInfo,
 } from './services/ChapterDetector.js';
+import { extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl } from './services/PageMetadata.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
   drainOfflineQueue, reconcileScrollPosition, shouldSyncCompletion,
