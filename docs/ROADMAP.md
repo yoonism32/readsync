@@ -194,7 +194,9 @@ this file is the trimmed, current-facing view of it.
       1. **Architecture prerequisite.** There is no site-adapter
          abstraction today — all site-specific logic (URL regex, DOM
          selectors, meta-tag parsing, base-URL derivation) is hand-branched
-         directly inside `ChapterDetector.ts` (~630 lines) and hand-mirrored
+         directly inside `ChapterDetector.ts` (~545 lines, after page-metadata
+         extraction split it down from ~630 — see `PageMetadata.ts`) and
+         hand-mirrored
          in a second, simpler scraper (`bot/src/services/NovelScraper.ts` /
          `parseNovelInfo.ts`) that can't share code with it (different build
          systems). Two sites already broke this twice (2026-08-06 header-count
