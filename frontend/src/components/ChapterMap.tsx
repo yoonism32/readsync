@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
 import type { Novel } from '../types/index.js';
@@ -37,6 +38,9 @@ export function ChapterMap({ novel }: Props) {
     { revalidateOnFocus: false }
   );
 
+  const [pageOffset, setPageOffset] = useState(0);
+  useEffect(() => setPageOffset(0), [novel.novel_id]);
+
   if (!data) return null;
 
   const readSet = new Set(data.chapters);
@@ -48,9 +52,14 @@ export function ChapterMap({ novel }: Props) {
   );
   if (total === 0) return null;
 
-  const windowStart = total > MAX_CELLS ? total - MAX_CELLS + 1 : 1;
+  const windowEnd = Math.max(1, total - pageOffset * MAX_CELLS);
+  const windowStart = Math.max(1, windowEnd - MAX_CELLS + 1);
   const cells: number[] = [];
-  for (let c = windowStart; c <= total; c++) cells.push(c);
+  for (let c = windowStart; c <= windowEnd; c++) cells.push(c);
+
+  const hasPager = total > MAX_CELLS;
+  const canGoNewer = pageOffset > 0;
+  const canGoOlder = windowStart > 1;
 
   // chapters below the frontier that were never visited (skipped or synced-over)
   const skipped: number[] = [];
@@ -74,40 +83,68 @@ export function ChapterMap({ novel }: Props) {
         </p>
       )}
 
-      {windowStart > 1 && (
+      {hasPager && (
         <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginBottom: 8 }}>
-          Showing {windowStart}–{total}
+          Showing {windowStart}–{windowEnd}
         </p>
       )}
 
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(12px, 1fr))',
-          gap: 3,
-        }}
-      >
-        {cells.map(c => {
-          const isCurrent = c === current;
-          const isRead = readSet.has(c);
-          return (
-            <div
-              key={c}
-              title={`Ch. ${c}${isCurrent ? ' — current' : isRead ? ' — read' : ' — unread'}`}
-              style={{
-                height: 12,
-                borderRadius: 2,
-                background: isCurrent
-                  ? 'var(--color-accent-bright)'
-                  : isRead
-                    ? 'var(--color-accent-dim)'
-                    : 'rgba(255,255,255,0.06)',
-                outline: isCurrent ? '1px solid var(--color-accent)' : 'none',
-                outlineOffset: 1,
-              }}
-            />
-          );
-        })}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(12px, 1fr))',
+            gap: 3,
+          }}
+        >
+          {cells.map(c => {
+            const isCurrent = c === current;
+            const isRead = readSet.has(c);
+            return (
+              <div
+                key={c}
+                title={`Ch. ${c}${isCurrent ? ' — current' : isRead ? ' — read' : ' — unread'}`}
+                style={{
+                  height: 12,
+                  borderRadius: 2,
+                  background: isCurrent
+                    ? 'var(--color-accent-bright)'
+                    : isRead
+                      ? 'var(--color-accent-dim)'
+                      : 'rgba(255,255,255,0.06)',
+                  outline: isCurrent ? '1px solid var(--color-accent)' : 'none',
+                  outlineOffset: 1,
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {hasPager && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <button
+              className="btn-ghost"
+              disabled={!canGoNewer}
+              onClick={() => setPageOffset(p => p - 1)}
+              style={{ width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1 }}
+              aria-label="Newer chapters"
+              title="Newer chapters"
+            >
+              ▲
+            </button>
+            <button
+              className="btn-ghost"
+              disabled={!canGoOlder}
+              onClick={() => setPageOffset(p => p + 1)}
+              style={{ width: 22, height: 22, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, lineHeight: 1 }}
+              aria-label="Older chapters"
+              title="Older chapters"
+            >
+              ▼
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="text-faint" style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 'var(--text-xs)' }}>
