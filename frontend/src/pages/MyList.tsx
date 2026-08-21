@@ -3,11 +3,13 @@ import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { fetchNovels, coverUrl, resumeUrl, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
-import { behindCount, StatusDot } from '../components/BehindBadge.js';
+import { StatusDot } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import { StarIcon, RefreshIcon, BellIcon } from '../components/Icon.js';
 import { Spinner } from '../components/Spinner.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
+import { behindCount } from '../lib/behindStatus.js';
+import { compactAge } from '../lib/dateFormat.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
 import type { SmartFilterId } from '../lib/smartFilters.js';
 import { compareNovels, updatedAt } from '../lib/novelSort.js';
@@ -27,22 +29,6 @@ const TABS: { id: Tab; label: string }[] = [
 
 const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', 'on-hold', 'dropped', 'removed'];
 const PAGE_SIZE = 50;
-
-/* Compact relative age, legacy style: 12h · 3d · 4mo */
-export function compactAge(iso: string | null | undefined, now = Date.now()): string {
-  if (!iso) return '—';
-  const ms = now - new Date(iso).getTime();
-  if (Number.isNaN(ms) || ms < 0) return '—';
-  const m = Math.floor(ms / 60_000);
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h`;
-  const d = Math.floor(h / 24);
-  if (d < 30) return `${d}d`;
-  const mo = Math.floor(d / 30);
-  if (mo < 12) return `${mo}mo`;
-  return `${Math.floor(mo / 12)}y`;
-}
 
 function lastRefreshLabel(iso: string | null): string {
   if (!iso) return 'never';

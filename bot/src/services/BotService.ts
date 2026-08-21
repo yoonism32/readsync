@@ -1,5 +1,5 @@
-import type { BotStatus, LogEntry } from '../types/index.js';
 import { MAX_ERRORS, RETAIN_ERRORS } from '../config.js';
+import type { BotStatus, LogEntry } from '../types/index.js';
 
 class BotStatusManager {
   private _status: BotStatus = {

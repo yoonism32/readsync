@@ -38,7 +38,10 @@ export function splitSqlStatements(sql: string): string[] {
       let j = i + 1;
       while (j < n) {
         if (sql[j] === "'") {
-          if (sql[j + 1] === "'") { j += 2; continue; }
+          if (sql[j + 1] === "'") {
+            j += 2;
+            continue;
+          }
           j += 1;
           break;
         }
@@ -54,7 +57,10 @@ export function splitSqlStatements(sql: string): string[] {
       let j = i + 1;
       while (j < n) {
         if (sql[j] === '"') {
-          if (sql[j + 1] === '"') { j += 2; continue; }
+          if (sql[j + 1] === '"') {
+            j += 2;
+            continue;
+          }
           j += 1;
           break;
         }
@@ -92,7 +98,8 @@ export function splitSqlStatements(sql: string): string[] {
   }
 
   const trailing = current.trim();
-  if (trailing) statements.push(trailing.endsWith(';') ? trailing : `${trailing};`);
+  if (trailing)
+    statements.push(trailing.endsWith(';') ? trailing : `${trailing};`);
 
   return statements;
 }

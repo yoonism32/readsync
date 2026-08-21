@@ -90,81 +90,104 @@ interface PrefSpec {
 const PREFS: Record<string, PrefSpec> = {
   refresh_interval_hours: {
     storageKey: 'refresh_interval_hours',
-    parse: raw => {
+    parse: (raw) => {
       const n = Math.round(Number(raw));
-      if (!Number.isFinite(n) || n < REFRESH_INTERVAL_MIN_HOURS || n > REFRESH_INTERVAL_MAX_HOURS) {
+      if (
+        !Number.isFinite(n) ||
+        n < REFRESH_INTERVAL_MIN_HOURS ||
+        n > REFRESH_INTERVAL_MAX_HOURS
+      ) {
         return null;
       }
       return String(n);
     },
-    read: stored => {
+    read: (stored) => {
       const n = Number(stored);
       return Number.isFinite(n) && n > 0 ? n : REFRESH_INTERVAL_DEFAULT_HOURS;
     },
   },
   notifications_enabled: {
     storageKey: 'notifications_enabled',
-    parse: raw => (typeof raw === 'boolean' ? String(raw) : null),
+    parse: (raw) => (typeof raw === 'boolean' ? String(raw) : null),
     // Defaults to false: the app must not assume consent to notify.
-    read: stored => stored === 'true',
+    read: (stored) => stored === 'true',
   },
 };
 
-router.get('/api/v1/settings/prefs', requireAuthAPI, validateApiKey, async (req, res) => {
-  try {
-    const result = await pool.query<{ key: string; value: string }>(
-      `SELECT key, value FROM user_settings WHERE user_id = $1 AND key = ANY($2)`,
-      [(req as AuthenticatedRequest).user.id, Object.values(PREFS).map(p => p.storageKey)],
-    );
+router.get(
+  '/api/v1/settings/prefs',
+  requireAuthAPI,
+  validateApiKey,
+  async (req, res) => {
+    try {
+      const result = await pool.query<{ key: string; value: string }>(
+        `SELECT key, value FROM user_settings WHERE user_id = $1 AND key = ANY($2)`,
+        [
+          (req as AuthenticatedRequest).user.id,
+          Object.values(PREFS).map((p) => p.storageKey),
+        ],
+      );
 
-    const stored = new Map(result.rows.map(r => [r.key, r.value]));
-    const prefs: Record<string, number | boolean> = {};
-    for (const [name, spec] of Object.entries(PREFS)) {
-      prefs[name] = spec.read(stored.get(spec.storageKey));
+      const stored = new Map(result.rows.map((r) => [r.key, r.value]));
+      const prefs: Record<string, number | boolean> = {};
+      for (const [name, spec] of Object.entries(PREFS)) {
+        prefs[name] = spec.read(stored.get(spec.storageKey));
+      }
+
+      res.json(prefs);
+    } catch (error) {
+      logger.error({ error }, 'Failed to read preferences');
+      res.status(HTTP_INTERNAL_ERROR).json({ error: 'Internal server error' });
+    }
+  },
+);
+
+router.put(
+  '/api/v1/settings/prefs',
+  requireAuthAPI,
+  validateApiKey,
+  async (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const writes: Array<[string, string]> = [];
+
+    for (const [name, raw] of Object.entries(body ?? {})) {
+      const spec = PREFS[name];
+      if (!spec) {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: `Unknown setting: ${name}` });
+      }
+      const parsed = spec.parse(raw);
+      if (parsed === null) {
+        return res
+          .status(HTTP_BAD_REQUEST)
+          .json({ error: `Invalid value for ${name}` });
+      }
+      writes.push([spec.storageKey, parsed]);
     }
 
-    res.json(prefs);
-  } catch (error) {
-    logger.error({ error }, 'Failed to read preferences');
-    res.status(HTTP_INTERNAL_ERROR).json({ error: 'Internal server error' });
-  }
-});
-
-router.put('/api/v1/settings/prefs', requireAuthAPI, validateApiKey, async (req, res) => {
-  const body = req.body as Record<string, unknown>;
-  const writes: Array<[string, string]> = [];
-
-  for (const [name, raw] of Object.entries(body ?? {})) {
-    const spec = PREFS[name];
-    if (!spec) {
-      return res.status(HTTP_BAD_REQUEST).json({ error: `Unknown setting: ${name}` });
+    if (writes.length === 0) {
+      return res
+        .status(HTTP_BAD_REQUEST)
+        .json({ error: 'No settings provided' });
     }
-    const parsed = spec.parse(raw);
-    if (parsed === null) {
-      return res.status(HTTP_BAD_REQUEST).json({ error: `Invalid value for ${name}` });
-    }
-    writes.push([spec.storageKey, parsed]);
-  }
 
-  if (writes.length === 0) {
-    return res.status(HTTP_BAD_REQUEST).json({ error: 'No settings provided' });
-  }
-
-  try {
-    for (const [key, value] of writes) {
-      await pool.query(
-        `INSERT INTO user_settings (user_id, key, value, updated_at)
+    try {
+      for (const [key, value] of writes) {
+        await pool.query(
+          `INSERT INTO user_settings (user_id, key, value, updated_at)
          VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
          ON CONFLICT (user_id, key)
          DO UPDATE SET value = $3, updated_at = CURRENT_TIMESTAMP`,
-        [(req as AuthenticatedRequest).user.id, key, value],
-      );
-    }
+          [(req as AuthenticatedRequest).user.id, key, value],
+        );
+      }
 
-    res.json({ success: true });
-  } catch (error) {
-    handleDbError(res, error, 'Save preferences');
-  }
-});
+      res.json({ success: true });
+    } catch (error) {
+      handleDbError(res, error, 'Save preferences');
+    }
+  },
+);
 
 export default router;

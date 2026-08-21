@@ -10,16 +10,24 @@ export function parseTimeAgo(str: string | undefined): Date | null {
 
   if (/just now|a few (seconds|secs) ago/i.test(s)) return now;
 
-  const match = s.match(/(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i);
+  const match = s.match(
+    /(\d+)\s*(second|sec|minute|min|hour|day|week|month|year)s?\s*ago/i,
+  );
   if (!match) return null;
 
   const val = parseInt(match[1], 10);
   const unit = match[2].toLowerCase();
 
   const ms: Record<string, number> = {
-    second: 1_000, sec: 1_000, minute: 60_000, min: 60_000,
-    hour: 3_600_000, day: 86_400_000, week: 604_800_000,
-    month: 2_592_000_000, year: 31_536_000_000,
+    second: 1_000,
+    sec: 1_000,
+    minute: 60_000,
+    min: 60_000,
+    hour: 3_600_000,
+    day: 86_400_000,
+    week: 604_800_000,
+    month: 2_592_000_000,
+    year: 31_536_000_000,
   };
 
   if (!ms[unit]) return null;
@@ -47,7 +55,10 @@ export function deriveNovelBaseUrl(novelUrl: string): string {
     : novelUrl.replace(/\/c*chapter-?\d+.*$/, '');
 }
 
-export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelInfo {
+export function parseNovelInfoFromHTML(
+  html: string,
+  _novelUrl: string,
+): NovelInfo {
   try {
     const result: NovelInfo = {
       chapter: null,
@@ -62,7 +73,9 @@ export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelIn
     const metaLast = html.match(
       /<meta[^>]+(?:property|name)=["']og:novel:latest_chapter_name["'][^>]+content=["']([^"']*)["']/i,
     );
-    const metaLastParsed = metaLast?.[1].match(/[^0-9]*([0-9]+)\s*[-:]?\s*(.*)/);
+    const metaLastParsed = metaLast?.[1].match(
+      /[^0-9]*([0-9]+)\s*[-:]?\s*(.*)/,
+    );
     if (metaLastParsed) {
       result.chapter = {
         num: parseInt(metaLastParsed[1], 10),
@@ -74,7 +87,10 @@ export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelIn
         /<div[^>]*class="[^"]*l-chapter[^"]*"[^>]*>[\s\S]*?Chapter\s+(\d+)\s*[: ]\s*([^<]*)/i,
       );
       if (lChapterMatch) {
-        result.chapter = { num: parseInt(lChapterMatch[1], 10), title: lChapterMatch[2].trim() };
+        result.chapter = {
+          num: parseInt(lChapterMatch[1], 10),
+          title: lChapterMatch[2].trim(),
+        };
       }
     }
 
@@ -83,11 +99,19 @@ export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelIn
       /<meta[^>]+(?:property|name)=["']og:novel:genre["'][^>]+content=["']([^"']+)["']/i,
     );
     if (metaGenre) {
-      result.genres = metaGenre[1].split(',').map(g => g.trim()).filter(g => g.length > 0 && g.length < 50);
+      result.genres = metaGenre[1]
+        .split(',')
+        .map((g) => g.trim())
+        .filter((g) => g.length > 0 && g.length < 50);
     } else {
-      const genreMatch = html.match(/<dt[^>]*>Genres?:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i);
+      const genreMatch = html.match(
+        /<dt[^>]*>Genres?:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i,
+      );
       if (genreMatch) {
-        result.genres = genreMatch[1].split(',').map(g => g.trim()).filter(g => g.length > 0 && g.length < 50);
+        result.genres = genreMatch[1]
+          .split(',')
+          .map((g) => g.trim())
+          .filter((g) => g.length > 0 && g.length < 50);
       }
     }
 
@@ -95,18 +119,26 @@ export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelIn
       /<meta[^>]+(?:property|name)=["']og:novel:author["'][^>]+content=["']([^"']+)["']/i,
     );
     if (metaAuthor) {
-      result.author = metaAuthor[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+      result.author = metaAuthor[1]
+        .trim()
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&');
     } else {
       const authorMatch =
         html.match(/<dt[^>]*>Author:?\s*<\/dt>\s*<dd[^>]*>([^<]+)<\/dd>/i) ||
         html.match(/Author:\s*([^<,\n]+)/i);
       if (authorMatch) {
-        result.author = authorMatch[1].trim().replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+        result.author = authorMatch[1]
+          .trim()
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&');
       }
     }
 
     // --- Updated time: prefer .item-time, fallback to og:novel:update_time ---
-    const itemTime = html.match(/<div[^>]*class="item-time"[^>]*>([^<]+)<\/div>/i);
+    const itemTime = html.match(
+      /<div[^>]*class="item-time"[^>]*>([^<]+)<\/div>/i,
+    );
     if (itemTime) {
       result.site_latest_chapter_time_raw = itemTime[1].trim();
       const parsed = parseTimeAgo(result.site_latest_chapter_time_raw);
@@ -118,13 +150,21 @@ export function parseNovelInfoFromHTML(html: string, _novelUrl: string): NovelIn
       if (metaUpdateTime) {
         result.site_latest_chapter_time_raw = metaUpdateTime[1].trim();
         const parsedDate = new Date(result.site_latest_chapter_time_raw);
-        result.site_latest_chapter_time = !isNaN(parsedDate.getTime()) ? parsedDate.toISOString() : null;
+        result.site_latest_chapter_time = !Number.isNaN(parsedDate.getTime())
+          ? parsedDate.toISOString()
+          : null;
       }
     }
 
     return result;
   } catch (err) {
     console.error('HTML parsing error:', err);
-    return { chapter: null, genres: [], author: null, site_latest_chapter_time_raw: null, site_latest_chapter_time: null };
+    return {
+      chapter: null,
+      genres: [],
+      author: null,
+      site_latest_chapter_time_raw: null,
+      site_latest_chapter_time: null,
+    };
   }
 }

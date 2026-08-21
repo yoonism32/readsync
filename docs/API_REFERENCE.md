@@ -16,7 +16,9 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 | GET | `/api/auth/status` | — | Used by the SPA to check login state |
 | GET | `/api/v1/auth/whoami` | `validateApiKey` | |
 | GET | `/login` | `redirectIfAuthenticated` | |
-| GET | `/`, `/legacy-dashboard`, `/manage`, `/settings`, `/novels`, `/mylist`, `/novel/:novelId`, `/novels/:novelId`, `/admin`, `/explorer`, `/practice` | `requireAuth` | Server-rendered page routes; the React SPA lives at `/app/*` separately |
+| GET | `/` | — | Redirects to `/app/` (the SPA) |
+| GET | `/legacy/dashboard`, `/legacy/manage`, `/legacy/settings`, `/legacy/mylist`, `/legacy/novel/:novelId`, `/legacy/admin`, `/legacy/explorer`, `/legacy/practice` | `requireAuth` | Deprecated server-rendered pages, superseded by the SPA at `/app/*` (`/legacy/practice` has no SPA replacement yet) |
+| GET | `/legacy-dashboard`, `/manage`, `/settings`, `/novels`, `/mylist`, `/novel/:novelId`, `/novels/:novelId`, `/admin`, `/explorer`, `/practice` | — | 301 redirects to their `/legacy/*` home, kept for old bookmarks/links |
 
 ## progress.ts — the sync path (factory: `createProgressRouter(io)`)
 

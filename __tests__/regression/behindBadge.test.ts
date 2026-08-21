@@ -3,7 +3,7 @@
  * user's frontier, floored at zero, and 0 whenever either side is unknown.
  */
 import { describe, it, expect } from 'vitest';
-import { behindCount } from '../../frontend/src/components/BehindBadge.js';
+import { behindCount } from '../../frontend/src/lib/behindStatus.js';
 import type { Novel } from '../../frontend/src/types/index.js';
 
 const base = {

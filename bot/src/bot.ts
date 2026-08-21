@@ -1,18 +1,22 @@
+import {
+  BATCH_INTERVAL_MS,
+  BATCH_SIZE,
+  CHECK_INTERVAL_MS,
+  STALE_THRESHOLD_HOURS,
+} from './config.js';
 import pool from './db.js';
 import { botService } from './services/BotService.js';
 import { NovelScraper } from './services/NovelScraper.js';
-import {
-  CHECK_INTERVAL_MS, BATCH_SIZE, BATCH_INTERVAL_MS, STALE_THRESHOLD_HOURS,
-} from './config.js';
-import type { NovelRow, NovelInfo, SingleRunResult } from './types/index.js';
+import type { NovelRow, SingleRunResult } from './types/index.js';
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /* ==================== Parsing Utilities ==================== */
 
-export { parseTimeAgo, parseNovelInfoFromHTML } from './parseNovelInfo.js';
+export { parseNovelInfoFromHTML, parseTimeAgo } from './parseNovelInfo.js';
+
 import { parseNovelInfoFromHTML } from './parseNovelInfo.js';
 
 /* ==================== Database Operations ==================== */
@@ -39,9 +43,12 @@ export async function initNotifications(): Promise<void> {
 }
 
 async function getNovelsNeedingUpdate(): Promise<NovelRow[]> {
-  const staleHoursAgo = new Date(Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000).toISOString();
+  const staleHoursAgo = new Date(
+    Date.now() - STALE_THRESHOLD_HOURS * 60 * 60 * 1000,
+  ).toISOString();
 
-  const result = await pool.query<NovelRow>(`
+  const result = await pool.query<NovelRow>(
+    `
     SELECT DISTINCT n.id, n.primary_url, n.latest_chapter_num, n.chapters_updated_at,
            (SELECT MAX(updated_at) FROM progress_snapshots WHERE novel_id = n.id) as last_read_at,
            (SELECT COUNT(DISTINCT device_id) FROM progress_snapshots WHERE novel_id = n.id) as active_readers
@@ -51,7 +58,9 @@ async function getNovelsNeedingUpdate(): Promise<NovelRow[]> {
     ORDER BY
       (SELECT COUNT(DISTINCT device_id) FROM progress_snapshots WHERE novel_id = n.id) DESC,
       n.chapters_updated_at ASC NULLS FIRST
-  `, [staleHoursAgo]);
+  `,
+    [staleHoursAgo],
+  );
 
   return result.rows;
 }
@@ -65,7 +74,8 @@ async function updateNovelChapterInfo(
   timeRaw: string | null,
   timeISO: string | null,
 ): Promise<NovelRow> {
-  const result = await pool.query<NovelRow>(`
+  const result = await pool.query<NovelRow>(
+    `
     UPDATE novels
     SET latest_chapter_num = $2,
         latest_chapter_title = $3,
@@ -76,7 +86,9 @@ async function updateNovelChapterInfo(
         site_latest_chapter_time = $7
     WHERE id = $1
     RETURNING *
-  `, [novelId, chapterNum, chapterTitle, genres, author, timeRaw, timeISO]);
+  `,
+    [novelId, chapterNum, chapterTitle, genres, author, timeRaw, timeISO],
+  );
 
   return result.rows[0];
 }
@@ -85,7 +97,9 @@ async function updateNovelChapterInfo(
 
 let singleRunLock = false;
 
-export async function runSingleNovelOnly(novelId: string): Promise<SingleRunResult> {
+export async function runSingleNovelOnly(
+  novelId: string,
+): Promise<SingleRunResult> {
   if (singleRunLock) {
     return { error: 'Single-novel run already in progress' };
   }
@@ -119,7 +133,9 @@ export async function runSingleNovelOnly(novelId: string): Promise<SingleRunResu
       novelInfo.site_latest_chapter_time,
     );
 
-    console.log(`SINGLE-NOVEL SUCCESS: ${novel.id} → Ch.${updated.latest_chapter_num}`);
+    console.log(
+      `SINGLE-NOVEL SUCCESS: ${novel.id} → Ch.${updated.latest_chapter_num}`,
+    );
 
     return {
       success: true,
@@ -173,7 +189,10 @@ export async function updateNovelChapters(): Promise<void> {
       return;
     }
 
-    botService.log('info', `Found ${novels.length} novels needing updates`, { cycleId, count: novels.length });
+    botService.log('info', `Found ${novels.length} novels needing updates`, {
+      cycleId,
+      count: novels.length,
+    });
 
     // Process in batches
     for (let i = 0; i < novels.length; i += BATCH_SIZE) {
@@ -188,7 +207,9 @@ export async function updateNovelChapters(): Promise<void> {
       });
 
       for (const novel of batch) {
-        botService.patch({ novelsChecked: botService.status.novelsChecked + 1 });
+        botService.patch({
+          novelsChecked: botService.status.novelsChecked + 1,
+        });
 
         botService.log('info', 'Processing novel', {
           cycleId,
@@ -204,7 +225,10 @@ export async function updateNovelChapters(): Promise<void> {
           const novelInfo = parseNovelInfoFromHTML(html, novel.primary_url);
 
           if (!novelInfo.chapter) {
-            botService.log('warn', 'Skipping novel (parse failed)', { cycleId, novelId: novel.id });
+            botService.log('warn', 'Skipping novel (parse failed)', {
+              cycleId,
+              novelId: novel.id,
+            });
             botService.addError({
               timestamp: new Date().toISOString(),
               level: 'warn',
@@ -226,13 +250,21 @@ export async function updateNovelChapters(): Promise<void> {
             timeRaw: novelInfo.site_latest_chapter_time_raw,
           });
 
-          if (novel.latest_chapter_num && novelInfo.chapter.num <= novel.latest_chapter_num) {
-            botService.log('info', `No new chapters (still at Ch.${novelInfo.chapter.num})`, {
-              cycleId,
-              novelId: novel.id,
-            });
+          if (
+            novel.latest_chapter_num &&
+            novelInfo.chapter.num <= novel.latest_chapter_num
+          ) {
+            botService.log(
+              'info',
+              `No new chapters (still at Ch.${novelInfo.chapter.num})`,
+              {
+                cycleId,
+                novelId: novel.id,
+              },
+            );
 
-            await pool.query(`
+            await pool.query(
+              `
               UPDATE novels SET
                 chapters_updated_at = CURRENT_TIMESTAMP,
                 genre = COALESCE($2, genre),
@@ -240,13 +272,15 @@ export async function updateNovelChapters(): Promise<void> {
                 site_latest_chapter_time_raw = $4,
                 site_latest_chapter_time = $5
               WHERE id = $1
-            `, [
-              novel.id,
-              novelInfo.genres.join(', ') || null,
-              novelInfo.author,
-              novelInfo.site_latest_chapter_time_raw,
-              novelInfo.site_latest_chapter_time,
-            ]);
+            `,
+              [
+                novel.id,
+                novelInfo.genres.join(', ') || null,
+                novelInfo.author,
+                novelInfo.site_latest_chapter_time_raw,
+                novelInfo.site_latest_chapter_time,
+              ],
+            );
           } else {
             const updated = await updateNovelChapterInfo(
               novel.id,
@@ -264,10 +298,15 @@ export async function updateNovelChapters(): Promise<void> {
               previousChapter: novel.latest_chapter_num ?? '?',
               newChapter: updated.latest_chapter_num,
               title: updated.latest_chapter_title,
-              genres: novelInfo.genres.length > 0 ? novelInfo.genres.join(', ') : null,
+              genres:
+                novelInfo.genres.length > 0
+                  ? novelInfo.genres.join(', ')
+                  : null,
             });
 
-            botService.patch({ novelsUpdated: botService.status.novelsUpdated + 1 });
+            botService.patch({
+              novelsUpdated: botService.status.novelsUpdated + 1,
+            });
           }
         } catch (error) {
           botService.log('error', 'Novel processing failed', {
@@ -289,7 +328,11 @@ export async function updateNovelChapters(): Promise<void> {
       // Wait between batches (except for the last batch)
       if (i + BATCH_SIZE < novels.length) {
         const waitMinutes = BATCH_INTERVAL_MS / 60_000;
-        botService.log('info', `Waiting ${waitMinutes} minutes before next batch...`, { cycleId });
+        botService.log(
+          'info',
+          `Waiting ${waitMinutes} minutes before next batch...`,
+          { cycleId },
+        );
         await sleep(BATCH_INTERVAL_MS);
       }
     }
@@ -310,7 +353,6 @@ export async function updateNovelChapters(): Promise<void> {
 
     // Close browser after cycle completes to save memory
     await NovelScraper.closeBrowser();
-
   } catch (error) {
     botService.log('error', 'Update cycle failed', {
       error: (error as Error).message,
@@ -330,7 +372,9 @@ export async function updateNovelChapters(): Promise<void> {
   }
 }
 
-export async function triggerManualUpdate(_novelId?: string): Promise<{ triggered: boolean }> {
+export async function triggerManualUpdate(
+  _novelId?: string,
+): Promise<{ triggered: boolean }> {
   botService.log('info', 'Manual update triggered');
   setImmediate(() => void updateNovelChapters());
   return { triggered: true };

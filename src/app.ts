@@ -19,11 +19,11 @@ import { globalErrorHandler } from './middleware/errorHandler.js';
 import { normalizeBody } from './middleware/normalizeBody.js';
 import { createAdminRouter } from './routes/admin.js';
 import authRouter from './routes/auth.js';
+import backupsRouter from './routes/backups.js';
 import bookmarksRouter from './routes/bookmarks.js';
+import categoriesRouter from './routes/categories.js';
 import coversRouter from './routes/covers.js';
 import devicesRouter from './routes/devices.js';
-import backupsRouter from './routes/backups.js';
-import categoriesRouter from './routes/categories.js';
 import historyRouter from './routes/history.js';
 import notesRouter from './routes/notes.js';
 import notificationsRouter from './routes/notifications.js';
@@ -98,10 +98,13 @@ export function createApp(): {
   // ── Static files ─────────────────────────────────────────────────────────────
 
   // Hashed assets (JS/CSS bundles from Vite) → 1 year immutable
-  app.use('/app/assets', express.static(path.join(PUBLIC_DIR, 'app', 'assets'), {
-    maxAge: '1y',
-    immutable: true,
-  }));
+  app.use(
+    '/app/assets',
+    express.static(path.join(PUBLIC_DIR, 'app', 'assets'), {
+      maxAge: '1y',
+      immutable: true,
+    }),
+  );
 
   // All other static files → 1 day with revalidation
   app.use(express.static(PUBLIC_DIR, { maxAge: '1d' }));

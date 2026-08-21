@@ -4,7 +4,7 @@
  * chapters_updated_at; anything non-reading or unknown is never flagged.
  */
 import { describe, it, expect } from 'vitest';
-import { isLikelyHiatus } from '../../frontend/src/components/HiatusBadge.js';
+import { isLikelyHiatus } from '../../frontend/src/lib/hiatus.js';
 import type { Novel, NovelStatus } from '../../frontend/src/types/index.js';
 
 const NOW = new Date('2026-08-03T00:00:00Z');

@@ -13,7 +13,9 @@ const DEFAULT_USERSCRIPT_PATH = path.join(
 // Factory (not a bare default export) so tests can point it at a fixture
 // instead of the real build artifact — see createProgressRouter for the
 // same pattern.
-export function createUserscriptRouter(userscriptPath: string = DEFAULT_USERSCRIPT_PATH): Router {
+export function createUserscriptRouter(
+  userscriptPath: string = DEFAULT_USERSCRIPT_PATH,
+): Router {
   const router = Router();
 
   // No auth: Tampermonkey/Violentmonkey poll @updateURL from the browser

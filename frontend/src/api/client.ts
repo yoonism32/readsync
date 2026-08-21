@@ -61,7 +61,7 @@ export async function request<T = unknown>(
   });
 
   if (!res.ok) {
-    let detail = '';
+    let detail: string;
     try {
       const j = await res.json() as { error?: string; detail?: string };
       detail = j.error ?? j.detail ?? JSON.stringify(j);

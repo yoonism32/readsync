@@ -2,7 +2,7 @@
  * Legacy-style compact relative ages for the MyList table: 12h · 3d · 4mo.
  */
 import { describe, it, expect } from 'vitest';
-import { compactAge } from '../../frontend/src/pages/MyList.js';
+import { compactAge } from '../../frontend/src/lib/dateFormat.js';
 
 const NOW = new Date('2026-08-03T12:00:00Z').getTime();
 const ago = (ms: number) => new Date(NOW - ms).toISOString();

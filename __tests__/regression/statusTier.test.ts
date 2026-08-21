@@ -4,7 +4,7 @@
  * way-behind 50+ (red), unknown when the site chapter count is missing.
  */
 import { describe, it, expect } from 'vitest';
-import { statusTier } from '../../frontend/src/components/BehindBadge.js';
+import { statusTier } from '../../frontend/src/lib/behindStatus.js';
 import type { Novel, NovelStatus } from '../../frontend/src/types/index.js';
 
 const novel = (over: Partial<Novel>): Novel =>

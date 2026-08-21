@@ -34,12 +34,10 @@ export interface BackupFileInfo {
 
 export async function listBackups(userId: string): Promise<BackupFileInfo[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase.storage
-    .from(BUCKET)
-    .list(userId, {
-      limit: 100,
-      sortBy: { column: 'name', order: 'desc' },
-    });
+  const { data, error } = await supabase.storage.from(BUCKET).list(userId, {
+    limit: 100,
+    sortBy: { column: 'name', order: 'desc' },
+  });
   if (error) {
     logger.warn({ error, userId }, 'Backup list failed');
     return [];

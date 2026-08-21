@@ -18,7 +18,11 @@ import {
   validateNovelId,
   validatePagination,
 } from '../middleware/validation.js';
-import { deriveNovelMainUrl, extractNovelTitle, healDeadSiteUrl } from '../services/NovelService.js';
+import {
+  deriveNovelMainUrl,
+  extractNovelTitle,
+  healDeadSiteUrl,
+} from '../services/NovelService.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -44,7 +48,10 @@ router.get(
       res.json(
         result.rows.map((row) => ({
           ...row,
-          chapter_url: healDeadSiteUrl(row.chapter_url, String(req.params.novelId)),
+          chapter_url: healDeadSiteUrl(
+            row.chapter_url,
+            String(req.params.novelId),
+          ),
         })),
       );
     } catch (error) {
@@ -133,7 +140,11 @@ router.post(
           VALUES ($1, $2, $3)
           ON CONFLICT (id) DO NOTHING
         `,
-          [novel_id, extractNovelTitle(chapter_url as string), deriveNovelMainUrl(chapter_url as string)],
+          [
+            novel_id,
+            extractNovelTitle(chapter_url as string),
+            deriveNovelMainUrl(chapter_url as string),
+          ],
         );
 
         const insertResult = await client.query(

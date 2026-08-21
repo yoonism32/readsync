@@ -16,7 +16,9 @@
     "lint:fix": "biome lint --write src/ bot/src/",
     "format": "biome format --write src/ bot/src/",
     "check": "biome check src/ bot/src/",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "typecheck:bot": "tsc --noEmit -p bot/tsconfig.json",
+    "verify": "npm test && npm run typecheck && npm run check && npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend && npm run build --prefix userscript && npm run typecheck:bot"
   },
   "keywords": [
     "reading",

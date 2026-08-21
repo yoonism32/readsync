@@ -246,7 +246,7 @@ export function createAdminRouter(io: SocketServer): Router {
         let parsed = parseTimeAgo(update_time_raw as string);
         if (!parsed && update_time_raw) {
           const isoDate = new Date(update_time_raw as string);
-          if (!isNaN(isoDate.getTime())) parsed = isoDate;
+          if (!Number.isNaN(isoDate.getTime())) parsed = isoDate;
         }
         const site_latest_chapter_time = parsed ? parsed.toISOString() : null;
 

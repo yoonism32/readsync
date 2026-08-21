@@ -1,17 +1,20 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import chromium from '@sparticuz/chromium';
 import type { Browser, Page } from 'puppeteer-core';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import {
-  BROWSER_TIMEOUT_MS, CLOUDFLARE_WAIT_MS,
-  MIN_GLOBAL_GAP_MS, COOLDOWN_403_MS, COOLDOWN_429_MS,
+  BROWSER_TIMEOUT_MS,
+  CLOUDFLARE_WAIT_MS,
+  COOLDOWN_403_MS,
+  COOLDOWN_429_MS,
+  MIN_GLOBAL_GAP_MS,
 } from '../config.js';
 import { deriveNovelBaseUrl } from '../parseNovelInfo.js';
 
 puppeteer.use(StealthPlugin());
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 class NovelScraperClass {
@@ -32,12 +35,12 @@ class NovelScraperClass {
     this.browserLaunchInProgress = true;
     try {
       console.log('Launching Puppeteer browser with Chromium + Stealth...');
-      this.browserInstance = await puppeteer.launch({
+      this.browserInstance = (await puppeteer.launch({
         args: chromium.args,
         defaultViewport: null,
         executablePath: await chromium.executablePath(),
         headless: true,
-      }) as unknown as Browser;
+      })) as unknown as Browser;
       console.log('Browser launched successfully (stealth mode enabled)');
       return this.browserInstance;
     } catch (error) {
@@ -71,7 +74,9 @@ class NovelScraperClass {
     const gap = now - this.lastNovelbinRequestAt;
     if (gap < MIN_GLOBAL_GAP_MS) {
       const waitTime = MIN_GLOBAL_GAP_MS - gap;
-      console.log(`⏳ Waiting ${Math.ceil(waitTime / 1000)}s before next request...`);
+      console.log(
+        `⏳ Waiting ${Math.ceil(waitTime / 1000)}s before next request...`,
+      );
       await sleep(waitTime);
     }
 
@@ -85,7 +90,9 @@ class NovelScraperClass {
     try {
       return await fn(page);
     } finally {
-      try { await page.close(); } catch (e) {
+      try {
+        await page.close();
+      } catch (e) {
         console.error('Error closing page:', (e as Error).message);
       }
     }
@@ -121,36 +128,52 @@ class NovelScraperClass {
 
         let foundContent = false;
 
-        while ((Date.now() - startTime) < maxWaitTime && !foundContent) {
+        while (Date.now() - startTime < maxWaitTime && !foundContent) {
           await sleep(checkInterval);
 
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
           const pageTitle = await page.title();
 
-          const hasCloudflare = await page.evaluate(() =>
-            document.body.innerHTML.includes('Just a moment') ||
-            document.body.innerHTML.includes('challenge-platform'),
+          const hasCloudflare = await page.evaluate(
+            () =>
+              document.body.innerHTML.includes('Just a moment') ||
+              document.body.innerHTML.includes('challenge-platform'),
           );
 
           const contentChecks = await page.evaluate(() => ({
             hasLChapter: !!document.querySelector('.l-chapter'),
-            hasMeta: !!document.querySelector('meta[property*="novel"], meta[name*="og:novel"]'),
-            hasNovelTitle: !!document.querySelector('.novel-title, .book-title, h1'),
+            hasMeta: !!document.querySelector(
+              'meta[property*="novel"], meta[name*="og:novel"]',
+            ),
+            hasNovelTitle: !!document.querySelector(
+              '.novel-title, .book-title, h1',
+            ),
             bodySize: document.body.innerHTML.length,
-            visibleText: document.body.textContent?.trim().substring(0, 100).replace(/\s+/g, ' ') ?? '',
+            visibleText:
+              document.body.textContent
+                ?.trim()
+                .substring(0, 100)
+                .replace(/\s+/g, ' ') ?? '',
           }));
 
           console.log(`   [${elapsed}s] Title: "${pageTitle}"`);
           console.log(
             `   [${elapsed}s] Cloudflare=${hasCloudflare ? 'YES' : 'NO'} | ` +
-            `l-chapter=${contentChecks.hasLChapter ? 'YES' : 'NO'} | ` +
-            `meta=${contentChecks.hasMeta ? 'YES' : 'NO'} | ` +
-            `size=${(contentChecks.bodySize / 1024).toFixed(0)}KB`,
+              `l-chapter=${contentChecks.hasLChapter ? 'YES' : 'NO'} | ` +
+              `meta=${contentChecks.hasMeta ? 'YES' : 'NO'} | ` +
+              `size=${(contentChecks.bodySize / 1024).toFixed(0)}KB`,
           );
-          console.log(`   [${elapsed}s] Preview: "${contentChecks.visibleText}..."`);
+          console.log(
+            `   [${elapsed}s] Preview: "${contentChecks.visibleText}..."`,
+          );
 
-          if (!hasCloudflare && (contentChecks.hasLChapter || contentChecks.hasMeta)) {
-            console.log(`   [${elapsed}s] Novel content detected! Stopping early.`);
+          if (
+            !hasCloudflare &&
+            (contentChecks.hasLChapter || contentChecks.hasMeta)
+          ) {
+            console.log(
+              `   [${elapsed}s] Novel content detected! Stopping early.`,
+            );
             foundContent = true;
           }
         }

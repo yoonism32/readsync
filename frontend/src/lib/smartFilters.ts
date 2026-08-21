@@ -1,7 +1,7 @@
 // Smart filter presets over the novel list. Pure predicates so they can
 // be regression-tested; the UI maps ids to these.
 
-import { behindCount } from '../components/BehindBadge.js';
+import { behindCount } from './behindStatus.js';
 import type { Novel } from '../types/index.js';
 
 export type SmartFilterId = 'behind' | 'fresh' | 'almost' | 'stale';

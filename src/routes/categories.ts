@@ -48,9 +48,7 @@ router.post(
       );
       res
         .status(HTTP_CREATED)
-        .json(
-          result.rows[0] ?? { novel_id: req.params.novelId, category },
-        );
+        .json(result.rows[0] ?? { novel_id: req.params.novelId, category });
     } catch (error) {
       handleDbError(res, error, 'Add category');
     }

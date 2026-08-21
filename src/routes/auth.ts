@@ -5,8 +5,8 @@ import {
   HTTP_INTERNAL_ERROR,
   HTTP_UNAUTHORIZED,
 } from '../config.js';
-import logger from '../logger.js';
 import pool from '../db/pool.js';
+import logger from '../logger.js';
 import {
   redirectIfAuthenticated,
   requireAuth,
@@ -138,48 +138,69 @@ router.get('/login', redirectIfAuthenticated, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'login.html'));
 });
 
-// The React SPA is the front door now; the legacy dashboard stays
-// reachable at /legacy-dashboard and its direct .html paths.
 router.get('/', (_req, res) => {
   res.redirect('/app/');
 });
 
-router.get('/legacy-dashboard', requireAuth, (_req, res) => {
+// The React SPA (frontend/, served at /app/*) is the front door and has a
+// 1:1 replacement for every page below except /practice (API Route
+// Explorer — never ported to the SPA). Quarantined under /legacy/* rather
+// than deleted: this is a live app and we can't rule out bookmarked or
+// linked-to direct .html paths. Old bare paths 301-redirect to their new
+// /legacy/* home so nothing breaks.
+
+router.get('/legacy/dashboard', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'dashboard.html'));
 });
+router.get('/legacy-dashboard', (_req, res) =>
+  res.redirect(301, '/legacy/dashboard'),
+);
 
-router.get('/manage', requireAuth, (_req, res) => {
+router.get('/legacy/manage', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'manage.html'));
 });
+router.get('/manage', (_req, res) => res.redirect(301, '/legacy/manage'));
 
-router.get('/settings', requireAuth, (_req, res) => {
+router.get('/legacy/settings', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'settings.html'));
 });
+router.get('/settings', (_req, res) => res.redirect(301, '/legacy/settings'));
 
-router.get('/novels', requireAuth, (_req, res) => res.redirect('/mylist'));
-
-router.get('/mylist', requireAuth, (_req, res) => {
+router.get('/legacy/mylist', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'mylist.html'));
 });
+router.get('/mylist', (_req, res) => res.redirect(301, '/legacy/mylist'));
+router.get('/novels', (_req, res) => res.redirect(301, '/legacy/mylist'));
 
-router.get('/novel/:novelId', requireAuth, (_req, res) => {
+router.get('/legacy/novel/:novelId', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'novel.html'));
 });
-
-router.get('/novels/:novelId', requireAuth, (req, res) => {
-  res.redirect(`/novel/${encodeURIComponent(String(req.params.novelId))}`);
+router.get('/novel/:novelId', (req, res) => {
+  res.redirect(
+    301,
+    `/legacy/novel/${encodeURIComponent(String(req.params.novelId))}`,
+  );
+});
+router.get('/novels/:novelId', (req, res) => {
+  res.redirect(
+    301,
+    `/legacy/novel/${encodeURIComponent(String(req.params.novelId))}`,
+  );
 });
 
-router.get('/admin', requireAuth, (_req, res) => {
+router.get('/legacy/admin', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'admin.html'));
 });
+router.get('/admin', (_req, res) => res.redirect(301, '/legacy/admin'));
 
-router.get('/explorer', requireAuth, (_req, res) => {
+router.get('/legacy/explorer', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'explorer.html'));
 });
+router.get('/explorer', (_req, res) => res.redirect(301, '/legacy/explorer'));
 
-router.get('/practice', requireAuth, (_req, res) => {
+router.get('/legacy/practice', requireAuth, (_req, res) => {
   res.sendFile(path.join(PUBLIC_DIR, 'practice.html'));
 });
+router.get('/practice', (_req, res) => res.redirect(301, '/legacy/practice'));
 
 export default router;

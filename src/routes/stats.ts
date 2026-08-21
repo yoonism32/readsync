@@ -257,12 +257,14 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
       seconds: b.seconds,
     }));
 
-    const by_weekday = fillBuckets(weekday.rows, 7, (r) => r.weekday).map((b) => ({
-      weekday: b.index,
-      label: WEEKDAY_LABELS[b.index],
-      sessions: b.sessions,
-      seconds: b.seconds,
-    }));
+    const by_weekday = fillBuckets(weekday.rows, 7, (r) => r.weekday).map(
+      (b) => ({
+        weekday: b.index,
+        label: WEEKDAY_LABELS[b.index],
+        sessions: b.sessions,
+        seconds: b.seconds,
+      }),
+    );
 
     const by_device = byDevice.rows.map((r) => ({
       device_id: r.device_id as string,

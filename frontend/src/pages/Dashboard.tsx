@@ -2,12 +2,13 @@ import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import { swrFetcher, fetchNovels, formatTimestamp, resumeUrl } from '../api/client.js';
-import { BehindBadge, behindCount } from '../components/BehindBadge.js';
+import { BehindBadge } from '../components/BehindBadge.js';
 import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import { useNow } from '../hooks/useNow.js';
+import { behindCount } from '../lib/behindStatus.js';
 import type { Novel, StatsSummary } from '../types/index.js';
 
 /** Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero. */
