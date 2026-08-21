@@ -4,7 +4,6 @@ import type { Server as SocketServer } from 'socket.io';
 import {
   AUTO_REREAD_CHAPTER_THRESHOLD,
   AUTO_REREAD_MAX_START_CHAPTER,
-  CHAPTER_RESTART_THRESHOLD_PERCENT,
   HTTP_BAD_REQUEST,
   HTTP_NOT_FOUND,
   MAX_DEVICE_ID_LENGTH,
@@ -12,7 +11,6 @@ import {
   MAX_PERCENT,
   MIN_PERCENT,
   SESSION_IDLE_SECONDS,
-  SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT,
 } from '../config.js';
 import pool, { withTransaction } from '../db/pool.js';
 import logger from '../logger.js';
@@ -28,6 +26,7 @@ import {
   normalizeNovelId,
   parseChapterFromUrl,
 } from '../services/NovelService.js';
+import { decideProgressUpdate } from '../services/ProgressPolicy.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 /**
@@ -366,57 +365,42 @@ export function createProgressRouter(io: SocketServer): Router {
           // Max-progress policy. rejected_reason distinguishes a quiet
           // peek at an earlier chapter (bookmark stays safe) from mere
           // same-chapter noise, so clients can offer "re-read from here".
-          let shouldUpdate = true;
-          let rejectedReason: string | null = null;
-          if (lastProgress.rows.length > 0) {
-            const prev = lastProgress.rows[0];
-            if (
-              prev.chapter_num === chapterInfo.num &&
-              percentValue <= parseFloat(prev.percent)
-            ) {
-              shouldUpdate = false;
-              rejectedReason = 'same_chapter_lower_percent';
-            }
-            if (chapterInfo.num < prev.chapter_num) {
-              shouldUpdate = false;
-              rejectedReason = 'behind_chapter';
-              // Diagnostic for the 2026-08-20 "peek banner on a brand-new
-              // chapter" report: this should only fire when chapterInfo.num
-              // is genuinely behind prev.chapter_num for THIS device+novel+
-              // read-through, but the user says it sometimes fires on a
-              // chapter they've never visited. Capturing full context here
-              // (including whether chapterInfo came from the client's
-              // current_chapter_num or a server-side URL parse) so the next
-              // occurrence can be diagnosed from logs instead of guessed at.
-              // Remove once root-caused.
-              logger.warn(
-                {
-                  user_id,
-                  device_id,
-                  novel_id,
-                  novel_url,
-                  chapterNum: chapterInfo.num,
-                  chapterSource: (req.body as Record<string, unknown>)
-                    .current_chapter_num
-                    ? 'client_current_chapter_num'
-                    : 'server_url_parse',
-                  prevChapterNum: prev.chapter_num,
-                  prevPercent: prev.percent,
-                  percentValue,
-                  readThrough: currentReadThrough,
-                },
-                'behind_chapter rejection (diagnostic)',
-              );
-            }
-            if (
-              percentValue <= CHAPTER_RESTART_THRESHOLD_PERCENT &&
-              parseFloat(prev.percent) >
-                SIGNIFICANT_PROGRESS_THRESHOLD_PERCENT &&
-              prev.chapter_num === chapterInfo.num
-            ) {
-              shouldUpdate = false;
-              rejectedReason = 'chapter_restart_guard';
-            }
+          // See ProgressPolicy.ts for the decision matrix itself.
+          const prev = lastProgress.rows[0];
+          const { shouldUpdate, rejectedReason } = decideProgressUpdate(
+            prev,
+            chapterInfo.num,
+            percentValue,
+          );
+
+          if (rejectedReason === 'behind_chapter' && prev) {
+            // Diagnostic for the 2026-08-20 "peek banner on a brand-new
+            // chapter" report: this should only fire when chapterInfo.num
+            // is genuinely behind prev.chapter_num for THIS device+novel+
+            // read-through, but the user says it sometimes fires on a
+            // chapter they've never visited. Capturing full context here
+            // (including whether chapterInfo came from the client's
+            // current_chapter_num or a server-side URL parse) so the next
+            // occurrence can be diagnosed from logs instead of guessed at.
+            // Remove once root-caused.
+            logger.warn(
+              {
+                user_id,
+                device_id,
+                novel_id,
+                novel_url,
+                chapterNum: chapterInfo.num,
+                chapterSource: (req.body as Record<string, unknown>)
+                  .current_chapter_num
+                  ? 'client_current_chapter_num'
+                  : 'server_url_parse',
+                prevChapterNum: prev.chapter_num,
+                prevPercent: prev.percent,
+                percentValue,
+                readThrough: currentReadThrough,
+              },
+              'behind_chapter rejection (diagnostic)',
+            );
           }
 
           if (shouldUpdate) {
