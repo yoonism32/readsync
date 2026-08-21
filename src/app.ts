@@ -24,7 +24,6 @@ import bookmarksRouter from './routes/bookmarks.js';
 import categoriesRouter from './routes/categories.js';
 import coversRouter from './routes/covers.js';
 import devicesRouter from './routes/devices.js';
-import diagnosticsRouter from './routes/diagnostics.js';
 import historyRouter from './routes/history.js';
 import notesRouter from './routes/notes.js';
 import notificationsRouter from './routes/notifications.js';
@@ -148,7 +147,6 @@ export function createApp(): {
   app.use(statsRouter);
   app.use(settingsRouter);
   app.use(coversRouter);
-  app.use(diagnosticsRouter);
   app.use(createAdminRouter(io));
   app.use(userscriptRouter);
 
