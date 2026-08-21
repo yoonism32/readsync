@@ -1,18 +1,15 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
-import { fetchNovels, coverUrl, resumeUrl, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
-import { StatusDot } from '../components/BehindBadge.js';
-import { HiatusBadge } from '../components/HiatusBadge.js';
-import { StarIcon, RefreshIcon, BellIcon } from '../components/Icon.js';
+import { fetchNovels, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
+import { RefreshIcon, BellIcon } from '../components/Icon.js';
 import { Spinner } from '../components/Spinner.js';
+import { Th, Row } from '../components/MyListTable.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
-import { behindCount } from '../lib/behindStatus.js';
-import { compactAge } from '../lib/dateFormat.js';
+import { lastRefreshLabel, describeFailure } from '../lib/refreshStatus.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
 import type { SmartFilterId } from '../lib/smartFilters.js';
-import { compareNovels, updatedAt } from '../lib/novelSort.js';
+import { compareNovels } from '../lib/novelSort.js';
 import type { SortKey } from '../lib/novelSort.js';
 import type { CategoryAssignment, Novel, NovelStatus } from '../types/index.js';
 
@@ -27,38 +24,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'dropped',      label: 'Dropped' },
 ];
 
-const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', 'on-hold', 'dropped', 'removed'];
 const PAGE_SIZE = 50;
-
-function lastRefreshLabel(iso: string | null): string {
-  if (!iso) return 'never';
-  const ms = Date.now() - new Date(iso).getTime();
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  return h > 0 ? `${h}h ${m}m ago` : `${m}m ago`;
-}
-
-const ordinal = (n: number): string =>
-  n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
-
-const FAILURE_LABELS: Record<string, string> = {
-  no_url: 'no site URL on record',
-  popup_blocked: 'popup blocked — allow popups for this site',
-  timeout: 'timed out after 30s',
-  no_chapter_info: 'no chapter number found on page',
-  chapter_page: 'link opened a chapter, not the novel page',
-  no_novel_id: 'could not read a novel ID from the URL',
-  api_error: 'server rejected the update',
-  exception: 'userscript error',
-  unknown: 'refresh did not report a reason',
-};
-
-/** `api_error:404` → "server rejected the update (HTTP 404)". */
-function describeFailure(reason: string): string {
-  const [kind, status] = reason.split(':');
-  const label = FAILURE_LABELS[kind] ?? kind;
-  return status ? `${label} (HTTP ${status})` : label;
-}
 
 // Sorting moved to lib/novelSort so Explorer sorts by the same rules.
 
@@ -419,172 +385,5 @@ export function MyList() {
         </>
       )}
     </div>
-  );
-}
-
-/* ── Table pieces ─────────────────────────────────────────── */
-
-function Th({ label, sortable, active, asc, onClick, align = 'center', toggle }: {
-  label: string; sortable?: boolean; active?: boolean; asc?: boolean;
-  onClick?: () => void; align?: 'left' | 'center';
-  /** Optional sort-mode switch rendered next to the label, hidden until the
-   *  header is hovered/focused (see .progress-mode-toggle in index.css). */
-  toggle?: { active: boolean; symbol: string; title: string; onClick: () => void };
-}) {
-  return (
-    <th
-      onClick={sortable ? onClick : undefined}
-      className={toggle ? 'th-progress' : undefined}
-      style={{
-        padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap',
-        fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
-        color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
-        cursor: sortable ? 'pointer' : 'default', userSelect: 'none',
-      }}
-    >
-      {label}{active && (asc ? ' ▲' : ' ▼')}
-      {toggle && (
-        <button
-          type="button"
-          className={`progress-mode-toggle${toggle.active ? ' active' : ''}`}
-          onClick={e => { e.stopPropagation(); toggle.onClick(); }}
-          title={toggle.title}
-          aria-label={toggle.title}
-          style={{
-            marginLeft: 6, background: 'none', border: 'none', padding: 0,
-            fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer', verticalAlign: 'middle',
-          }}
-        >
-          {toggle.symbol}
-        </button>
-      )}
-    </th>
-  );
-}
-
-function Row({ novel: n, onSetStatus, onToggleFav }: {
-  novel: Novel;
-  onSetStatus: (id: string, s: NovelStatus) => void;
-  onToggleFav: (n: Novel) => void;
-}) {
-  const behind = behindCount(n);
-  const continueHref = n.latest_url
-    ? resumeUrl(n.latest_url, n.latest_percent)
-    : n.primary_url ?? null;
-
-  const td: React.CSSProperties = { padding: '10px 12px', textAlign: 'center', whiteSpace: 'nowrap' };
-
-  return (
-    <tr
-      className="row-hover"
-      style={{ borderBottom: '1px solid var(--color-border)' }}
-    >
-      {/* Cover */}
-      <td style={{ ...td, width: 52 }}>
-        <a href={continueHref ?? '#'} target="_blank" rel="noopener noreferrer" aria-label={`Open ${n.title} on site`}>
-          <span style={{
-            position: 'relative', display: 'inline-block', width: 38, height: 54, borderRadius: 4,
-            overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)', verticalAlign: 'middle',
-          }}>
-            <img
-              src={coverUrl(n.novel_id)} alt="" width={38} height={54} loading="lazy"
-              onError={e => { e.currentTarget.style.display = 'none'; }}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </span>
-        </a>
-      </td>
-
-      {/* Title */}
-      {/* 560, not 380: at the old cap a long title wrapped to two lines and
-          pushed the star + delta onto a third. The intended shape is one line
-          of title/star/delta with the "Last ch." pill beneath it. */}
-      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 560 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <Link
-            to={`/novel/${encodeURIComponent(n.novel_id)}`}
-            className="link-accent"
-            style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none' }}
-          >
-            {n.title}
-          </Link>
-          <button
-            type="button"
-            onClick={() => onToggleFav(n)}
-            aria-label={n.favorite ? 'Unfavorite' : 'Favorite'}
-            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: n.favorite ? 'var(--color-warning)' : 'var(--color-text-faint)', lineHeight: 1 }}
-          >
-            <StarIcon size={12} filled={n.favorite} />
-          </button>
-          {(n.current_read_through ?? 1) > 1 && (
-            <span style={{
-              fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', background: 'var(--color-accent-glow)',
-              border: '1px solid var(--color-accent-border)', borderRadius: 'var(--radius-full)', padding: '0 8px',
-            }}>
-              {ordinal(n.current_read_through)} read
-            </span>
-          )}
-          {behind > 0 && (
-            <span className="tabular" style={{
-              fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-on-teal)',
-              background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px',
-            }}>
-              +{behind}
-            </span>
-          )}
-          <HiatusBadge novel={n} />
-        </span>
-        {n.latest_chapter != null && (
-          <span className="text-muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', marginTop: 3 }}>
-            <StatusDot novel={n} /> Last ch. {n.latest_chapter}
-          </span>
-        )}
-      </td>
-
-      {/* Progress */}
-      <td className="tabular" style={{ ...td, fontSize: 'var(--text-sm)' }}>
-        {n.latest_chapter ?? 0} / {n.latest_chapter_num ?? '?'}
-      </td>
-
-      {/* Continue */}
-      <td style={td}>
-        {continueHref ? (
-          <a
-            href={continueHref}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="btn-accent"
-            style={{ textDecoration: 'none', fontSize: 'var(--text-xs)', padding: '6px 12px', display: 'inline-block' }}
-          >
-            Continue Reading →
-          </a>
-        ) : (
-          <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>—</span>
-        )}
-      </td>
-
-      {/* Status */}
-      <td style={td}>
-        <select
-          value={n.status}
-          onChange={e => onSetStatus(n.novel_id, e.target.value as NovelStatus)}
-          aria-label={`Status of ${n.title}`}
-          style={{
-            background: 'var(--color-bg-input)', border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-md)', padding: '5px 8px',
-            color: 'var(--color-text)', fontSize: 'var(--text-xs)', cursor: 'pointer', outline: 'none',
-          }}
-        >
-          {STATUS_OPTIONS.map(s => (
-            <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-          ))}
-        </select>
-      </td>
-
-      {/* Times */}
-      <td className="tabular text-muted" style={{ ...td, fontSize: 'var(--text-xs)' }}>{compactAge(n.latest_read_at)}</td>
-      <td className="tabular text-muted" style={{ ...td, fontSize: 'var(--text-xs)' }}>{compactAge(updatedAt(n))}</td>
-      <td className="tabular text-muted" style={{ ...td, fontSize: 'var(--text-xs)' }}>{compactAge(n.started_at)}</td>
-    </tr>
   );
 }
