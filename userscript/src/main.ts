@@ -189,11 +189,6 @@ function addProgressBar(): void {
         debouncedSync(candidate, syncCtx);
       }
     }
-
-    if (Math.abs(current - prev) > 5) {
-      log('big scroll delta, syncing', { prev, current });
-      debouncedSync(current, syncCtx);
-    }
   }
 
   scrollHandler = onAnyScroll;
