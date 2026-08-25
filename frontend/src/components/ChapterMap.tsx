@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
 import type { Novel } from '../types/index.js';
@@ -39,7 +39,11 @@ export function ChapterMap({ novel }: Props) {
   );
 
   const [pageOffset, setPageOffset] = useState(0);
-  useEffect(() => setPageOffset(0), [novel.novel_id]);
+  const [prevNovelId, setPrevNovelId] = useState(novel.novel_id);
+  if (novel.novel_id !== prevNovelId) {
+    setPrevNovelId(novel.novel_id);
+    setPageOffset(0);
+  }
 
   if (!data) return null;
 
