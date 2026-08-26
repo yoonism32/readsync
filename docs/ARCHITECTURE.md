@@ -101,6 +101,27 @@ on NovelArrow/NovelBin. It is **not wired into the deployed server**:
   with a working-looking status/trigger UI that silently no-op'd; that UI
   has been removed and replaced with a static note.
 
+**Decision confirmed by production-network test (2026-08-21): do not retry
+the bot on Render.** An authenticated, read-only probe sent six NovelArrow
+novel-page requests from the deployed ReadSync process in two batches of
+three. All six received HTTP 403 Cloudflare challenges before any novel
+metadata was returned. The same pages returned complete, parseable HTML from
+a local connection, so this is an outbound-network/IP-reputation problem, not
+a parser or batch-size problem. Puppeteer would still originate from Render's
+blocked network while adding Chromium overhead, so stealth settings and lower
+concurrency do not address the cause. Keep chapter refresh and one-time
+metadata imports in the reader's real browser/userscript. Revisit server-side
+scraping only if the network premise changes materially (for example,
+NovelArrow explicitly permits/allowlists it or a separately verified outbound
+route succeeds); do not periodically retry the old bot as routine maintenance.
+
+The investigation also found that normal successful NovelArrow pages now
+contain a `challenge-platform` script. The bot's current detector treats that
+string alone as an active challenge, so it false-positives even on valid pages.
+If the local-only bot tooling is ever used again, challenge detection must rely
+on actual signals such as `cf-mitigated: challenge`, a `Just a moment` title,
+HTTP 403/429, and missing required metadata.
+
 If you need a one-off chapter refresh, run the bot manually and locally:
 `npm run bot` (requires `dist-bot/`, built via `npx tsc -p bot/tsconfig.json`
 — there's no wired `build:bot` npm script today). Do not re-enable it in

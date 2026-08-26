@@ -38,10 +38,7 @@ export function Layout({ children }: Props) {
   const socket = useSocket();
 
   useEffect(() => {
-    if (location.pathname.startsWith('/novel/')) {
-      document.title = 'Novel | ReadSync';
-      return;
-    }
+    if (location.pathname.startsWith('/novel/')) return;
     const pageName = NAV.find(item => location.pathname.startsWith(item.to))?.label
       ?? 'ReadSync';
     document.title = `${pageName} | ReadSync`;
