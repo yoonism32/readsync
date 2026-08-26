@@ -270,6 +270,7 @@ export function createAdminRouter(io: SocketServer): Router {
       UPDATE novels
       SET latest_chapter_num = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) OR $9::boolean THEN $2::int ELSE latest_chapter_num END,
           latest_chapter_title = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) OR $9::boolean THEN $3 ELSE latest_chapter_title END,
+          chapters_updated_at = CURRENT_TIMESTAMP,
           genre = COALESCE($4, genre),
           author = COALESCE($5, author),
           site_latest_chapter_time_raw = CASE WHEN $2::int >= COALESCE(latest_chapter_num, 0) OR $9::boolean THEN $6 ELSE site_latest_chapter_time_raw END,
