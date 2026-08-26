@@ -296,7 +296,9 @@ export function createAdminRouter(io: SocketServer): Router {
             site_latest_chapter_time,
             safeCoverUrl,
             isConfirmedCorrection,
-            typeof synopsis === 'string' && synopsis.length > 0 ? synopsis : null,
+            typeof synopsis === 'string' && synopsis.length > 0
+              ? synopsis
+              : null,
           ],
         );
 

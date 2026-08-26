@@ -44,10 +44,11 @@ describe('parseNovelInfoFromHTML — NovelArrow page (name= metas, no .l-chapter
     expect(info.site_latest_chapter_time).toBe('2026-07-24T18:15:04.030Z');
   });
 
-  it('extracts synopsis from <dt>Synopsis:</dt><dd>...</dd>, stripping tags, decoding entities, and collapsing whitespace', () => {
+  it('extracts every synopsis paragraph from the current Next.js page payload', () => {
     expect(info.synopsis).toBe(
-      'Growing up in poverty, Sunny never expected anything good from life. ' +
-      'He didn\'t know "fear" until the Nightmare Spell chose him & everything changed. Now he must survive.',
+      'Growing up in poverty, Sunny never expected anything good from life.\n\n' +
+      'He didn\'t know "fear" until the Nightmare Spell chose him & everything changed.\n\n' +
+      'Now he must survive.',
     );
   });
 });
@@ -67,6 +68,12 @@ describe('parseNovelInfoFromHTML — synopsis edge cases', () => {
     const html = `<html><body><dt>Synopsis:</dt><dd>${oversized}</dd></body></html>`;
     const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
     expect(info.synopsis).toBeNull();
+  });
+
+  it('preserves paragraphs from the modern visible synopsis when no page payload is present', () => {
+    const html = '<div class="site-reading-copy site-reading-prose"><p>First paragraph.</p><p>Second paragraph.</p></div>';
+    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
+    expect(info.synopsis).toBe('First paragraph.\n\nSecond paragraph.');
   });
 
   it('returns null synopsis when the section is present but empty after cleanup', () => {

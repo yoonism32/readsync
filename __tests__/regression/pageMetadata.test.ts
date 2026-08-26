@@ -9,12 +9,19 @@ import {
   extractGenres,
   extractAuthor,
   extractCoverUrl,
+  extractSynopsis,
   extractUpdateTime,
 } from '../../userscript/src/services/PageMetadata.js';
 
 interface ElementStub {
   textContent: string | null;
   getAttribute?: (name: string) => string | null;
+  tagName?: string;
+  nextElementSibling?: ElementStub | null;
+  click?: () => void;
+  closest?: (selector: string) => ElementStub | null;
+  querySelector?: (selector: string) => ElementStub | null;
+  querySelectorAll?: (selector: string) => ElementStub[];
 }
 
 const globalRef = globalThis as unknown as { document?: unknown };
@@ -120,6 +127,82 @@ describe('extractCoverUrl', () => {
   it('returns null when the meta tag is absent', () => {
     stubDocument({ querySelector: { [COVER_META]: null } });
     expect(extractCoverUrl()).toBeNull();
+  });
+});
+
+describe('extractSynopsis', () => {
+  it('expands the scoped NovelArrow synopsis and preserves every paragraph', async () => {
+    const initialParagraphs: ElementStub[] = [
+      { textContent: 'First paragraph.' },
+      { textContent: 'Second paragraph.' },
+    ];
+    const expandedParagraphs: ElementStub[] = [
+      ...initialParagraphs,
+      { textContent: 'Third paragraph.' },
+    ];
+    let expanded = false;
+
+    const container: ElementStub = {
+      textContent: null,
+      querySelectorAll: selector => selector === 'p'
+        ? (expanded ? expandedParagraphs : initialParagraphs)
+        : [],
+    };
+    const showMore: ElementStub = {
+      textContent: 'Show more',
+      click: () => {
+        expanded = true;
+        showMore.textContent = 'Show less';
+      },
+    };
+    const panel: ElementStub = {
+      textContent: null,
+      querySelector: selector => selector === '.site-reading-prose' ? container : null,
+      querySelectorAll: selector => {
+        if (selector === 'button') return [showMore];
+        if (selector === '.site-reading-prose p') {
+          return expanded ? expandedParagraphs : initialParagraphs;
+        }
+        return [];
+      },
+    };
+    const heading: ElementStub = {
+      textContent: 'Synopsis',
+      closest: selector => selector === '.site-panel' ? panel : null,
+    };
+
+    stubDocument({ querySelectorAll: { span: [heading] } });
+
+    await expect(extractSynopsis()).resolves.toBe(
+      'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.',
+    );
+    expect(expanded).toBe(true);
+  });
+
+  it('does not click an unrelated Show more button outside the synopsis panel', async () => {
+    let unrelatedClicked = false;
+    const container: ElementStub = {
+      textContent: null,
+      querySelectorAll: selector => selector === 'p' ? [{ textContent: 'Complete synopsis.' }] : [],
+    };
+    const panel: ElementStub = {
+      textContent: null,
+      querySelector: selector => selector === '.site-reading-prose' ? container : null,
+      querySelectorAll: () => [],
+    };
+    const heading: ElementStub = {
+      textContent: 'Synopsis',
+      closest: () => panel,
+    };
+    const unrelatedButton: ElementStub = {
+      textContent: 'Show more',
+      click: () => { unrelatedClicked = true; },
+    };
+
+    stubDocument({ querySelectorAll: { span: [heading], button: [unrelatedButton] } });
+
+    await expect(extractSynopsis()).resolves.toBe('Complete synopsis.');
+    expect(unrelatedClicked).toBe(false);
   });
 });
 

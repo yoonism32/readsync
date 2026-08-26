@@ -1,6 +1,6 @@
 {
   "name": "readsync-userscript",
-  "version": "5.7.1",
+  "version": "5.7.2",
   "private": true,
   "scripts": {
     "dev": "vite build --watch",

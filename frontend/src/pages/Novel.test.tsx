@@ -134,6 +134,28 @@ describe('synopsis panel', () => {
     expect(link).toHaveProperty('href', 'https://novelarrow.com/novel/nine-star-hegemon-body-arts');
   });
 
+  it('renders stored paragraph separators as compact semantic paragraphs', async () => {
+    mocks.fetchNovels.mockResolvedValue([novel()]);
+    mocks.synopsis.mockResolvedValue({
+      synopsis: 'First paragraph.\n\nSecond paragraph.\n\nThird paragraph.',
+      synopsis_imported_at: '2026-08-01T00:00:00.000Z',
+      primary_url: null,
+    });
+
+    renderNovel();
+
+    const copy = await screen.findByTestId('synopsis-copy');
+    const paragraphs = copy.querySelectorAll('p');
+    expect(paragraphs).toHaveLength(3);
+    expect(Array.from(paragraphs, paragraph => paragraph.textContent)).toEqual([
+      'First paragraph.',
+      'Second paragraph.',
+      'Third paragraph.',
+    ]);
+    expect(copy.style.gap).toBe('6px');
+    expect(copy.style.maxWidth).toBe('70ch');
+  });
+
   it('shows an empty state when no synopsis is stored yet', async () => {
     mocks.fetchNovels.mockResolvedValue([novel()]);
     mocks.synopsis.mockResolvedValue({ synopsis: null, synopsis_imported_at: null, primary_url: null });

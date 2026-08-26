@@ -25,17 +25,32 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
     { revalidateOnFocus: false },
   );
 
+  const synopsisParagraphs = data?.synopsis
+    ?.split(/\n\s*\n/)
+    .map(paragraph => paragraph.trim())
+    .filter(Boolean) ?? [];
+  const synopsisSourceUrl = data?.primary_url;
+
   return (
     <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Synopsis</h2>
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}><Spinner /></div>
-      ) : data?.synopsis ? (
+      ) : synopsisParagraphs.length > 0 ? (
         <>
-          <p style={{ fontSize: 'var(--text-sm)', whiteSpace: 'pre-wrap' }}>{data.synopsis}</p>
-          {data.primary_url && (
+          <div
+            data-testid="synopsis-copy"
+            style={{ display: 'grid', gap: 6, maxWidth: '70ch', lineHeight: 1.7 }}
+          >
+            {synopsisParagraphs.map((paragraph, index) => (
+              <p key={`${index}-${paragraph.slice(0, 24)}`} style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
+                {paragraph}
+              </p>
+            ))}
+          </div>
+          {synopsisSourceUrl && (
             <a
-              href={data.primary_url}
+              href={synopsisSourceUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-ghost"

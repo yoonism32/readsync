@@ -411,7 +411,7 @@ async function autoUpdateNovelInfo(): Promise<void> {
       author: extractAuthor(),
       update_time_raw: extractUpdateTime(),
       cover_url: extractCoverUrl(),
-      synopsis: extractSynopsis(),
+      synopsis: await extractSynopsis(),
     };
 
     log('📤 Sending novel info:', payload);
@@ -533,4 +533,3 @@ if (document.readyState === 'loading') {
 } else {
   setTimeout(() => { void autoUpdateNovelInfo(); }, 2000);
 }
-

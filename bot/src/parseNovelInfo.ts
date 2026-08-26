@@ -157,31 +157,70 @@ export function parseNovelInfoFromHTML(
       }
     }
 
-    // --- Synopsis: NovelArrow's dt/dd pattern first, generic synopsis-class
-    // div as fallback. Deliberately NOT using og:description — NovelArrow
-    // truncates it (docs/ROADMAP.md "Novel metadata"). Unverified against a
-    // live page yet; a wrong match here fails safe (see MAX_SYNOPSIS_LENGTH
-    // and the empty-after-cleanup check below), it never corrupts data.
-    const synopsisMatch =
-      html.match(/<dt[^>]*>Synopsis:?\s*<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i) ||
-      html.match(/<div[^>]*class="[^"]*synopsis[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
-    if (synopsisMatch) {
-      const cleaned = synopsisMatch[1]
+    // --- Synopsis. NovelArrow's visible DOM initially contains only the
+    // first four paragraphs of longer synopses. Its Next.js page payload has
+    // the complete `synopsisParagraphs` array, including the content revealed
+    // by "Show more", so prefer that over the visible HTML. Deliberately do
+    // not use og:description because NovelArrow truncates it.
+    const cleanSynopsisText = (value: string): string =>
+      value
         .replace(/<[^>]+>/g, ' ')
         .replace(/&quot;/g, '"')
         .replace(/&amp;/g, '&')
-        .replace(/&#39;/g, "'")
+        .replace(/&#(?:39|x27);/gi, "'")
         .replace(/&lt;/g, '<')
         .replace(/&gt;/g, '>')
         .replace(/\s+/g, ' ')
         .trim();
-      // ponytail: guessed ceiling, revisit if a real synopsis exceeds it
-      const MAX_SYNOPSIS_LENGTH = 20_000;
-      result.synopsis =
-        cleaned.length > 0 && cleaned.length <= MAX_SYNOPSIS_LENGTH
-          ? cleaned
-          : null;
+    const MAX_SYNOPSIS_LENGTH = 20_000;
+    let synopsisText: string | null = null;
+
+    const serializedSynopsis = html.match(
+      /synopsisParagraphs\\":(\[[\s\S]*?\])(?=,\\"tags\\":)/,
+    );
+    if (serializedSynopsis) {
+      try {
+        const decodedArray = JSON.parse(`"${serializedSynopsis[1]}"`);
+        const paragraphs = (JSON.parse(decodedArray) as unknown[])
+          .filter(
+            (paragraph): paragraph is string => typeof paragraph === 'string',
+          )
+          .map(cleanSynopsisText)
+          .filter(Boolean);
+        synopsisText = paragraphs.length > 0 ? paragraphs.join('\n\n') : null;
+      } catch {
+        // Fall through to DOM-pattern parsing for legacy/non-Next.js pages.
+      }
     }
+
+    if (!synopsisText) {
+      const synopsisMatch =
+        html.match(
+          /<dt[^>]*>Synopsis:?\s*<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i,
+        ) ||
+        html.match(
+          /<div[^>]*class="[^"]*synopsis[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+        ) ||
+        html.match(
+          /<div[^>]*class="[^"]*site-reading-prose[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+        );
+      if (synopsisMatch) {
+        const paragraphs = Array.from(
+          synopsisMatch[1].matchAll(/<p[^>]*>([\s\S]*?)<\/p>/gi),
+        )
+          .map((match) => cleanSynopsisText(match[1]))
+          .filter(Boolean);
+        synopsisText =
+          paragraphs.length > 0
+            ? paragraphs.join('\n\n')
+            : cleanSynopsisText(synopsisMatch[1]);
+      }
+    }
+
+    result.synopsis =
+      synopsisText && synopsisText.length <= MAX_SYNOPSIS_LENGTH
+        ? synopsisText
+        : null;
 
     return result;
   } catch (err) {
