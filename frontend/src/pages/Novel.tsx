@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
@@ -72,6 +73,10 @@ export function NovelPage() {
   const { novelId } = useParams<{ novelId: string }>();
   const { data: novelsData, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels);
   const novel = novelsData?.find(n => n.novel_id === novelId);
+
+  useEffect(() => {
+    document.title = novel?.title ? `${novel.title} | ReadSync` : 'Novel | ReadSync';
+  }, [novelId, novel?.title]);
 
   async function toggleFav() {
     if (!novel) return;

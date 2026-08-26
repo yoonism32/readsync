@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { auth, hasApiKey, setApiKey } from '../api/client.js';
 import { applyProgressUpdate } from '../api/normalize.js';
@@ -20,21 +20,32 @@ interface Props {
 type NavItem = { to: string; label: string; Icon: React.ComponentType<{ size?: number }> };
 
 const NAV: NavItem[] = [
-  { to: '/mylist',   label: 'My List',   Icon: BookOpenIcon },
-  { to: '/dashboard',label: 'Dashboard', Icon: DashboardIcon },
-  { to: '/explorer', label: 'Explorer',  Icon: SearchIcon },
-  { to: '/history',  label: 'History',   Icon: ClockIcon },
-  { to: '/stats',    label: 'Stats',     Icon: BarChartIcon },
-  { to: '/manage',   label: 'Manage',    Icon: WrenchIcon },
-  { to: '/settings', label: 'Settings',  Icon: GearIcon },
-  { to: '/admin',    label: 'Admin',     Icon: ShieldIcon },
+  { to: '/mylist', label: 'My List', Icon: BookOpenIcon },
+  { to: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
+  { to: '/explorer', label: 'Explorer', Icon: SearchIcon },
+  { to: '/history', label: 'History', Icon: ClockIcon },
+  { to: '/stats', label: 'Stats', Icon: BarChartIcon },
+  { to: '/manage', label: 'Manage', Icon: WrenchIcon },
+  { to: '/settings', label: 'Settings', Icon: GearIcon },
+  { to: '/admin', label: 'Admin', Icon: ShieldIcon },
 ];
 
 export function Layout({ children }: Props) {
+  const location = useLocation();
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
   const [keyMissing, setKeyMissing] = useState(false);
   const socket = useSocket();
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/novel/')) {
+      document.title = 'Novel | ReadSync';
+      return;
+    }
+    const pageName = NAV.find(item => location.pathname.startsWith(item.to))?.label
+      ?? 'ReadSync';
+    document.title = `${pageName} | ReadSync`;
+  }, [location.pathname]);
 
   // Push-based library refresh: the poll interval in Dashboard/Explorer/
   // Manage/MyList is now just a safety net for a silently-dead socket, not
@@ -68,11 +79,11 @@ export function Layout({ children }: Props) {
           current?.map(n =>
             n.novel_id === payload.novel_id
               ? applyProgressUpdate(n, {
-                  latest_global: payload.latest_global,
-                  latest_per_device: payload.latest_per_device,
-                  current_read_through: payload.read_through,
-                  last_activity: payload.timestamp,
-                })
+                latest_global: payload.latest_global,
+                latest_per_device: payload.latest_per_device,
+                current_read_through: payload.read_through,
+                last_activity: payload.timestamp,
+              })
               : n,
           ),
         { revalidate: false },

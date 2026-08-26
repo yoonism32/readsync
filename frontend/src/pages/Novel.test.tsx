@@ -96,6 +96,15 @@ describe('novel page actions', () => {
     expect(resume.getAttribute('href')).toContain('chapter-2');
   });
 
+  it('sets the browser title to the novel title', async () => {
+    mocks.fetchNovels.mockResolvedValue([novel()]);
+
+    renderNovel();
+
+    await screen.findByRole('heading', { name: 'Nine Star Hegemon Body Arts' });
+    expect(document.title).toBe('Nine Star Hegemon Body Arts | ReadSync');
+  });
+
   it('links to the novel index, not the chapter the reader left off on', async () => {
     mocks.fetchNovels.mockResolvedValue([novel()]);
 
