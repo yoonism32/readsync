@@ -31,13 +31,15 @@ const ageDays = (iso: string | null | undefined, now: Date): number | null => {
 export const isBehind = (novel: Novel): boolean =>
   novel.status === 'reading' && behindCount(novel) >= BEHIND_THRESHOLD;
 
-/** The site released chapters within the last 7 days. */
+/**
+ * The site released chapters within the last 7 days. Uses the site's own
+ * scraped release time only — chapters_updated_at means "we last checked,"
+ * not "the site last published," so it can't stand in when the site time
+ * is missing.
+ */
 export const isFresh = (novel: Novel, now: Date): boolean => {
   if (novel.status === 'removed') return false;
-  const age = ageDays(
-    novel.site_latest_chapter_time ?? novel.chapters_updated_at,
-    now,
-  );
+  const age = ageDays(novel.site_latest_chapter_time, now);
   return age != null && age <= FRESH_DAYS;
 };
 

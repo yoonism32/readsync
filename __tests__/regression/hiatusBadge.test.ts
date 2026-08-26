@@ -32,8 +32,8 @@ describe('isLikelyHiatus', () => {
   it('90 days exactly is not yet hiatus', () => {
     expect(isLikelyHiatus(novel({ site_latest_chapter_time: daysAgo(90) }), NOW)).toBe(false);
   });
-  it('falls back to chapters_updated_at', () => {
-    expect(isLikelyHiatus(novel({ chapters_updated_at: daysAgo(200) }), NOW)).toBe(true);
+  it('ignores chapters_updated_at even when the site time is missing', () => {
+    expect(isLikelyHiatus(novel({ chapters_updated_at: daysAgo(200) }), NOW)).toBe(false);
   });
   it('never flags non-reading statuses or unknown dates', () => {
     expect(isLikelyHiatus(novel({ status: 'completed' as NovelStatus, site_latest_chapter_time: daysAgo(400) }), NOW)).toBe(false);

@@ -44,8 +44,8 @@ describe('isFresh', () => {
   it('flags a release within 7 days', () => {
     expect(isFresh(novel({ site_latest_chapter_time: daysAgo(3) }), NOW)).toBe(true);
   });
-  it('falls back to chapters_updated_at', () => {
-    expect(isFresh(novel({ chapters_updated_at: daysAgo(2) }), NOW)).toBe(true);
+  it('ignores chapters_updated_at even when the site time is missing', () => {
+    expect(isFresh(novel({ chapters_updated_at: daysAgo(2) }), NOW)).toBe(false);
   });
   it('ignores older releases and unknown dates', () => {
     expect(isFresh(novel({ site_latest_chapter_time: daysAgo(10) }), NOW)).toBe(false);

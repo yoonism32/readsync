@@ -14,9 +14,13 @@ import type { Novel } from '../types/index.js';
 export type SortKey =
   | 'last_read' | 'title' | 'progress' | 'completion' | 'updated' | 'added' | 'chapters' | 'percent';
 
-/** Sites report a chapter's publish time; fall back to when we scraped it. */
-export const updatedAt = (n: Novel): string | null =>
-  n.site_latest_chapter_time ?? n.chapters_updated_at;
+/**
+ * The site's own publish time for the latest chapter. Deliberately does NOT
+ * fall back to chapters_updated_at — that column means "we last checked this
+ * novel," not "the novel last changed," and using it as a stand-in silently
+ * mislabels a refresh you triggered as a new release.
+ */
+export const updatedAt = (n: Novel): string | null => n.site_latest_chapter_time;
 
 export function sortValue(n: Novel, key: SortKey): number | string {
   switch (key) {
