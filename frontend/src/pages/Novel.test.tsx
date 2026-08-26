@@ -102,7 +102,7 @@ describe('novel page actions', () => {
     renderNovel();
 
     await screen.findByRole('heading', { name: 'Nine Star Hegemon Body Arts' });
-    expect(document.title).toBe('Nine Star Hegemon Body Arts | ReadSync');
+    expect(document.title).toBe('Nine Star Hegemon Body Arts');
   });
 
   it('links to the novel index, not the chapter the reader left off on', async () => {
@@ -128,7 +128,7 @@ describe('novel page actions', () => {
 });
 
 describe('synopsis panel', () => {
-  it('renders the stored synopsis and a link to the NovelArrow source', async () => {
+  it('renders the stored synopsis without a duplicate NovelArrow link', async () => {
     mocks.fetchNovels.mockResolvedValue([novel()]);
     mocks.synopsis.mockResolvedValue({
       synopsis: 'A hero rises from poverty to face the Nightmare Spell.',
@@ -139,8 +139,7 @@ describe('synopsis panel', () => {
     renderNovel();
 
     expect(await screen.findByText(/a hero rises from poverty/i)).toBeDefined();
-    const link = screen.getByRole('link', { name: /view on novelarrow/i });
-    expect(link).toHaveProperty('href', 'https://novelarrow.com/novel/nine-star-hegemon-body-arts');
+    expect(screen.queryByRole('link', { name: /view on novelarrow/i })).toBeNull();
   });
 
   it('renders stored paragraph separators as compact semantic paragraphs', async () => {

@@ -30,7 +30,6 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
     ?.split(/\n\s*\n/)
     .map(paragraph => paragraph.trim())
     .filter(Boolean) ?? [];
-  const synopsisSourceUrl = data?.primary_url;
 
   return (
     <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
@@ -49,17 +48,6 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
               </p>
             ))}
           </div>
-          {synopsisSourceUrl && (
-            <a
-              href={synopsisSourceUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-ghost"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, textDecoration: 'none' }}
-            >
-              <ExternalLinkIcon size={13} /> View on NovelArrow
-            </a>
-          )}
         </>
       ) : (
         <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>No synopsis stored yet.</p>
@@ -75,7 +63,7 @@ export function NovelPage() {
   const novel = novelsData?.find(n => n.novel_id === novelId);
 
   useEffect(() => {
-    document.title = novel?.title ? `${novel.title} | ReadSync` : 'Novel | ReadSync';
+    document.title = novel?.title ?? 'Novel';
   }, [novelId, novel?.title]);
 
   async function toggleFav() {
