@@ -153,7 +153,7 @@ describe('synopsis panel', () => {
       'Third paragraph.',
     ]);
     expect(copy.style.gap).toBe('6px');
-    expect(copy.style.maxWidth).toBe('70ch');
+    expect(copy.style.maxWidth).toBe('');
   });
 
   it('shows an empty state when no synopsis is stored yet', async () => {

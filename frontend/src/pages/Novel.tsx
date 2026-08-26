@@ -40,7 +40,7 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
         <>
           <div
             data-testid="synopsis-copy"
-            style={{ display: 'grid', gap: 6, maxWidth: '70ch', lineHeight: 1.7 }}
+            style={{ display: 'grid', gap: 6, lineHeight: 1.7 }}
           >
             {synopsisParagraphs.map((paragraph, index) => (
               <p key={`${index}-${paragraph.slice(0, 24)}`} style={{ margin: 0, fontSize: 'var(--text-sm)' }}>
