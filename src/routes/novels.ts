@@ -481,6 +481,36 @@ router.post(
   },
 );
 
+// GET /api/v1/novels/:novelId/synopsis
+router.get(
+  '/api/v1/novels/:novelId/synopsis',
+  requireAuthAPI,
+  validateApiKey,
+  validateNovelId,
+  async (req: Request, res: Response) => {
+    const { novelId } = req.params;
+
+    try {
+      const result = await pool.query<{
+        synopsis: string | null;
+        synopsis_imported_at: string | null;
+        primary_url: string | null;
+      }>(
+        'SELECT synopsis, synopsis_imported_at, primary_url FROM novels WHERE id = $1',
+        [novelId],
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Novel not found' });
+      }
+
+      res.json(result.rows[0]);
+    } catch (error) {
+      handleDbError(res, error, 'Get novel synopsis');
+    }
+  },
+);
+
 // DELETE /api/v1/novels/:novelId
 router.delete(
   '/api/v1/novels/:novelId',

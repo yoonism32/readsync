@@ -43,6 +43,37 @@ describe('parseNovelInfoFromHTML — NovelArrow page (name= metas, no .l-chapter
     expect(info.site_latest_chapter_time_raw).toBe('2026-07-24T18:15:04.030Z');
     expect(info.site_latest_chapter_time).toBe('2026-07-24T18:15:04.030Z');
   });
+
+  it('extracts synopsis from <dt>Synopsis:</dt><dd>...</dd>, stripping tags, decoding entities, and collapsing whitespace', () => {
+    expect(info.synopsis).toBe(
+      'Growing up in poverty, Sunny never expected anything good from life. ' +
+      'He didn\'t know "fear" until the Nightmare Spell chose him & everything changed. Now he must survive.',
+    );
+  });
+});
+
+describe('parseNovelInfoFromHTML — synopsis edge cases', () => {
+  it('returns null synopsis when no Synopsis section is present', () => {
+    // novelbin-novel-page.html has no <dt>Synopsis:</dt> or .synopsis div
+    const info = parseNovelInfoFromHTML(
+      fixture('novelbin-novel-page.html'),
+      'https://novelbin.com/b/some-novel',
+    );
+    expect(info.synopsis).toBeNull();
+  });
+
+  it('returns null synopsis when the parsed content exceeds the max length (never truncates)', () => {
+    const oversized = 'x'.repeat(20_001);
+    const html = `<html><body><dt>Synopsis:</dt><dd>${oversized}</dd></body></html>`;
+    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
+    expect(info.synopsis).toBeNull();
+  });
+
+  it('returns null synopsis when the section is present but empty after cleanup', () => {
+    const html = '<html><body><dt>Synopsis:</dt><dd>   <p></p>   </dd></body></html>';
+    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
+    expect(info.synopsis).toBeNull();
+  });
 });
 
 describe('parseNovelInfoFromHTML — NovelBin page (property= metas, .l-chapter)', () => {

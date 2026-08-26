@@ -37,6 +37,14 @@ export interface Novel {
   devices_reading: DeviceProgress[];
 }
 
+// Separate from Novel: fetched via its own endpoint, not the /novels list
+// response, since the list backs every grid view and must stay lean.
+export interface NovelSynopsis {
+  synopsis: string | null;
+  synopsis_imported_at: string | null;
+  primary_url: string | null;
+}
+
 export interface DeviceProgress {
   device_id: string;
   device_label: string;

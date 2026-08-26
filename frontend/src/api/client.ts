@@ -99,7 +99,7 @@ export const auth = {
 
 // ── Novels ────────────────────────────────────────────────
 
-import type { Novel, NovelStatus } from '../types/index.js';
+import type { Novel, NovelStatus, NovelSynopsis } from '../types/index.js';
 import { normalizeNovel } from './normalize.js';
 import type { RawNovel } from './normalize.js';
 
@@ -122,6 +122,9 @@ export const novels = {
     const qs = new URLSearchParams(params as Record<string, string>).toString();
     return fetchNovels(`/novels${qs ? `?${qs}` : ''}`);
   },
+
+  synopsis: (novelId: string) =>
+    request<NovelSynopsis>(`/novels/${encodeURIComponent(novelId)}/synopsis`),
 
   setStatus: (novelId: string, status: NovelStatus) =>
     request(`/novels/${encodeURIComponent(novelId)}/status`, {

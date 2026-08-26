@@ -7,11 +7,17 @@ import { NovelPage } from './Novel.js';
 
 const mocks = vi.hoisted(() => ({
   fetchNovels: vi.fn(),
+  synopsis: vi.fn().mockResolvedValue({ synopsis: null, synopsis_imported_at: null, primary_url: null }),
 }));
 
 vi.mock('../api/client.js', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>();
-  return { ...actual, fetchNovels: mocks.fetchNovels };
+  const actualNovels = actual.novels as Record<string, unknown>;
+  return {
+    ...actual,
+    fetchNovels: mocks.fetchNovels,
+    novels: { ...actualNovels, synopsis: mocks.synopsis },
+  };
 });
 
 const NOVEL_ID = 'novelbin:nine-star-hegemon-body-arts';
@@ -109,5 +115,31 @@ describe('novel page actions', () => {
 
     expect(await screen.findByRole('link', { name: /open on novelarrow/i })).toBeDefined();
     expect(screen.queryAllByRole('link', { name: /open on novelarrow/i })).toHaveLength(1);
+  });
+});
+
+describe('synopsis panel', () => {
+  it('renders the stored synopsis and a link to the NovelArrow source', async () => {
+    mocks.fetchNovels.mockResolvedValue([novel()]);
+    mocks.synopsis.mockResolvedValue({
+      synopsis: 'A hero rises from poverty to face the Nightmare Spell.',
+      synopsis_imported_at: '2026-08-01T00:00:00.000Z',
+      primary_url: 'https://novelarrow.com/novel/nine-star-hegemon-body-arts',
+    });
+
+    renderNovel();
+
+    expect(await screen.findByText(/a hero rises from poverty/i)).toBeDefined();
+    const link = screen.getByRole('link', { name: /view on novelarrow/i });
+    expect(link).toHaveProperty('href', 'https://novelarrow.com/novel/nine-star-hegemon-body-arts');
+  });
+
+  it('shows an empty state when no synopsis is stored yet', async () => {
+    mocks.fetchNovels.mockResolvedValue([novel()]);
+    mocks.synopsis.mockResolvedValue({ synopsis: null, synopsis_imported_at: null, primary_url: null });
+
+    renderNovel();
+
+    expect(await screen.findByText(/no synopsis stored yet/i)).toBeDefined();
   });
 });

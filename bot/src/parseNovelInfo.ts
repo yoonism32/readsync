@@ -66,6 +66,7 @@ export function parseNovelInfoFromHTML(
       author: null,
       site_latest_chapter_time_raw: null,
       site_latest_chapter_time: null,
+      synopsis: null,
     };
 
     // 1) Best source: og:novel:latest_chapter_name meta — NovelArrow uses
@@ -156,6 +157,32 @@ export function parseNovelInfoFromHTML(
       }
     }
 
+    // --- Synopsis: NovelArrow's dt/dd pattern first, generic synopsis-class
+    // div as fallback. Deliberately NOT using og:description — NovelArrow
+    // truncates it (docs/ROADMAP.md "Novel metadata"). Unverified against a
+    // live page yet; a wrong match here fails safe (see MAX_SYNOPSIS_LENGTH
+    // and the empty-after-cleanup check below), it never corrupts data.
+    const synopsisMatch =
+      html.match(/<dt[^>]*>Synopsis:?\s*<\/dt>\s*<dd[^>]*>([\s\S]*?)<\/dd>/i) ||
+      html.match(/<div[^>]*class="[^"]*synopsis[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
+    if (synopsisMatch) {
+      const cleaned = synopsisMatch[1]
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/\s+/g, ' ')
+        .trim();
+      // ponytail: guessed ceiling, revisit if a real synopsis exceeds it
+      const MAX_SYNOPSIS_LENGTH = 20_000;
+      result.synopsis =
+        cleaned.length > 0 && cleaned.length <= MAX_SYNOPSIS_LENGTH
+          ? cleaned
+          : null;
+    }
+
     return result;
   } catch (err) {
     console.error('HTML parsing error:', err);
@@ -165,6 +192,7 @@ export function parseNovelInfoFromHTML(
       author: null,
       site_latest_chapter_time_raw: null,
       site_latest_chapter_time: null,
+      synopsis: null,
     };
   }
 }

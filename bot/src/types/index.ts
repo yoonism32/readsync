@@ -19,6 +19,7 @@ export interface NovelInfo {
   author: string | null;
   site_latest_chapter_time_raw: string | null;
   site_latest_chapter_time: string | null;
+  synopsis: string | null;
 }
 
 export interface LogEntry {

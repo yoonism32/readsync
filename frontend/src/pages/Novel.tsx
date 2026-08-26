@@ -16,7 +16,41 @@ import { RateNovel } from '../components/RateNovel.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { StarIcon, ExternalLinkIcon, CrownIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
-import type { Novel } from '../types/index.js';
+import type { Novel, NovelSynopsis } from '../types/index.js';
+
+function SynopsisPanel({ novelId }: { novelId: string }) {
+  const { data, isLoading } = useSWR<NovelSynopsis>(
+    `synopsis-${novelId}`,
+    () => novelsApi.synopsis(novelId),
+    { revalidateOnFocus: false },
+  );
+
+  return (
+    <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
+      <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Synopsis</h2>
+      {isLoading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}><Spinner /></div>
+      ) : data?.synopsis ? (
+        <>
+          <p style={{ fontSize: 'var(--text-sm)', whiteSpace: 'pre-wrap' }}>{data.synopsis}</p>
+          {data.primary_url && (
+            <a
+              href={data.primary_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-ghost"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 10, textDecoration: 'none' }}
+            >
+              <ExternalLinkIcon size={13} /> View on NovelArrow
+            </a>
+          )}
+        </>
+      ) : (
+        <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>No synopsis stored yet.</p>
+      )}
+    </div>
+  );
+}
 
 export function NovelPage() {
   useNow(); // ticks so "Xm ago" labels below advance without a data refetch
@@ -172,6 +206,8 @@ export function NovelPage() {
       )}
 
       <ChapterMap novel={novel} />
+
+      <SynopsisPanel novelId={novel.novel_id} />
 
       {novel.devices_reading.length > 1 && (
         <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>

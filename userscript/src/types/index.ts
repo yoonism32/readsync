@@ -62,6 +62,7 @@ export interface AutoUpdatePayload {
   author: string | null;
   update_time_raw: string | null;
   cover_url: string | null;
+  synopsis: string | null;
 }
 
 /** Response from POST /covers/:novelId/upload */

@@ -73,6 +73,7 @@ async function updateNovelChapterInfo(
   author: string | null,
   timeRaw: string | null,
   timeISO: string | null,
+  synopsis: string | null,
 ): Promise<NovelRow> {
   const result = await pool.query<NovelRow>(
     `
@@ -83,11 +84,25 @@ async function updateNovelChapterInfo(
         genre = COALESCE($4, genre),
         author = COALESCE($5, author),
         site_latest_chapter_time_raw = $6,
-        site_latest_chapter_time = $7
+        site_latest_chapter_time = $7,
+        synopsis = COALESCE(synopsis, $8),
+        synopsis_imported_at = CASE
+          WHEN synopsis IS NULL AND $8 IS NOT NULL THEN CURRENT_TIMESTAMP
+          ELSE synopsis_imported_at
+        END
     WHERE id = $1
     RETURNING *
   `,
-    [novelId, chapterNum, chapterTitle, genres, author, timeRaw, timeISO],
+    [
+      novelId,
+      chapterNum,
+      chapterTitle,
+      genres,
+      author,
+      timeRaw,
+      timeISO,
+      synopsis,
+    ],
   );
 
   return result.rows[0];
@@ -131,6 +146,7 @@ export async function runSingleNovelOnly(
       novelInfo.author,
       novelInfo.site_latest_chapter_time_raw,
       novelInfo.site_latest_chapter_time,
+      novelInfo.synopsis,
     );
 
     console.log(
@@ -270,7 +286,12 @@ export async function updateNovelChapters(): Promise<void> {
                 genre = COALESCE($2, genre),
                 author = COALESCE($3, author),
                 site_latest_chapter_time_raw = $4,
-                site_latest_chapter_time = $5
+                site_latest_chapter_time = $5,
+                synopsis = COALESCE(synopsis, $6),
+                synopsis_imported_at = CASE
+                  WHEN synopsis IS NULL AND $6 IS NOT NULL THEN CURRENT_TIMESTAMP
+                  ELSE synopsis_imported_at
+                END
               WHERE id = $1
             `,
               [
@@ -279,6 +300,7 @@ export async function updateNovelChapters(): Promise<void> {
                 novelInfo.author,
                 novelInfo.site_latest_chapter_time_raw,
                 novelInfo.site_latest_chapter_time,
+                novelInfo.synopsis,
               ],
             );
           } else {
@@ -290,6 +312,7 @@ export async function updateNovelChapters(): Promise<void> {
               novelInfo.author,
               novelInfo.site_latest_chapter_time_raw,
               novelInfo.site_latest_chapter_time,
+              novelInfo.synopsis,
             );
 
             botService.log('success', 'Updated novel', {

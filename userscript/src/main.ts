@@ -7,7 +7,7 @@ import {
   parseChapterEnhanced, buildChapterPath,
   extractLatestChapterInfo,
 } from './services/ChapterDetector.js';
-import { extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl } from './services/PageMetadata.js';
+import { extractGenres, extractAuthor, extractUpdateTime, extractCoverUrl, extractSynopsis } from './services/PageMetadata.js';
 import {
   syncProgress, debouncedSync, sendFinal, startConflictChecker, cleanup, cancelPendingSync,
   drainOfflineQueue, reconcileScrollPosition, shouldSyncCompletion,
@@ -411,6 +411,7 @@ async function autoUpdateNovelInfo(): Promise<void> {
       author: extractAuthor(),
       update_time_raw: extractUpdateTime(),
       cover_url: extractCoverUrl(),
+      synopsis: extractSynopsis(),
     };
 
     log('📤 Sending novel info:', payload);

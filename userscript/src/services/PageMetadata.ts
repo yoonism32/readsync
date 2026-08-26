@@ -60,6 +60,27 @@ export function extractCoverUrl(): string | null {
   }
 }
 
+const MAX_SYNOPSIS_LENGTH = 20_000; // ponytail: guessed ceiling, revisit if a real synopsis exceeds it
+
+export function extractSynopsis(): string | null {
+  try {
+    // Not og:description — NovelArrow truncates it (docs/ROADMAP.md
+    // "Novel metadata"). Try a labeled dt/dd pair first, then a generic
+    // synopsis-class container.
+    const dtEls = Array.from(document.querySelectorAll('dt'));
+    const synopsisDt = dtEls.find(dt => /^synopsis:?$/i.test(dt.textContent?.trim() ?? ''));
+    const dd = synopsisDt?.nextElementSibling;
+    const container =
+      dd && dd.tagName === 'DD' ? dd : document.querySelector('[class*="synopsis"]');
+
+    const text = container?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+    return text.length > 0 && text.length <= MAX_SYNOPSIS_LENGTH ? text : null;
+  } catch (error) {
+    log('Error extracting synopsis:', error);
+    return null;
+  }
+}
+
 export function extractUpdateTime(): string | null {
   try {
     // NovelArrow serves an ISO timestamp in the og:novel:update_time meta

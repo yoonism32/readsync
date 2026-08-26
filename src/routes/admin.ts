@@ -208,6 +208,7 @@ export function createAdminRouter(io: SocketServer): Router {
         author,
         update_time_raw,
         cover_url,
+        synopsis,
       } = req.body as Record<string, unknown>;
 
       // og:image from the novel page. Only trust cover CDN hosts — the server
@@ -276,6 +277,11 @@ export function createAdminRouter(io: SocketServer): Router {
           cover_img = CASE
             WHEN $8::text IS NOT NULL AND (cover_img IS NULL OR cover_img = 'failed')
             THEN $8::text ELSE cover_img
+          END,
+          synopsis = COALESCE(synopsis, $10),
+          synopsis_imported_at = CASE
+            WHEN synopsis IS NULL AND $10::text IS NOT NULL THEN CURRENT_TIMESTAMP
+            ELSE synopsis_imported_at
           END
       WHERE id = $1
       RETURNING *
@@ -290,6 +296,7 @@ export function createAdminRouter(io: SocketServer): Router {
             site_latest_chapter_time,
             safeCoverUrl,
             isConfirmedCorrection,
+            typeof synopsis === 'string' && synopsis.length > 0 ? synopsis : null,
           ],
         );
 
