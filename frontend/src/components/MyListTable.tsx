@@ -84,12 +84,15 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
       </td>
 
       {/* Title */}
-      {/* 700, not 560/380: at each earlier cap a long title + star + behind-count
-          badge wrapped to two lines. The intended shape is one line of
-          title/star/delta with the "Last ch." pill beneath it. Keep MyList.tsx's
-          table minWidth in sync (+140 here → +140 there) or this column just
-          gets squeezed by its siblings instead of actually widening. */}
-      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 700 }}>
+      {/* 780, not 700/560/380: at each earlier cap a long title + star +
+          behind-count badge wrapped to two lines. The intended shape is one
+          line of title/star/delta with the "Last ch." pill beneath it. A
+          handful of 13+ word outlier titles (~830px+ of text alone) will
+          still wrap regardless of width — not worth bloating every row to
+          chase those. Keep MyList.tsx's table minWidth in sync (+80 here →
+          +80 there) or this column just gets squeezed by its siblings
+          instead of actually widening. */}
+      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 780 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}

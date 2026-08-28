@@ -329,7 +329,7 @@ export function MyList() {
         <>
           <div className="panel" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1020 }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
                     <Th label="Cover" />
