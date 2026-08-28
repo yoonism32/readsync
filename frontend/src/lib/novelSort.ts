@@ -36,7 +36,7 @@ export function sortValue(n: Novel, key: SortKey): number | string {
     case 'chapters':   return n.latest_chapter_num ?? -1;
     case 'last_read':  return n.latest_read_at ? new Date(n.latest_read_at).getTime() : 0;
     case 'updated':    { const u = updatedAt(n); return u ? new Date(u).getTime() : 0; }
-    case 'added':      return n.started_at ? new Date(n.started_at).getTime() : 0;
+    case 'added':      return n.created_at ? new Date(n.created_at).getTime() : 0;
   }
 }
 

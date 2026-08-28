@@ -36,6 +36,7 @@ export interface RawNovel {
   notes: string | null;
   started_at: string | null;
   completed_at: string | null;
+  created_at: string | null;
   current_read_through: number;
   read_history: ReadThroughEntry[];
   latest_global: RawLatestProgress | null;
@@ -98,6 +99,7 @@ export function normalizeNovel(raw: RawNovel): Novel {
     last_activity: raw.last_activity,
     started_at: raw.started_at,
     completed_at: raw.completed_at,
+    created_at: raw.created_at,
     current_read_through: raw.current_read_through,
     read_history: raw.read_history ?? [],
     ...deriveProgressFields(raw.latest_global, raw.latest_per_device),

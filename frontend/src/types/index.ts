@@ -25,6 +25,7 @@ export interface Novel {
   last_activity: string | null;
   started_at: string | null;
   completed_at: string | null;
+  created_at: string | null;
   current_read_through: number;
   read_history: ReadThroughEntry[];
   // flattened from latest_global / latest_per_device

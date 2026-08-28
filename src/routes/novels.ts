@@ -71,6 +71,7 @@ router.get(
           m.notes, m.started_at, m.completed_at,
           COALESCE(m.current_read_through, 1) AS current_read_through,
           COALESCE(m.read_history, '[]'::jsonb) AS read_history,
+          m.created_at,
           -- Not filtered on d.active: see getLatestStates() in NovelService.
           -- The latest_activity CTE above never was, so gating these two made
           -- a removed device show a live "last read" date next to ch. 0.
@@ -168,6 +169,7 @@ router.get(
             last_activity: novel.last_activity,
             current_read_through: novel.current_read_through,
             read_history: novel.read_history,
+            created_at: novel.created_at,
             latest_global,
             latest_per_device,
           };

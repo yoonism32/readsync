@@ -165,6 +165,7 @@ export async function initDatabase(): Promise<void> {
     await client.query(`
       ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS current_read_through INTEGER DEFAULT 1;
       ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS read_history JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();
       ALTER TABLE progress_snapshots ADD COLUMN IF NOT EXISTS read_through_num INTEGER DEFAULT 1;
     `);
 
