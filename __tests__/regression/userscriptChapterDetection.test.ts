@@ -57,6 +57,23 @@ describe('parseChapterEnhanced — NovelArrow routes are URL-first', () => {
     expect(info?.num).toBe(215);
     expect(info?.source).toBe('url-novelarrow');
   });
+
+  /**
+   * Bug: some NovelArrow slugs prefix the real chapter number with an
+   * internal "auto-<id>-" tag, occasionally doubled — e.g.
+   * "chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2"
+   * for "my-medical-skills-give-me-experience-points". The old regex required
+   * digits immediately after "chapter-", so it never matched at all and fell
+   * through to the "any number in the last segment" fallback, which grabbed
+   * the auto-id (282) instead of the real chapter (145).
+   */
+  it('skips a NovelArrow "auto-<id>-" prefix and finds the real chapter number', () => {
+    const info = parseChapterEnhanced(
+      '/chapter/my-medical-skills-give-me-experience-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
+    );
+    expect(info?.num).toBe(145);
+    expect(info?.source).toBe('url-novelarrow');
+  });
 });
 
 describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
@@ -115,6 +132,14 @@ describe('isChapterPath — a chapter lives below the slug', () => {
   it('still recognises NovelArrow chapter routes', () => {
     expect(isChapterPath('/chapter/shadow-slave/chapter-215-the-end')).toBe(true);
     expect(isChapterPath('/chapter/100x-rebate-sharing-system/chapter-5')).toBe(true);
+  });
+
+  it('recognises NovelArrow routes with an "auto-<id>-" prefixed chapter number', () => {
+    expect(
+      isChapterPath(
+        '/chapter/my-medical-skills-give-me-experience-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
+      ),
+    ).toBe(true);
   });
 
   it('still recognises NovelBin chapter routes', () => {

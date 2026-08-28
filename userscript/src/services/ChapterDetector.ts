@@ -47,8 +47,10 @@ export function extractChapterNum(text: string): number | null {
 }
 
 export function extractChapterFromUrl(href: string): number | null {
-  // Try standard chapter format first
-  const chapterMatch = href.match(/chapter-?(\d+)/i);
+  // Try standard chapter format first. NovelArrow occasionally prefixes the
+  // real chapter number with an internal "auto-<id>-" tag, sometimes doubled
+  // (e.g. "chapter-auto-282-auto-282-145-title") — skip those before capturing.
+  const chapterMatch = href.match(/chapter-?(?:auto-\d+-)*(\d+)/i);
   if (chapterMatch) return parseInt(chapterMatch[1], 10);
 
   try {
@@ -93,7 +95,7 @@ export function isChapterPath(pathname: string): boolean {
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length <= 2) return false;
   const lastSegment = parts[parts.length - 1];
-  return !!(pathname.match(/chapter-?\d+/i) || /^\d+/.test(lastSegment));
+  return !!(pathname.match(/chapter-?(?:auto-\d+-)*\d+/i) || /^\d+/.test(lastSegment));
 }
 
 /**
@@ -218,7 +220,7 @@ export function extractLatestChapterInfo(
 
     // Strategy 1: Links with "chapter" in href
     document.querySelectorAll<HTMLAnchorElement>('a[href*="chapter"]').forEach(link => {
-      const hrefMatch = link.href.match(/chapter-?(\d+)/i);
+      const hrefMatch = link.href.match(/chapter-?(?:auto-\d+-)*(\d+)/i);
       if (hrefMatch) {
         const num = parseInt(hrefMatch[1], 10);
         if (num > maxChapter) {
@@ -467,7 +469,7 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   // truth. The SPA reader's DOM (sidebar widgets, stale title after
   // client-side navigation) can carry a neighbouring chapter number, so
   // content scanning must not run first on these routes.
-  const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(\d+)(?:-[^/]*)?\/?$/i);
+  const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(?:auto-\d+-)*(\d+)(?:-[^/]*)?\/?$/i);
   if (arrowMatch) {
     const res: ChapterInfo = {
       token: 'chapter',
