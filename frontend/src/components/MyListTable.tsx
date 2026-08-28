@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { coverUrl, resumeUrl } from '../api/client.js';
 import { StatusDot } from './BehindBadge.js';
-import { HiatusBadge } from './HiatusBadge.js';
 import { StarIcon } from './Icon.js';
 import { behindCount } from '../lib/behindStatus.js';
 import { compactAge } from '../lib/dateFormat.js';
@@ -85,10 +84,12 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
       </td>
 
       {/* Title */}
-      {/* 560, not 380: at the old cap a long title wrapped to two lines and
-          pushed the star + delta onto a third. The intended shape is one line
-          of title/star/delta with the "Last ch." pill beneath it. */}
-      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 560 }}>
+      {/* 700, not 560/380: at each earlier cap a long title + star + behind-count
+          badge wrapped to two lines. The intended shape is one line of
+          title/star/delta with the "Last ch." pill beneath it. Keep MyList.tsx's
+          table minWidth in sync (+140 here → +140 there) or this column just
+          gets squeezed by its siblings instead of actually widening. */}
+      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 700 }}>
         <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}
@@ -121,7 +122,6 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
               +{behind}
             </span>
           )}
-          <HiatusBadge novel={n} />
         </span>
         {n.latest_chapter != null && (
           <span className="text-muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-xs)', marginTop: 3 }}>
