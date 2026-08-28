@@ -47,11 +47,15 @@ export function extractChapterNum(text: string): number | null {
 }
 
 export function extractChapterFromUrl(href: string): number | null {
-  // Try standard chapter format first. NovelArrow occasionally prefixes the
-  // real chapter number with an internal "auto-<id>-" tag, sometimes doubled
-  // (e.g. "chapter-auto-282-auto-282-145-title") — skip those before capturing.
-  const chapterMatch = href.match(/chapter-?(?:auto-\d+-)*(\d+)/i);
-  if (chapterMatch) return parseInt(chapterMatch[1], 10);
+  // Try standard chapter format first. NovelArrow's real chapter number is
+  // sometimes tagged "auto-<N>" (occasionally doubled: "auto-282-auto-282"),
+  // followed by digits from the ORIGINAL source title (e.g.
+  // "chapter-auto-282-auto-282-145-title" is chapter 282, whose source
+  // title itself started with "Chapter 145:" — confirmed against
+  // og:description "Chapter 282: Chapter 145: ..."). The auto-id, not the
+  // trailing number, is ground truth — capture it first when present.
+  const chapterMatch = href.match(/chapter-?(?:auto-(\d+)|(\d+))/i);
+  if (chapterMatch) return parseInt(chapterMatch[1] ?? chapterMatch[2], 10);
 
   try {
     const url = new URL(href, location.origin);
@@ -220,9 +224,9 @@ export function extractLatestChapterInfo(
 
     // Strategy 1: Links with "chapter" in href
     document.querySelectorAll<HTMLAnchorElement>('a[href*="chapter"]').forEach(link => {
-      const hrefMatch = link.href.match(/chapter-?(?:auto-\d+-)*(\d+)/i);
+      const hrefMatch = link.href.match(/chapter-?(?:auto-(\d+)|(\d+))/i);
       if (hrefMatch) {
-        const num = parseInt(hrefMatch[1], 10);
+        const num = parseInt(hrefMatch[1] ?? hrefMatch[2], 10);
         if (num > maxChapter) {
           maxChapter = num;
           const textMatch = link.textContent?.match(/Chapter\s+\d+\s*:\s*(.+)/i);
@@ -469,11 +473,11 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
   // truth. The SPA reader's DOM (sidebar widgets, stale title after
   // client-side navigation) can carry a neighbouring chapter number, so
   // content scanning must not run first on these routes.
-  const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(?:auto-\d+-)*(\d+)(?:-[^/]*)?\/?$/i);
+  const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(?:auto-(\d+)|(\d+))(?:-[^/]*)?\/?$/i);
   if (arrowMatch) {
     const res: ChapterInfo = {
       token: 'chapter',
-      num: parseInt(arrowMatch[1], 10),
+      num: parseInt(arrowMatch[1] ?? arrowMatch[2], 10),
       source: 'url-novelarrow',
     };
     log('Using chapter from URL (NovelArrow format):', res);

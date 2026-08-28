@@ -59,19 +59,22 @@ describe('parseChapterEnhanced — NovelArrow routes are URL-first', () => {
   });
 
   /**
-   * Bug: some NovelArrow slugs prefix the real chapter number with an
-   * internal "auto-<id>-" tag, occasionally doubled — e.g.
+   * Bug: some NovelArrow slugs tag the real chapter number as "auto-<N>",
+   * occasionally doubled — e.g.
    * "chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2"
-   * for "my-medical-skills-give-me-experience-points". The old regex required
-   * digits immediately after "chapter-", so it never matched at all and fell
-   * through to the "any number in the last segment" fallback, which grabbed
-   * the auto-id (282) instead of the real chapter (145).
+   * for "my-medical-skills-give-me-experience-points". "auto-282" IS the
+   * real chapter number (confirmed against the page's own
+   * og:description: "Chapter 282: Chapter 145: Soaring..."); the trailing
+   * "145" is just digits from the original source title. The old regex
+   * required digits immediately after "chapter-", so it never matched at
+   * all and fell through to the "any number in the last segment" fallback,
+   * which grabbed the title-embedded 145 instead of the real chapter (282).
    */
-  it('skips a NovelArrow "auto-<id>-" prefix and finds the real chapter number', () => {
+  it('finds the real chapter number tagged "auto-<N>", not a trailing title number', () => {
     const info = parseChapterEnhanced(
       '/chapter/my-medical-skills-give-me-experience-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
     );
-    expect(info?.num).toBe(145);
+    expect(info?.num).toBe(282);
     expect(info?.source).toBe('url-novelarrow');
   });
 });
