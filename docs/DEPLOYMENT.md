@@ -43,6 +43,15 @@ From `.env.example`:
 | `NODE_ENV` | `development` / `production` |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Supabase project credentials (Storage access — `BackupService.ts`, `covers.ts`) |
 | `BOT_DISABLED`, `API_KEY`, `SUPABASE_ANON_KEY` | **Not read anywhere in current code** — see [DATABASE.md](./DATABASE.md#known-dead-config) |
+| `PG_POOL_MAX` | Postgres pool size, default `10` (`src/config.ts`) — see the transaction-pooler switch in [ROADMAP.md](./ROADMAP.md#ops--infrastructure) for why this value matters and why it wasn't raised |
+| `PG_IDLE_TIMEOUT` | Idle client timeout ms, default `30000` (`src/config.ts`) |
+| `PG_CONN_TIMEOUT` | Connection acquisition timeout ms, default `10000` (`src/config.ts`) |
+| `ALLOWED_ORIGINS` | Comma-separated CORS allowlist (`src/config.ts`) |
+
+The four vars above are read by `src/config.ts` but **not listed in
+`.env.example`** — they all have safe defaults so their absence doesn't
+break anything, but a deployer tuning pool size or CORS won't find them
+there.
 
 ## Local development
 

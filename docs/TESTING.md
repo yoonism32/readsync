@@ -23,10 +23,10 @@ cd frontend && npm test   # or the frontend's own test script
 
 | Surface | Test files | What's covered |
 |---|---|---|
-| Backend (`src/`, `__tests__/regression/`) | 24 | Pure business logic: auto-reread detection, chapter-regression correction, cover mirroring/upload, normalization, streaks, migrations, rate-limit config, `normalizeBody`, and (since this audit) the admin-auth fix and the userscript/bot URL-derivation parity |
-| Userscript (`userscript/__tests__/`) | 2 | base64 helpers, cover-upload caching |
-| Userscript `ChapterDetector.ts` (`__tests__/regression/`) | 2 of the 24 above | URL/path parsing: `parseChapterEnhanced`, `isChapterPath`, `normalizePath`, plus (since this audit) `normalizeUrl`, `normalizeNovelId`, `extractChapterNum`, `extractChapterFromUrl`, `buildChapterPath`, `deriveNovelBaseUrl` |
-| Frontend (`frontend/src/`) | 4 | Login page, Novel page, `useRefreshAll` hook, Explorer filters |
+| Backend (`src/`, `__tests__/regression/`) | 33 | Pure business logic: auto-reread detection, chapter-regression correction, cover mirroring/upload/source-fallback/failure-poisoning, normalization, streaks, migrations, rate-limit config, `normalizeBody`, admin-auth, half-star rating validation, hiatus badges, smart filters, stats breakdown/velocity, NovelArrow synopsis parsing, and the userscript/bot URL-derivation parity |
+| Userscript (`userscript/__tests__/`) | 5 | base64 helpers, cover-upload caching, completion sync, heartbeat sync, stale-rejection handling |
+| Userscript `ChapterDetector.ts` (`__tests__/regression/`) | 5 of the 33 above (`chapterDetectorPureFunctions`, `chapterCorrection`, `latestChapterDetection`, `novelBaseUrlDerivation`, `userscriptChapterDetection`) | URL/path parsing: `parseChapterEnhanced`, `isChapterPath`, `normalizePath`, `normalizeUrl`, `normalizeNovelId`, `extractChapterNum`, `extractChapterFromUrl`, `buildChapterPath`, `deriveNovelBaseUrl` |
+| Frontend (`frontend/src/`) | 6 | Login page, Novel page, `useRefreshAll` hook, Explorer filters, My List table, rating stars |
 | Bot (`bot/src/`) | 0 | Nothing |
 
 ## What's not covered (known gaps)

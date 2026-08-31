@@ -262,29 +262,20 @@ this file is the trimmed, current-facing view of it.
 
 ## Novel metadata
 
-- [ ] **Store and display NovelArrow synopses on the ReadSync novel page.**
-      Treat the synopsis as one-time imported metadata, not a live embed or
-      per-page-load fetch: when a novel has no stored synopsis, extract the
-      full text from the **Synopsis** section of its NovelArrow novel page,
-      store it as `TEXT` on `novels`, and serve the stored value from ReadSync
-      thereafter. Once populated, **Refresh All and the recurring 48-hour
-      metadata scan must not fetch or overwrite it**. A failed or empty parse
-      should leave the field unset so a later attempt can retry; it must never
-      replace a stored synopsis with `NULL`, empty, or truncated text. Keep
-      `primary_url` as the canonical source link and record when the synopsis
-      was first imported. Do not use `og:description` as the primary source
-      because NovelArrow truncates it; normalize whitespace/decode entities
-      from the visible Synopsis content and enforce a reasonable input-size
-      limit.
-
-      Add a Synopsis section to `frontend/src/pages/Novel.tsx`, with the
-      stored text and an external NovelArrow source link. Do **not** add the
-      full synopsis to the existing `GET /api/v1/novels` list response: that
-      endpoint backs every library/grid view and has already caused egress
-      incidents. Add a single-novel detail endpoint (or a synopsis-specific
-      endpoint) so the larger text is fetched only on the novel detail page.
-      Cover the NovelArrow parser, import-once/no-overwrite behavior, API
-      response, and empty-synopsis UI state with regression tests.
+- [x] **Store and display NovelArrow synopses on the ReadSync novel page.**
+      Done 2026-08-26 — shipped exactly as specced. Imported once per novel
+      (not a live embed/per-page-load fetch) into `novels.synopsis` /
+      `synopsis_imported_at` (migration `013_novel_synopsis.sql`), parsed
+      from the visible **Synopsis** section rather than the truncated
+      `og:description`; Refresh All and the metadata scan never overwrite a
+      populated value. Rendered via a `SynopsisPanel` in
+      `frontend/src/pages/Novel.tsx`, sourced from a dedicated
+      `synopsis-${novelId}` endpoint (not added to the list-backing
+      `GET /api/v1/novels`, matching the egress-incident constraint above).
+      Regression coverage: `__tests__/regression/novelSynopsis.test.ts`,
+      `pageMetadata.test.ts`, `novelParsing.test.ts`,
+      `frontend/src/pages/Novel.test.tsx`. Commits `f72b549`, `e38cc50`,
+      `1811e18`.
 
 ## Product features — Tier 1: deferred specs (infra already exists)
 
@@ -304,7 +295,14 @@ one still open (F11 shipped 2026-08-11).
 - [ ] CLI tool (`readsync status|list|progress|sync|export`)
 - [ ] GraphQL API alongside REST
 - [ ] CRDTs for conflict resolution (replace last-write-wins with Automerge/Yjs)
-- [ ] Reading analytics engine (completion ETA, velocity, peak hours, burnout detection)
+- [ ] Reading analytics engine — remaining scope: completion ETA, peak
+      hours, burnout detection.
+      - [x] Velocity trend — done 2026-08-31.
+            `computeVelocityTrend()` (`src/services/StatsVelocity.ts`)
+            splits a 14-day chapters-read series into two trailing 7-day
+            windows and reports the percent change; `GET /api/v1/stats/velocity`
+            (see [API_REFERENCE.md](./API_REFERENCE.md)), rendered in the
+            new Bento Grid `frontend/src/pages/Stats.tsx`. Commit `84f2e5b`.
 
 ## Product features — Tier 3: signature
 

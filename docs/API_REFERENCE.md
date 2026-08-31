@@ -121,6 +121,8 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 | GET | `/api/v1/stats/summary` | `validateApiKey` | |
 | GET | `/api/v1/stats/library` | `validateApiKey` | |
 | GET | `/api/v1/stats/daily` | `validateApiKey` | |
+| GET | `/api/v1/stats/genres` | `validateApiKey` | Genre breakdown share — `frontend/src/pages/Stats.tsx` |
+| GET | `/api/v1/stats/velocity` | `validateApiKey` | 14-day chapters-read trend, split into trailing 7-day windows — `computeVelocityTrend()` in `src/services/StatsVelocity.ts` |
 | GET | `/api/v1/stats/breakdown` | `validateApiKey` | Reading time by hour-of-day, weekday, and device — `frontend/src/pages/Stats.tsx` |
 | GET | `/api/v1/stats/novels/:novelId` | `validateApiKey` | |
 

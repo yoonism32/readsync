@@ -13,7 +13,7 @@ older docs were updated to match — see the git history and
 | Frontend | React 19, React Router 7, Vite, Tailwind 4, SWR | `frontend/` → served at `/app` |
 | Browser client | Userscript (Vite-built IIFE, GM-API based — works in Tampermonkey/Violentmonkey) | `userscript/` → `dist-userscript/readsync.user.js` |
 | Chapter-update bot | Puppeteer-extra + stealth, TypeScript | `bot/src/` — **not part of the deployed system, see below** |
-| Database | Postgres (Supabase-hosted) | 10 migrations in `src/db/migrations/` |
+| Database | Postgres (Supabase-hosted) | 14 migrations in `src/db/migrations/` |
 | Realtime | Socket.IO | wired into `src/app.ts` |
 
 The only deployed entrypoint is `dist/server.js` (compiled from

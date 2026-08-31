@@ -1,6 +1,6 @@
 # Database
 
-Postgres, Supabase-hosted. Schema is defined by 10 sequential migrations in
+Postgres, Supabase-hosted. Schema is defined by 14 sequential migrations in
 `src/db/migrations/`, run by `src/db/migrate.ts` on server startup.
 
 ## Tables
@@ -9,9 +9,9 @@ Postgres, Supabase-hosted. Schema is defined by 10 sequential migrations in
 |---|---|---|
 | `users` | 001 | Accounts; holds `api_key` (data-plane auth) |
 | `devices` | 001 | Per-user device registry |
-| `novels` | 001 | Novel metadata: title, URL, latest chapter, genre, author, cover |
+| `novels` | 001 (`synopsis`/`synopsis_imported_at` added in 013) | Novel metadata: title, URL, latest chapter, genre, author, cover, one-time-imported NovelArrow synopsis |
 | `progress_snapshots` | 001 | One row per sync event — the raw read-progress log |
-| `user_novel_meta` | 001 | Per-user-per-novel status (reading/completed/on-hold/dropped/plan-to-read/removed), favorite flag |
+| `user_novel_meta` | 001 (`created_at` added in 014) | Per-user-per-novel status (reading/completed/on-hold/dropped/plan-to-read/removed), favorite flag, half-star `rating` (011), true first-added `created_at` distinct from reread-overwritten `started_at` (014) |
 | `bookmarks` | 001 | User bookmarks within a novel |
 | `reading_sessions` | 001 | Session grouping over `progress_snapshots` (30-min idle timeout) |
 | `novel_notes` | 001 | Free-text notes per novel |
@@ -32,6 +32,10 @@ Postgres, Supabase-hosted. Schema is defined by 10 sequential migrations in
 - **008 — first My List perf pass.** `GET /api/v1/novels` was 60% of all database time: two correlated subqueries per novel scanned every snapshot for that novel/read-through combination (589 rows in production) and sorted in-memory, unable to use the existing index because it ordered by different columns. Added indexes matching the actual sort order.
 - **009 — session store.** `app.ts` configured `express-session` with no store, so it silently fell back to in-process `MemoryStore` — sessions were wiped on every deploy and every free-tier hibernation. Since `requireAuthAPI` only checks `req.session.authenticated`, this surfaced as pages loading fine while every API call returned 401 (reads as a broken app, not a logout). Moved sessions into Postgres via `connect-pg-simple`, schema owned by this migration.
 - **010 — second My List perf pass (the big one).** Even after 008, `pg_stat_statements` showed this query at 82% of all database time (574ms mean, 1210 calls; 2667ms measured directly in production for a 50-row page). Root cause: the `latest_per_device_json` subquery used `DISTINCT ON (device_id)`, which can't stop early within a device's group even with a matching index — production read-throughs have 1000+ snapshots, so each of the ~10 devices per novel cost a full walk. Rewrote as a `LATERAL` join with `LIMIT 1` per device, backed by new covering indexes. **Result: 2667ms → 36ms, a 74× speedup.**
+- **011 — half-star ratings.** `user_novel_meta.rating` was `INTEGER CHECK (1-5)` with no user-facing write path (only the backup-restore importer wrote it). Shipping a half-star rating UI needs 0.5 increments, which the integer column rejected outright. Converted to `NUMERIC(2,1)`, `NULL` still means "unrated," and the `CHECK` constrains to the 0.5–5.0 half-star grid (`rating * 2 = ROUND(rating * 2)` rejects off-grid values like 2.3).
+- **012 — notifications `(user_id, created_at DESC)` index.** Supabase's Index Advisor flagged `GET /api/v1/notifications` as unindexed after the 08-18 `pg_stat_statements` reset. The existing `idx_notifications_user_unread` (006) doesn't cover this query — `read` sits between `user_id` and `created_at` in that index, breaking the sort guarantee, so the planner fell back to Seq Scan + Sort (1.516ms). This index lets it use Index Scan Backward instead (0.238ms on the current 548-row table; the real win is avoiding Seq Scan + Sort as the table grows). Built `CONCURRENTLY`; applied directly to production 2026-08-18 to unblock verification, this file exists so schema-as-code matches prod.
+- **013 — NovelArrow synopsis columns.** Adds `novels.synopsis` (`TEXT`) and `novels.synopsis_imported_at` (`TIMESTAMPTZ`) for the one-time-imported synopsis feature (see [ROADMAP.md](./ROADMAP.md)) — fetched once when missing, never overwritten by Refresh All or a recurring scan. Kept separate from the existing `description` column (user import/export field, `src/routes/novels.ts`) so scraped synopsis text can't collide with that feature's meaning.
+- **014 — `user_novel_meta.created_at`, decoupled from `started_at`.** The My List "Added" column/sort read `started_at`, which every reread (manual or auto-detected) unconditionally overwrites with `CURRENT_TIMESTAMP` — a reread silently corrupted "Added" for any novel. Adds a real `created_at`, set once and never touched by a reread; backfilled from the earliest `read_history` entry's `started_at` where history exists, else the existing `started_at`. Includes a one-off data correction for a single production row (`novelbin:my-medical-skills-give-me-experience-points`) whose `started_at` had been left at an accidental reread's timestamp during an unrelated manual fix.
 
 ## Known dead config
 
