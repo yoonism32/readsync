@@ -9,11 +9,13 @@ import { useEffect, useRef, useState } from 'react';
 export function useCountUp(value: number, durationMs = 900): number {
   const [display, setDisplay] = useState(0);
   const prevValue = useRef(0);
+  const reduceMotion =
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   useEffect(() => {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduceMotion) {
-      setDisplay(value);
       prevValue.current = value;
       return;
     }
@@ -35,7 +37,7 @@ export function useCountUp(value: number, durationMs = 900): number {
     }
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [value, durationMs]);
+  }, [value, durationMs, reduceMotion]);
 
-  return display;
+  return reduceMotion ? value : display;
 }
