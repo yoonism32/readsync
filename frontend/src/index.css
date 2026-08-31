@@ -38,7 +38,10 @@
   /* Text */
   --color-text:         #e4e8e6;
   --color-text-muted:   #8e9a96;
-  --color-text-faint:   #4e5754;
+  /* was #4e5754 — measured 2.67:1 against --color-bg, failing WCAG 1.4.3
+     (4.5:1 minimum for normal text). Lightened along the same hue to
+     4.72:1. */
+  --color-text-faint:   #717e7a;
 
   /* Rating gold — deliberately not --color-warning below: that token is
      flat Tailwind amber-400 at 96% saturation, which reads as an
