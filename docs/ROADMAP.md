@@ -183,6 +183,51 @@ this file is the trimmed, current-facing view of it.
       manually. Genuinely still unbuilt (the source doc's "legacy-only"
       framing no longer applies since legacy is deleted, but nothing was
       ever built for the current stack either).
+- [ ] **`validateEnvironment()` (`src/config.ts:108`) is never called.**
+      Flagged by a 2026-08-31 production-readiness pass. A missing
+      `SESSION_SECRET` (or other required var) currently starts the server
+      with an empty/undefined signing secret instead of failing fast — the
+      check exists but nothing invokes it from `server.ts`. Wire it into
+      startup so a misconfigured deploy fails loudly instead of silently.
+- [ ] **No documented rollback path for a failed migration.** Migrations
+      run automatically and forward-only on startup (`src/db/migrate.ts`);
+      there's no written procedure for unsticking a partially-applied one.
+      Worth a short paragraph in [DATABASE.md](./DATABASE.md), not new code.
+- [ ] **No error-reporting/alerting beyond stdout logs.** Generalizes the
+      "no egress alarm short of a human staring at the dashboard" gap
+      (08-18 incident above) to all runtime errors — nothing pages or
+      surfaces an exception outside of Render's log tail. A lightweight
+      option (Sentry free tier, or a webhook-based log alert) would close
+      this without new infra.
+
+## Accessibility (2026-08-31 audit)
+
+- [ ] **Unlabeled, placeholder-only form inputs** — Manage's filter input,
+      NotesPanel (2 fields), TagEditor, and the Settings API-key field have
+      no `<label>`/`aria-label`; a screen reader announces nothing when
+      they're focused. WCAG 1.3.1/4.1.2.
+- [ ] **`CommandPalette` is missing `aria-modal` and has an incomplete Tab
+      trap** — focus can leave the visible dialog while it's open.
+- [ ] **No live-region announcement for socket-driven updates** — SPA
+      state updates silently on `progress:updated`/`chapters:updated` (see
+      [ARCHITECTURE.md](./ARCHITECTURE.md#data-flow-reading-progress-sync));
+      a screen-reader user gets no signal that the page changed under them.
+      Related to, but distinct from, the userscript-side "ARIA live-region
+      sync announcements" already listed under accepted field-audit ideas
+      below — that one covers the injected overlay on the source site, not
+      the ReadSync SPA itself.
+
+## Dependency maintenance
+
+- [x] **`@sparticuz/chromium` (bot's Puppeteer dep) bumped to latest.** Done
+      2026-08-31 — `^143.0.4` → `^149.0.0` (no published CVE against the
+      old pin, just version lag; the bot stays off in production regardless,
+      see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production)).
+      `bot/` still compiles clean (`tsc -p bot/tsconfig.json`) and the full
+      suite (38 files, 283 tests) stays green.
+- [ ] **TypeScript 6→7 and ESLint 9→10 major-version bumps deferred.** No
+      urgency; revisit together since both tend to touch config/type-check
+      output at once.
 
 ## Future site support
 
@@ -319,6 +364,25 @@ one still open (F11 shipped 2026-08-11).
 - [ ] Chapter highlights & annotations, userscript-side
 - [ ] Auto-cleanup & maintenance mode
 - [ ] Userscript reading modes
+
+## New feature ideas (2026-08-31 brainstorm)
+
+Not from the field-audit consolidation below — drawn fresh from current
+schema/codebase knowledge during the 2026-08-31 docs/roadmap pass. None
+scoped or approved yet.
+
+- [ ] **Reading goals** — yearly/monthly chapter-count goal tracked against
+      existing `progress_snapshots`; no new infra needed.
+- [ ] **"On this day" flashback** — surfaces what you were reading N
+      months/years ago, from existing snapshot timestamps.
+- [ ] **In-library rating-based recommendations** — "loved this, try these"
+      using the half-star `rating` (migration 011) plus `novel_categories`
+      tags already in the schema; no external API.
+- [ ] **Reading-activity digest** — optional periodic summary of new
+      chapters/progress, reusing the existing `notifications` generation
+      logic. Distinct from the "weekly data-health digest" below, which
+      covers corrections/rejected regressions, not user-facing reading
+      content.
 
 ## Accepted from the field-audit consolidation (2026-08-06)
 

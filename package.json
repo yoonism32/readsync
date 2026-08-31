@@ -30,7 +30,7 @@
   "author": "ReadSync",
   "license": "MIT",
   "dependencies": {
-    "@sparticuz/chromium": "^143.0.4",
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.101.0",
     "@types/compression": "^1.8.1",
     "@types/connect-pg-simple": "^7.0.3",
