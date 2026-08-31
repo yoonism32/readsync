@@ -100,6 +100,7 @@ export interface CategoryAssignment {
 export interface StatsSummary {
   total_novels: number;
   novels_by_status: Record<string, number>;
+  completion_rate: number;
   avg_progress: number;
   reading_sessions: {
     total: number;
@@ -114,6 +115,14 @@ export interface StatsBreakdown {
   by_hour: { hour: number; sessions: number; seconds: number }[];
   by_weekday: { weekday: number; label: string; sessions: number; seconds: number }[];
   by_device: { device_id: string; device_label: string; sessions: number; seconds: number }[];
+}
+
+export type GenreBreakdown = { genre: string; count: number; percent: number }[];
+
+export interface VelocityStats {
+  current_avg_per_day: number;
+  previous_avg_per_day: number;
+  trend_pct: number | null;
 }
 
 export interface AppNotification {

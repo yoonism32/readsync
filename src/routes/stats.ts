@@ -9,6 +9,7 @@ import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import { validateNovelId } from '../middleware/validation.js';
 import { fillBuckets } from '../services/StatsBreakdown.js';
+import { computeVelocityTrend } from '../services/StatsVelocity.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -66,6 +67,12 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
         statusMap[row.status as string] = Number(row.count);
       }
 
+      const totalTracked = Object.values(statusMap).reduce((a, b) => a + b, 0);
+      const completion_rate =
+        totalTracked > 0
+          ? Math.round(((statusMap.completed ?? 0) / totalTracked) * 1000) / 10
+          : 0;
+
       res.json({
         total_novels: Number(totalNovels.rows[0]?.total ?? 0),
         novels_by_status: {
@@ -75,6 +82,7 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
           dropped: statusMap.dropped ?? 0,
           'plan-to-read': statusMap['plan-to-read'] ?? 0,
         },
+        completion_rate,
         avg_progress: Number(avgProgress.rows[0]?.avg_progress ?? 0),
         reading_sessions: {
           total: Number(sessionStats.rows[0]?.total_sessions ?? 0),
@@ -202,6 +210,115 @@ router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
     res.json(result.rows);
   } catch (error) {
     handleDbError(res, error, 'Get daily statistics');
+  }
+});
+
+const GENRE_TOP_N = 12;
+
+/**
+ * Genre distribution — scoped to novels the user actually tracks (has a
+ * user_novel_meta row), same 'removed' exclusion as /stats/summary's
+ * novels_by_status. novels.genre stores a comma-separated tag string (e.g.
+ * "FANTASY,ACTION,ADVENTURE,HAREM"), not one value per novel, so this
+ * unnests it — a novel with 5 tags counts toward 5 buckets, and percent is
+ * "% of your tracked novels carrying this tag" (columns don't sum to 100).
+ * Long tails beyond the top N fold into "Other" so the panel stays legible.
+ */
+router.get('/api/v1/stats/genres', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const [tagCounts, totalTracked] = await Promise.all([
+      pool.query(
+        `WITH tags AS (
+           SELECT m.novel_id,
+                  TRIM(UNNEST(STRING_TO_ARRAY(COALESCE(n.genre, 'Unknown'), ','))) AS tag
+           FROM user_novel_meta m
+           JOIN novels n ON n.id = m.novel_id
+           WHERE m.user_id = $1 AND m.status <> 'removed'
+         )
+         SELECT tag AS genre, COUNT(DISTINCT novel_id) AS count
+         FROM tags
+         WHERE tag <> ''
+         GROUP BY tag
+         ORDER BY count DESC`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total FROM user_novel_meta WHERE user_id = $1 AND status <> 'removed'`,
+        [user_id],
+      ),
+    ]);
+
+    const total = Number(totalTracked.rows[0]?.total ?? 0);
+    const toPercent = (count: number): number =>
+      total > 0 ? Math.round((count / total) * 1000) / 10 : 0;
+
+    const top = tagCounts.rows.slice(0, GENRE_TOP_N);
+    const rest = tagCounts.rows.slice(GENRE_TOP_N);
+    const otherCount = rest.reduce((sum, r) => sum + Number(r.count), 0);
+
+    const genres = top.map((r) => ({
+      genre: r.genre as string,
+      count: Number(r.count),
+      percent: toPercent(Number(r.count)),
+    }));
+
+    if (otherCount > 0) {
+      genres.push({
+        genre: `Other (${rest.length})`,
+        count: otherCount,
+        percent: toPercent(otherCount),
+      });
+    }
+
+    res.json(genres);
+  } catch (error) {
+    handleDbError(res, error, 'Get genre breakdown');
+  }
+});
+
+/**
+ * Reading velocity — trailing 7-day vs. prior 7-day average chapters/day,
+ * reusing the daily-bucket query shape from /stats/daily. Trend math lives
+ * in StatsVelocity.ts so it's unit-testable independent of the DB.
+ */
+router.get('/api/v1/stats/velocity', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+  const toDate = new Date();
+  const fromDate = new Date(Date.now() - 13 * MS_PER_DAY);
+
+  try {
+    const result = await pool.query(
+      `
+      WITH date_range AS (
+        SELECT generate_series($2::date, $3::date, '1 day'::interval)::date AS date
+      ),
+      daily AS (
+        SELECT
+          DATE(created_at) AS date,
+          COUNT(DISTINCT (novel_id, chapter_num)) AS chapters_read
+        FROM progress_snapshots
+        WHERE user_id = $1
+          AND created_at >= $2
+          AND created_at <= $3 + interval '1 day'
+        GROUP BY DATE(created_at)
+      )
+      SELECT dr.date, COALESCE(d.chapters_read, 0) AS chapters_read
+      FROM date_range dr
+      LEFT JOIN daily d ON dr.date = d.date
+      ORDER BY dr.date ASC
+      `,
+      [
+        user_id,
+        fromDate.toISOString().split('T')[0],
+        toDate.toISOString().split('T')[0],
+      ],
+    );
+
+    res.json(computeVelocityTrend(result.rows));
+  } catch (error) {
+    handleDbError(res, error, 'Get reading velocity');
   }
 });
 
