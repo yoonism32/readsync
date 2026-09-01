@@ -25,7 +25,7 @@ function CellLabel({ children }: { children: React.ReactNode }) {
   return (
     <div
       className="text-muted"
-      style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}
+      style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}
     >
       {children}
     </div>
@@ -34,7 +34,7 @@ function CellLabel({ children }: { children: React.ReactNode }) {
 
 function CellTitle({ title, sub }: { title: string; sub?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 16 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>{title}</h2>
       {sub && <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{sub}</span>}
     </div>
@@ -62,11 +62,11 @@ function Cell({
       className={`panel animate-fade-in ${staggerClass} ${spanClass}`}
       style={{
         borderRadius: 'var(--radius-xl)',
-        padding: 14,
+        padding: '10px 16px 12px',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: span === 'wide' ? 200 : span === 'hero' ? 120 : 96,
+        minHeight: span === 'wide' ? 180 : span === 'hero' ? 150 : span === 'tall' ? 150 : 92,
         alignSelf: 'stretch',
       }}
     >
@@ -172,7 +172,7 @@ interface Bar {
 function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; height?: number }) {
   const max = Math.max(1, ...bars.map(b => b.value));
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 6 }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 4 }}>
       {bars.map(b => {
         const ratio = b.value / max;
         const barHeight = b.value > 0 ? Math.max(10, ratio * 100) : 8;
@@ -197,7 +197,7 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
               }}
             />
             {b.tickLabel !== undefined && (
-              <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 12, paddingTop: 6, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
+              <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 12, paddingTop: 4, whiteSpace: 'nowrap', lineHeight: 1.1, fontWeight: 500 }}>
                 {b.tickLabel}
               </span>
             )}

@@ -604,6 +604,9 @@ select option {
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
+  max-width: 1500px;
+  width: 100%;
+  margin: 0 auto;
 }
 
 @media (min-width: 640px) {
@@ -616,7 +619,7 @@ select option {
 @media (min-width: 1040px) {
   .stats-bento {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-rows: minmax(170px, auto);
+    grid-auto-rows: minmax(120px, auto);
     grid-auto-flow: dense;
     gap: 16px;
     align-items: stretch;
@@ -625,17 +628,17 @@ select option {
   .stats-cell-hero {
     grid-column: span 2;
     grid-row: span 2;
-    min-height: 280px;
+    min-height: 210px;
   }
 
   .stats-cell-wide {
     grid-column: span 2;
-    min-height: 220px;
+    min-height: 180px;
   }
 
   .stats-cell-tall {
     grid-row: span 2;
-    min-height: 280px;
+    min-height: 210px;
   }
 }
 
