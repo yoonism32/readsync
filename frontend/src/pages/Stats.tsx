@@ -62,11 +62,11 @@ function Cell({
       className={`panel animate-fade-in ${staggerClass} ${spanClass}`}
       style={{
         borderRadius: 'var(--radius-xl)',
-        padding: 20,
+        padding: 14,
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        minHeight: span === 'wide' ? 280 : span === 'hero' ? 180 : 150,
+        minHeight: span === 'wide' ? 200 : span === 'hero' ? 120 : 96,
         alignSelf: 'stretch',
       }}
     >
@@ -169,10 +169,10 @@ interface Bar {
  *  so the axis stays legible even for untouched hours/weekdays; ticks are
  *  selective, not one per bar, per the mark-spec guidance against labeling
  *  every point. */
-function BarChart({ bars, color, height = 180 }: { bars: Bar[]; color: string; height?: number }) {
+function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; height?: number }) {
   const max = Math.max(1, ...bars.map(b => b.value));
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 6 }}>
       {bars.map(b => {
         const ratio = b.value / max;
         const barHeight = b.value > 0 ? Math.max(10, ratio * 100) : 8;
@@ -197,7 +197,7 @@ function BarChart({ bars, color, height = 180 }: { bars: Bar[]; color: string; h
               }}
             />
             {b.tickLabel !== undefined && (
-              <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 16, paddingTop: 8, whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+              <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 12, paddingTop: 6, whiteSpace: 'nowrap', lineHeight: 1.1 }}>
                 {b.tickLabel}
               </span>
             )}
