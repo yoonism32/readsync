@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useSWR, { useSWRConfig } from 'swr';
 import toast from 'react-hot-toast';
@@ -38,6 +38,7 @@ export function CommandPalette() {
   const [cursor, setCursor] = useState(0);
   const [statusFor, setStatusFor] = useState<Novel | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
 
@@ -114,6 +115,22 @@ export function CommandPalette() {
   const listLength = statusFor ? STATUS_OPTIONS.length : results.length;
   const clamped = Math.min(cursor, Math.max(0, listLength - 1));
 
+  // Keep Tab from escaping the dialog into the page behind the overlay —
+  // the dialog only ever contains the search input in practice, but this
+  // stays correct if more focusable elements are added later.
+  const trapFocus = (e: ReactKeyboardEvent) => {
+    const focusable = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    if (focusable.length === 0) return;
+    e.preventDefault();
+    const activeIndex = focusable.indexOf(document.activeElement as HTMLElement);
+    const delta = e.shiftKey ? -1 : 1;
+    focusable[(activeIndex + delta + focusable.length) % focusable.length]?.focus();
+  };
+
   return (
     <div
       onClick={close}
@@ -141,6 +158,7 @@ export function CommandPalette() {
             setStatusFor(null);
             setCursor(0);
           }
+          if (e.key === 'Tab') trapFocus(e);
           return;
         }
         if (e.key === 'Tab') {
@@ -150,6 +168,8 @@ export function CommandPalette() {
             setStatusFor(cmd.novel);
             setQuery('');
             setCursor(0);
+          } else {
+            trapFocus(e);
           }
         }
         if (e.key === 'Enter' && results[clamped]) {
@@ -178,7 +198,9 @@ export function CommandPalette() {
       }}
     >
       <div
+        ref={dialogRef}
         role="dialog"
+        aria-modal="true"
         aria-label="Command palette"
         onClick={e => e.stopPropagation()}
         className="glass animate-fade-in"

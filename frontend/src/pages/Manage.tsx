@@ -64,6 +64,7 @@ export function Manage() {
 
       <input
         type="search"
+        aria-label="Filter by title"
         placeholder="Filter by title…"
         autoComplete="off"
         value={query}

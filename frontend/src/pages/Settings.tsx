@@ -159,6 +159,7 @@ export function Settings() {
           <input
             type="text"
             name="api-key"
+            aria-label="API key"
             autoComplete="off"
             spellCheck={false}
             value={apiKeyInput}

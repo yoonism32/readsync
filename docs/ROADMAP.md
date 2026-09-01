@@ -148,10 +148,15 @@ this file is the trimmed, current-facing view of it.
       matches. `eternal-life-by-daily-divination` is the only novel that was
       ever hit, and it's already corrected (now `676`, a real titled
       chapter).
-- [ ] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
-      reset per novel. Can no longer override a larger value, and Refresh
-      All is immune (fresh tab per novel), but browsing several novels in
-      one tab can still surface a stale count.
+- [x] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
+      reset per novel — Done 2026-09-01. Was a single module-level variable
+      shared across every novel a tab visited; browsing several novels in
+      one tab (no full reload) could leak one novel's fetched count into
+      another's candidates. Replaced with `realChapterCountBySlug`, a cache
+      keyed by novel slug (`getCachedRealChapterCount`/
+      `setCachedRealChapterCount`), so each novel's count stays isolated.
+      Regression test:
+      `userscript/__tests__/realChapterCountCache.test.ts`.
 - [x] **`extractChapterNum` caps at < 10000** — Done 2026-08-15. All 6
       chapter-number sanity-check sites in `ChapterDetector.ts`
       (`extractChapterNum`, `extractChapterFromUrl`,
@@ -160,9 +165,6 @@ this file is the trimmed, current-facing view of it.
       the hardcoded `10000`. `extractHeaderChapterCount`'s separate
       document-count check (already `< 100000`, a different concept) is
       untouched.
-- [ ] **`tab.closed` counts as success** (`useRefreshAll.ts`) — any
-      external close is banked as a win with no scrape. Deliberately left;
-      a test documents the behaviour if you want to flip it.
 - [ ] **API documentation (OpenAPI/Swagger)** for the endpoints in
       [API_REFERENCE.md](./API_REFERENCE.md).
 - [x] ~~**`SubPlan 2` in the My List query**~~ — **corrected: already
@@ -183,16 +185,16 @@ this file is the trimmed, current-facing view of it.
       manually. Genuinely still unbuilt (the source doc's "legacy-only"
       framing no longer applies since legacy is deleted, but nothing was
       ever built for the current stack either).
-- [ ] **`validateEnvironment()` (`src/config.ts:108`) is never called.**
-      Flagged by a 2026-08-31 production-readiness pass. A missing
-      `SESSION_SECRET` (or other required var) currently starts the server
-      with an empty/undefined signing secret instead of failing fast — the
-      check exists but nothing invokes it from `server.ts`. Wire it into
-      startup so a misconfigured deploy fails loudly instead of silently.
-- [ ] **No documented rollback path for a failed migration.** Migrations
-      run automatically and forward-only on startup (`src/db/migrate.ts`);
-      there's no written procedure for unsticking a partially-applied one.
-      Worth a short paragraph in [DATABASE.md](./DATABASE.md), not new code.
+- [x] **`validateEnvironment()` (`src/config.ts:108`) is never called.** —
+      Done 2026-09-01. `server.ts`'s `main()` now calls it as its first
+      statement, before `runMigrations()` — a missing `SESSION_SECRET`/
+      `DATABASE_URL` now fails startup loudly instead of running with an
+      empty signing secret.
+- [x] **No documented rollback path for a failed migration.** — Done
+      2026-09-01. Added a "Recovering from a failed migration" section to
+      [DATABASE.md](./DATABASE.md) covering the transactional-vs-
+      `CONCURRENTLY` failure modes and the manual `schema_migrations` retry
+      procedure.
 - [ ] **No error-reporting/alerting beyond stdout logs.** Generalizes the
       "no egress alarm short of a human staring at the dashboard" gap
       (08-18 incident above) to all runtime errors — nothing pages or
@@ -202,12 +204,14 @@ this file is the trimmed, current-facing view of it.
 
 ## Accessibility (2026-08-31 audit)
 
-- [ ] **Unlabeled, placeholder-only form inputs** — Manage's filter input,
-      NotesPanel (2 fields), TagEditor, and the Settings API-key field have
-      no `<label>`/`aria-label`; a screen reader announces nothing when
-      they're focused. WCAG 1.3.1/4.1.2.
-- [ ] **`CommandPalette` is missing `aria-modal` and has an incomplete Tab
-      trap** — focus can leave the visible dialog while it's open.
+- [x] **Unlabeled, placeholder-only form inputs** — Done 2026-09-01. Added
+      `aria-label` to Manage's filter input, NotesPanel's 2 chapter fields,
+      TagEditor's tag input, and the Settings API-key field. WCAG 1.3.1/4.1.2.
+- [x] **`CommandPalette` is missing `aria-modal` and has an incomplete Tab
+      trap** — Done 2026-09-01. Added `aria-modal="true"` to the dialog and
+      a real Tab/Shift+Tab trap (`trapFocus` in `CommandPalette.tsx`) that
+      cycles focus among the dialog's own focusable elements instead of
+      letting it escape to the page behind the overlay.
 - [ ] **No live-region announcement for socket-driven updates** — SPA
       state updates silently on `progress:updated`/`chapters:updated` (see
       [ARCHITECTURE.md](./ARCHITECTURE.md#data-flow-reading-progress-sync));
@@ -227,7 +231,13 @@ this file is the trimmed, current-facing view of it.
       suite (38 files, 283 tests) stays green.
 - [ ] **TypeScript 6→7 and ESLint 9→10 major-version bumps deferred.** No
       urgency; revisit together since both tend to touch config/type-check
-      output at once.
+      output at once. Stepped the safe part in the meantime (2026-09-01):
+      `typescript` 6.0.2→6.0.3 and `typescript-eslint` 8.58.0→8.69.0
+      (`eslint` was already at its latest 9.x, 9.39.5) across root,
+      `frontend/`, and `userscript/` — lint and the full test suite stayed
+      green. When the major bump is eventually attempted, take the same
+      incremental approach: step through intermediate minors before
+      jumping majors, rather than both majors at once.
 
 ## Future site support
 

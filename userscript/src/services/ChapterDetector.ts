@@ -135,8 +135,18 @@ export function deriveNovelBaseUrl(currentUrl: string): string {
 
 /* ===== Latest chapter detection ===== */
 
-// Module-level cache for the real chapter count fetched from the main novel page
-let realChapterCount: number | null = null;
+// Cache for the real chapter count fetched from a novel's main page, keyed by
+// novel slug so an SPA route change to a *different* novel (no full page
+// reload) can't leak the previous novel's count in as a stale candidate.
+const realChapterCountBySlug = new Map<string, number>();
+
+export function getCachedRealChapterCount(novelSlug: string): number | null {
+  return realChapterCountBySlug.get(novelSlug) ?? null;
+}
+
+export function setCachedRealChapterCount(novelSlug: string, count: number): void {
+  realChapterCountBySlug.set(novelSlug, count);
+}
 
 const CHAPTER_COUNT_RE = /^\s*([\d,]+)\s+Chapters?\s*$/i;
 
@@ -337,17 +347,19 @@ export function extractLatestChapterInfo(
             });
           }
 
-          if (mainPageMax > maxChapter) {
+          if (mainPageMax > maxChapter && novelSlug) {
             log('Found real chapter count from main page!', { was: maxChapter, now: mainPageMax });
-            realChapterCount = mainPageMax;
+            setCachedRealChapterCount(novelSlug, mainPageMax);
           }
         })
         .catch(err => log('Main page fetch failed (non-critical)', err));
     }
 
-    // A cached count from a previous main-page fetch is one more candidate —
-    // never an override, or a smaller stale value would win outright.
-    if (realChapterCount) candidates.push(realChapterCount);
+    // A cached count from a previous main-page fetch of THIS novel is one
+    // more candidate — never an override, or a smaller stale value would win
+    // outright.
+    const cachedRealCount = novelSlug ? getCachedRealChapterCount(novelSlug) : null;
+    if (cachedRealCount) candidates.push(cachedRealCount);
 
     const finalChapterCount = candidates.length ? Math.max(...candidates) : 0;
     // Prefer a title that names an actual chapter. When the header count wins
@@ -364,7 +376,7 @@ export function extractLatestChapterInfo(
     // chapter in the 2026-08-12 corruption incident — ChapterCorrection.ts
     // uses this flag to refuse to trust an unverified number as grounds for
     // overwriting a higher stored value, no matter how many times it repeats.
-    const authoritativeMax = Math.max(namedNum, headerCount ?? 0, realChapterCount ?? 0);
+    const authoritativeMax = Math.max(namedNum, headerCount ?? 0, cachedRealCount ?? 0);
     const verified = finalChapterCount <= authoritativeMax;
 
     if (finalChapterCount > 0) {

@@ -102,6 +102,7 @@ export function TagEditor({ novelId }: TagEditorProps) {
       <input
         type="text"
         list="tag-suggestions"
+        aria-label="Add tag"
         placeholder="+ tag"
         value={input}
         maxLength={40}

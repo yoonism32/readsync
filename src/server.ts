@@ -1,11 +1,12 @@
 import { createApp } from './app.js';
-import { PORT } from './config.js';
+import { PORT, validateEnvironment } from './config.js';
 import { runMigrations } from './db/migrate.js';
 import pool from './db/pool.js';
 import logger from './logger.js';
 import { startBackupScheduler } from './services/BackupService.js';
 
 async function main(): Promise<void> {
+  validateEnvironment();
   await runMigrations();
 
   const { httpServer, io } = createApp();

@@ -37,6 +37,34 @@ Postgres, Supabase-hosted. Schema is defined by 14 sequential migrations in
 - **013 — NovelArrow synopsis columns.** Adds `novels.synopsis` (`TEXT`) and `novels.synopsis_imported_at` (`TIMESTAMPTZ`) for the one-time-imported synopsis feature (see [ROADMAP.md](./ROADMAP.md)) — fetched once when missing, never overwritten by Refresh All or a recurring scan. Kept separate from the existing `description` column (user import/export field, `src/routes/novels.ts`) so scraped synopsis text can't collide with that feature's meaning.
 - **014 — `user_novel_meta.created_at`, decoupled from `started_at`.** The My List "Added" column/sort read `started_at`, which every reread (manual or auto-detected) unconditionally overwrites with `CURRENT_TIMESTAMP` — a reread silently corrupted "Added" for any novel. Adds a real `created_at`, set once and never touched by a reread; backfilled from the earliest `read_history` entry's `started_at` where history exists, else the existing `started_at`. Includes a one-off data correction for a single production row (`novelbin:my-medical-skills-give-me-experience-points`) whose `started_at` had been left at an accidental reread's timestamp during an unrelated manual fix.
 
+## Recovering from a failed migration
+
+`src/db/migrate.ts` only records a migration as applied (`schema_migrations`
+insert) *after* it finishes, so a failure always leaves the runner safe to
+retry on the next deploy — but the two migration styles fail differently:
+
+- **Transactional migrations** (the default — no `CONCURRENTLY` statement)
+  run inside a single `BEGIN`/`COMMIT`. On any statement error the runner
+  issues `ROLLBACK` itself (`migrate.ts:55`), so the database is left exactly
+  as it was before the migration started. Fix the `.sql` file (never edit a
+  file that has already shipped to production — add a new numbered one) and
+  redeploy; the runner retries it automatically since it was never marked
+  applied.
+- **`CONCURRENTLY` migrations** (002, 012) run each statement directly against
+  the pool with no wrapping transaction, because Postgres refuses
+  `CONCURRENTLY` inside one. A failure partway through leaves earlier
+  statements in that file already committed, and the whole file still
+  unmarked as applied — so the next run retries from the top and can hit
+  "already exists" on the objects that did succeed. Recovery is manual:
+  inspect what the failed statements actually created (`\d <table>` /
+  `\di <index>` in `psql`), either drop the partial objects or make the
+  migration idempotent (`IF NOT EXISTS`) for the retry, then redeploy.
+
+To force a manual retry of a specific migration without a new deploy, delete
+its row from `schema_migrations` (`DELETE FROM schema_migrations WHERE name =
+'0XX_name.sql'`) — the runner treats it as never-applied and reruns the file
+from `src/db/migrations/` on the next `runMigrations()` call.
+
 ## Known dead config
 
 `.env.example` lists `BOT_DISABLED`, `API_KEY`, and `SUPABASE_ANON_KEY` —

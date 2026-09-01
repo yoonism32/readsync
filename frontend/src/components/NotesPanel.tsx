@@ -178,6 +178,7 @@ export function NotesPanel({ novelId }: NotesPanelProps) {
           <input
             type="number"
             min={0}
+            aria-label="Chapter number (optional)"
             placeholder="Ch. (optional)"
             value={chapter}
             onChange={e => setChapter(e.target.value)}
