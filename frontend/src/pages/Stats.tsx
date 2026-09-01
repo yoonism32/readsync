@@ -60,7 +60,15 @@ function Cell({
   return (
     <div
       className={`panel animate-fade-in ${staggerClass} ${spanClass}`}
-      style={{ borderRadius: 'var(--radius-xl)', padding: 20 }}
+      style={{
+        borderRadius: 'var(--radius-xl)',
+        padding: 20,
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        minHeight: span === 'wide' ? 280 : span === 'hero' ? 180 : 150,
+        alignSelf: 'stretch',
+      }}
     >
       {children}
     </div>
@@ -161,28 +169,41 @@ interface Bar {
  *  so the axis stays legible even for untouched hours/weekdays; ticks are
  *  selective, not one per bar, per the mark-spec guidance against labeling
  *  every point. */
-function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; height?: number }) {
+function BarChart({ bars, color, height = 180 }: { bars: Bar[]; color: string; height?: number }) {
   const max = Math.max(1, ...bars.map(b => b.value));
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height }}>
-      {bars.map(b => (
-        <div key={b.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-          <div
-            title={b.tooltip}
-            style={{
-              width: '100%',
-              height: `${Math.max(2, (b.value / max) * 100)}%`,
-              background: color,
-              borderRadius: '3px 3px 0 0',
-            }}
-          />
-          {b.tickLabel !== undefined && (
-            <span className="text-faint" style={{ fontSize: 10, marginTop: 4, whiteSpace: 'nowrap' }}>
-              {b.tickLabel}
-            </span>
-          )}
-        </div>
-      ))}
+    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 8 }}>
+      {bars.map(b => {
+        const ratio = b.value / max;
+        const barHeight = b.value > 0 ? Math.max(10, ratio * 100) : 8;
+        return (
+          <div key={b.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', minWidth: 0, height: '100%' }}>
+            <div
+              data-value={b.value}
+              data-label={b.tickLabel ?? ''}
+              tabIndex={0}
+              title={b.tooltip}
+              className="bar-chart-bar"
+              style={{
+                width: '100%',
+                height: `${barHeight}%`,
+                background: color,
+                borderRadius: '3px 3px 0 0',
+                minHeight: b.value > 0 ? 10 : 6,
+                opacity: b.value > 0 ? 1 : 0.7,
+                display: 'block',
+                transition: 'transform 180ms ease, filter 180ms ease, box-shadow 180ms ease, opacity 180ms ease',
+                cursor: 'pointer',
+              }}
+            />
+            {b.tickLabel !== undefined && (
+              <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 16, paddingTop: 8, whiteSpace: 'nowrap', lineHeight: 1.2 }}>
+                {b.tickLabel}
+              </span>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -281,7 +302,7 @@ export function Stats() {
               key: b.hour,
               value: b.seconds,
               tooltip: `${hourLabel(b.hour)} — ${formatDuration(b.seconds)}, ${b.sessions} session${b.sessions === 1 ? '' : 's'}`,
-              tickLabel: b.hour % 3 === 0 ? hourLabel(b.hour) : undefined,
+              tickLabel: hourLabel(b.hour),
             }))}
           />
         </Cell>

@@ -383,6 +383,17 @@ scoped or approved yet.
       logic. Distinct from the "weekly data-health digest" below, which
       covers corrections/rejected regressions, not user-facing reading
       content.
+- [ ] **Reading Time by Hour bento upgrades** — improve the hourly chart card
+      with a right-aligned `This week` filter chip in the top-right corner,
+      plus a richer hover layer that surfaces the actual reading context
+      instead of a single percentage string. Product intent: if an hour has
+      multiple novels, show the list of novel names and their contribution;
+      if only one novel is active, show the chapter range for that novel
+      (e.g. `Ch. 18-42`). Keep the hover copy in a compact card, not a
+      purple text line, and treat the filter as a time-window control on the
+      card itself (defaulting to the current week while preserving all-hours
+      view as a fallback). This should sit alongside the existing stats grid
+      and not be treated as a full analytics rewrite yet.
 
 ## Accepted from the field-audit consolidation (2026-08-06)
 
@@ -418,6 +429,7 @@ to open a socket connection (reusing the existing session login) and render
 whatever arrives.
 
 **Open decisions, unresolved:**
+
 1. Reading-state stats: session-focused (time this session, streak) vs.
    book-identity-focused (genre, author, position)?
 2. Reading → idle trigger: timeout since last sync (~5 min, frontend-only)
@@ -471,3 +483,15 @@ eventually want too.
       catch branch) — closes both gaps in one shot, but is meaningfully more
       invasive than the shipped fix. Not blocking; pick up if the badge
       flicker or cross-novel case is ever actually observed.
+
+- [ ] **Stats-chart hover copy needs a better information model.** User feedback:
+      the current hover text is too weak and reads like a single purple line of
+      raw metadata rather than useful reading insight. The hover should not be the
+      only source of meaning; the chart should present the key reading context at a
+      glance, with the hover expanding into a compact detail card. Desired shape:
+      show the hour and total time first, then the reading context beneath it: the
+      novel names for multi-title hours, or a chapter range when a single novel
+      dominates. Keep the value legible and avoid the current “just a percentage”
+      or “just a tooltip string” feeling. If this passes design review, pair it
+      with the `This week` filter and the richer data view described in the
+      hourly-bento roadmap item above.

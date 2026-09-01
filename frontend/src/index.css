@@ -5,43 +5,43 @@
   --color-*: initial;
 
   /* Backgrounds */
-  --color-bg:           #07090c;
-  --color-bg-raised:    #0d1116;
-  --color-bg-card:      rgba(255,255,255,0.04);
-  --color-bg-input:     rgba(255,255,255,0.06);
-  --color-bg-hover:     rgba(255,255,255,0.07);
-  --color-bg-header:    rgba(8,12,18,0.85);
+  --color-bg: #07090c;
+  --color-bg-raised: #0d1116;
+  --color-bg-card: rgba(255, 255, 255, 0.04);
+  --color-bg-input: rgba(255, 255, 255, 0.06);
+  --color-bg-hover: rgba(255, 255, 255, 0.07);
+  --color-bg-header: rgba(8, 12, 18, 0.85);
 
   /* Primary accent — refined crimson */
-  --color-accent-dim:    #6e2b31;
+  --color-accent-dim: #6e2b31;
   /* #c94f57 sat at the luminance where neither black nor white text clears
      4.5:1 — it measured 4.42 against the near-black ink and 4.43 against
      white, so no foreground choice could fix it. Three percent lighter takes
      .btn-accent to 4.92:1 and lifts every accent-on-dark use with it. */
-  --color-accent:        #cd5b62;
+  --color-accent: #cd5b62;
   --color-accent-bright: #e0707a;
-  --color-accent-glow:   rgba(201,79,87,0.16);
-  --color-accent-border: rgba(201,79,87,0.24);
+  --color-accent-glow: rgba(201, 79, 87, 0.16);
+  --color-accent-border: rgba(201, 79, 87, 0.24);
 
   /* Secondary accent — the legacy refresh-button teal */
-  --color-teal:         #34d0ba;
-  --color-teal-bright:  #5fe3cf;
-  --color-teal-glow:    rgba(52,208,186,0.14);
-  --color-teal-border:  rgba(52,208,186,0.28);
+  --color-teal: #34d0ba;
+  --color-teal-bright: #5fe3cf;
+  --color-teal-glow: rgba(52, 208, 186, 0.14);
+  --color-teal-border: rgba(52, 208, 186, 0.28);
 
   /* Foregrounds for use ON a saturated fill — near-black, not white:
      against crimson and teal both, the dark foreground is the stronger
      contrast pairing. */
-  --color-on-accent:    #080c12;
-  --color-on-teal:      #07110f;
+  --color-on-accent: #080c12;
+  --color-on-teal: #07110f;
 
   /* Text */
-  --color-text:         #e4e8e6;
-  --color-text-muted:   #8e9a96;
+  --color-text: #e4e8e6;
+  --color-text-muted: #8e9a96;
   /* was #4e5754 — measured 2.67:1 against --color-bg, failing WCAG 1.4.3
      (4.5:1 minimum for normal text). Lightened along the same hue to
      4.72:1. */
-  --color-text-faint:   #717e7a;
+  --color-text-faint: #717e7a;
 
   /* Rating gold — deliberately not --color-warning below: that token is
      flat Tailwind amber-400 at 96% saturation, which reads as an
@@ -49,42 +49,42 @@
      and teal (62%) above. This antique gold sits at 62% saturation —
      in line with the rest of the palette — while keeping the universal
      "stars = gold" affordance. 8.53:1 against --color-bg (AAA). */
-  --color-gold:         #d2a241;
-  --color-gold-bright:  #dab66c;
+  --color-gold: #d2a241;
+  --color-gold-bright: #dab66c;
 
   /* Semantic */
-  --color-success:        #34d0ba;
-  --color-success-dim:    rgba(52,208,186,0.12);
-  --color-warning:        #fbbf24;
-  --color-warning-dim:    rgba(251,191,36,0.12);
-  --color-warning-border: rgba(251,191,36,0.30);
-  --color-danger:         #f87171;
-  --color-danger-dim:     rgba(248,113,113,0.12);
-  --color-danger-border:  rgba(248,113,113,0.30);
-  --color-info:           #60a5fa;
-  --color-info-dim:       rgba(96,165,250,0.12);
+  --color-success: #34d0ba;
+  --color-success-dim: rgba(52, 208, 186, 0.12);
+  --color-warning: #fbbf24;
+  --color-warning-dim: rgba(251, 191, 36, 0.12);
+  --color-warning-border: rgba(251, 191, 36, 0.30);
+  --color-danger: #f87171;
+  --color-danger-dim: rgba(248, 113, 113, 0.12);
+  --color-danger-border: rgba(248, 113, 113, 0.30);
+  --color-info: #60a5fa;
+  --color-info-dim: rgba(96, 165, 250, 0.12);
 
   /* Borders */
-  --color-border:        rgba(255,255,255,0.08);
+  --color-border: rgba(255, 255, 255, 0.08);
   --color-border-accent: var(--color-accent-border);
 
   /* ── Typography ──────────────────────────────────────── */
   --font-*: initial;
   --font-display: "Newsreader Variable", "Newsreader", "Georgia", serif;
-  --font-body:    "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, sans-serif;
   /* Deliberate system stack — no mono webfont is loaded, so name the
      fallback rather than requesting a face that will never arrive. */
-  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 
   /* Type scale — absorbs the 1.1 zoom that used to sit on <html>. */
-  --text-xs:   0.875rem;
-  --text-sm:   0.9375rem;
+  --text-xs: 0.875rem;
+  --text-sm: 0.9375rem;
   --text-base: 1.0625rem;
-  --text-lg:   1.25rem;
-  --text-xl:   1.4375rem;
-  --text-2xl:  1.8125rem;
-  --text-3xl:  2.1875rem;
-  --text-4xl:  2.75rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.4375rem;
+  --text-2xl: 1.8125rem;
+  --text-3xl: 2.1875rem;
+  --text-4xl: 2.75rem;
 
   /* ── Motion ──────────────────────────────────────────── */
   --ease-*: initial;
@@ -92,24 +92,28 @@
 
   /* ── Radius ──────────────────────────────────────────── */
   --radius-*: initial;
-  --radius-sm:   4px;
-  --radius-md:   8px;
-  --radius-lg:   12px;
-  --radius-xl:   16px;
-  --radius-2xl:  20px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
   --radius-full: 9999px;
 
   /* ── Z-index ─────────────────────────────────────────── */
-  --z-dropdown:  100;
-  --z-sticky:    200;
-  --z-modal:     500;
-  --z-toast:     800;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal: 500;
+  --z-toast: 800;
   --z-skip-link: 900;
 }
 
 /* ── Base reset ──────────────────────────────────────────── */
 
-*, *::before, *::after { box-sizing: border-box; }
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 html {
   color-scheme: dark;
@@ -124,14 +128,19 @@ body {
   color: var(--color-text);
   background-color: var(--color-bg);
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(52,208,186,0.05) 0%, transparent 70%);
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(52, 208, 186, 0.05) 0%, transparent 70%);
   background-attachment: fixed;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--font-display);
   font-weight: 600;
   line-height: 1.2;
@@ -140,8 +149,14 @@ h1, h2, h3, h4, h5, h6 {
   margin: 0;
 }
 
-a { color: inherit; text-decoration: none; }
-p { margin: 0; }
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+p {
+  margin: 0;
+}
 
 :focus-visible {
   outline: 2px solid var(--color-accent);
@@ -149,13 +164,23 @@ p { margin: 0; }
   border-radius: 4px;
 }
 
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 ::-webkit-scrollbar-thumb {
-  background: rgba(255,255,255,0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(201,79,87,0.35); }
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 79, 87, 0.35);
+}
 
 /* Visually hidden, still announced. */
 .sr-only {
@@ -188,11 +213,21 @@ p { margin: 0; }
   border: 1px solid var(--color-border);
 }
 
-@utility text-accent { color: var(--color-accent); }
-@utility text-muted { color: var(--color-text-muted); }
-@utility text-faint { color: var(--color-text-faint); }
+@utility text-accent {
+  color: var(--color-accent);
+}
 
-@utility font-display { font-family: var(--font-display); }
+@utility text-muted {
+  color: var(--color-text-muted);
+}
+
+@utility text-faint {
+  color: var(--color-text-faint);
+}
+
+@utility font-display {
+  font-family: var(--font-display);
+}
 
 /* Tailwind v4 only generates the utilities declared here — `line-clamp-1` was
    used in Manage but never defined, so it was a no-op class. A CJK title in a
@@ -212,12 +247,16 @@ p { margin: 0; }
   overflow: hidden;
 }
 
-@utility tabular { font-variant-numeric: tabular-nums; }
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
 
 /* ── Animations ──────────────────────────────────────────── */
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .animate-spin {
@@ -225,35 +264,68 @@ p { margin: 0; }
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes shimmer {
-  from { background-position: -200% 0; }
-  to   { background-position:  200% 0; }
+  from {
+    background-position: -200% 0;
+  }
+
+  to {
+    background-position: 200% 0;
+  }
 }
 
-.animate-fade-in   { animation: fade-in  0.4s var(--ease-out-expo) both; }
-.animate-slide-up  { animation: slide-up 0.5s var(--ease-out-expo) both; }
+.animate-fade-in {
+  animation: fade-in 0.4s var(--ease-out-expo) both;
+}
 
-.stagger-1 { animation-delay: 50ms;  }
-.stagger-2 { animation-delay: 100ms; }
-.stagger-3 { animation-delay: 150ms; }
-.stagger-4 { animation-delay: 200ms; }
+.animate-slide-up {
+  animation: slide-up 0.5s var(--ease-out-expo) both;
+}
+
+.stagger-1 {
+  animation-delay: 50ms;
+}
+
+.stagger-2 {
+  animation-delay: 100ms;
+}
+
+.stagger-3 {
+  animation-delay: 150ms;
+}
+
+.stagger-4 {
+  animation-delay: 200ms;
+}
 
 .skeleton {
-  background: linear-gradient(
-    90deg,
-    rgba(255,255,255,0.04) 25%,
-    rgba(255,255,255,0.08) 50%,
-    rgba(255,255,255,0.04) 75%
-  );
+  background: linear-gradient(90deg,
+      rgba(255, 255, 255, 0.04) 25%,
+      rgba(255, 255, 255, 0.08) 50%,
+      rgba(255, 255, 255, 0.04) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   border-radius: var(--radius-md);
@@ -262,11 +334,16 @@ p { margin: 0; }
 /* ── Responsive nav labels ───────────────────────────────── */
 
 @media (max-width: 600px) {
-  .nav-label { display: none; }
+  .nav-label {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+
+  *,
+  *::before,
+  *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
@@ -280,6 +357,7 @@ p { margin: 0; }
 .row-interactive {
   transition: border-color 150ms var(--ease-out-expo);
 }
+
 .row-interactive:hover,
 .row-interactive:focus-visible {
   border-color: var(--color-border-accent);
@@ -288,6 +366,7 @@ p { margin: 0; }
 .row-interactive-strong {
   transition: border-color 150ms var(--ease-out-expo);
 }
+
 .row-interactive-strong:hover,
 .row-interactive-strong:focus-visible {
   border-color: var(--color-accent);
@@ -297,9 +376,27 @@ p { margin: 0; }
   color: var(--color-text-faint);
   transition: color 150ms var(--ease-out-expo);
 }
+
 .icon-btn:hover,
 .icon-btn:focus-visible {
   color: var(--color-text);
+}
+
+.bar-chart-bar {
+  position: relative;
+  box-shadow: 0 0 0 rgba(52, 208, 186, 0);
+}
+
+.bar-chart-bar:hover,
+.bar-chart-bar:focus-visible {
+  transform: translateY(-3px);
+  filter: brightness(1.12) saturate(1.12);
+  box-shadow: 0 10px 18px rgba(52, 208, 186, 0.2);
+}
+
+.bar-chart-bar[data-value="0"]:hover,
+.bar-chart-bar[data-value="0"]:focus-visible {
+  box-shadow: 0 8px 16px rgba(255, 255, 255, 0.08);
 }
 
 /* Text fields. The border shift was an inline onFocus/onBlur pair mutating
@@ -310,6 +407,7 @@ p { margin: 0; }
 .input {
   transition: border-color 150ms var(--ease-out-expo);
 }
+
 .input:focus {
   border-color: var(--color-accent);
 }
@@ -330,6 +428,7 @@ p { margin: 0; }
 .cover-lift {
   position: relative;
 }
+
 .cover-lift:hover,
 .cover-lift:focus-visible {
   /* Raise the whole card in the stack, or the grown cover is clipped by
@@ -342,6 +441,7 @@ p { margin: 0; }
   transition-delay: 0ms;
   transform-origin: center center;
 }
+
 .cover-lift:hover .cover-lift-art,
 .cover-lift:focus-visible .cover-lift-art {
   /* The delay is the point: a pointer crossing the grid on its way somewhere
@@ -357,6 +457,7 @@ p { margin: 0; }
   color: var(--color-text-muted);
   transition: color 150ms var(--ease-out-expo);
 }
+
 .muted-btn:hover,
 .muted-btn:focus-visible {
   color: var(--color-text);
@@ -365,6 +466,7 @@ p { margin: 0; }
 .row-hover {
   transition: background-color 150ms var(--ease-out-expo);
 }
+
 .row-hover:hover,
 .row-hover:focus-visible {
   background-color: var(--color-bg-hover);
@@ -379,11 +481,13 @@ p { margin: 0; }
   color: var(--color-text-faint);
   transition: opacity 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo);
 }
+
 .th-progress:hover .progress-mode-toggle,
 .th-progress:focus-within .progress-mode-toggle,
 .progress-mode-toggle.active {
   opacity: 1;
 }
+
 .progress-mode-toggle:hover,
 .progress-mode-toggle:focus-visible {
   color: var(--color-text);
@@ -392,6 +496,7 @@ p { margin: 0; }
 .link-accent {
   transition: color 150ms var(--ease-out-expo);
 }
+
 .link-accent:hover,
 .link-accent:focus-visible {
   color: var(--color-accent-bright);
@@ -436,9 +541,19 @@ p { margin: 0; }
   transition: background-color 150ms var(--ease-out-expo), transform 100ms var(--ease-out-expo);
   touch-action: manipulation;
 }
-.btn-accent:hover:not(:disabled) { background: var(--color-accent-bright); }
-.btn-accent:active:not(:disabled) { transform: scale(0.97); }
-.btn-accent:disabled { opacity: 0.45; cursor: default; }
+
+.btn-accent:hover:not(:disabled) {
+  background: var(--color-accent-bright);
+}
+
+.btn-accent:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.btn-accent:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 .btn-ghost {
   background: none;
@@ -452,8 +567,16 @@ p { margin: 0; }
   transition: color 150ms var(--ease-out-expo), border-color 150ms var(--ease-out-expo);
   touch-action: manipulation;
 }
-.btn-ghost:hover:not(:disabled) { color: var(--color-text); border-color: var(--color-border-accent); }
-.btn-ghost:disabled { opacity: 0.45; cursor: default; }
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--color-text);
+  border-color: var(--color-border-accent);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* ── Native form controls ────────────────────────────────── */
 /* color-scheme:dark on html isn't always enough to darken a <select>'s
@@ -493,13 +616,27 @@ select option {
 @media (min-width: 1040px) {
   .stats-bento {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    grid-auto-rows: minmax(110px, auto);
+    grid-auto-rows: minmax(170px, auto);
     grid-auto-flow: dense;
     gap: 16px;
+    align-items: stretch;
   }
-  .stats-cell-hero { grid-column: span 2; grid-row: span 2; }
-  .stats-cell-wide { grid-column: span 2; }
-  .stats-cell-tall { grid-row: span 2; }
+
+  .stats-cell-hero {
+    grid-column: span 2;
+    grid-row: span 2;
+    min-height: 280px;
+  }
+
+  .stats-cell-wide {
+    grid-column: span 2;
+    min-height: 220px;
+  }
+
+  .stats-cell-tall {
+    grid-row: span 2;
+    min-height: 280px;
+  }
 }
 
 .stats-hero-value {
