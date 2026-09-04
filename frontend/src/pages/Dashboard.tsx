@@ -7,6 +7,7 @@ import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
+import { ArrowRightIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
 import { behindCount } from '../lib/behindStatus.js';
 import type { Novel, StatsSummary } from '../types/index.js';
@@ -148,7 +149,7 @@ export function Dashboard() {
               {continueNovel.latest_device_label && ` on ${continueNovel.latest_device_label}`}
             </div>
           </div>
-          <span aria-hidden="true" style={{ fontSize: 24, color: 'var(--color-accent)' }}>→</span>
+          <ArrowRightIcon size={22} style={{ color: 'var(--color-accent)', flexShrink: 0 }} />
         </a>
       )}
 

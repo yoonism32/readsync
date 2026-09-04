@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { backups as backupsApi, novels as novelsApi, settings as settingsApi, formatTimestamp, getApiKey, setApiKey as saveApiKey } from '../api/client.js';
 import type { BackupsStatus, Prefs, LibraryHealth } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
-import { BookOpenIcon, DashboardIcon, ClockIcon, BotIcon } from '../components/Icon.js';
+import { BookOpenIcon, DashboardIcon, ClockIcon, BotIcon, DownloadIcon, UploadIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
 
 const quickLinkStyle: React.CSSProperties = {
@@ -85,6 +85,10 @@ export function Settings() {
   }
 
   async function handleImportFile(file: File) {
+    if (!window.confirm('Importing will merge this file into your existing library and progress data. Continue?')) {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
     setImporting(true);
     try {
       const text = await file.text();
@@ -192,16 +196,19 @@ export function Settings() {
           previous one.
         </p>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn-accent" onClick={() => { void handleExport(); }} disabled={exporting}>
-            {exporting ? 'Exporting…' : '⬇ Export Data'}
+          <button type="button" className="btn-accent" onClick={() => { void handleExport(); }} disabled={exporting} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <DownloadIcon size={14} />
+            {exporting ? 'Exporting…' : 'Export Data'}
           </button>
           <button
             type="button"
             className="btn-ghost"
             onClick={() => fileInputRef.current?.click()}
             disabled={importing}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
-            {importing ? 'Importing…' : '⬆ Import Data'}
+            <UploadIcon size={14} />
+            {importing ? 'Importing…' : 'Import Data'}
           </button>
           <input
             ref={fileInputRef}
