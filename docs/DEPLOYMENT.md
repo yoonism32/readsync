@@ -47,6 +47,9 @@ From `.env.example`:
 | `PG_IDLE_TIMEOUT` | Idle client timeout ms, default `30000` (`src/config.ts`) |
 | `PG_CONN_TIMEOUT` | Connection acquisition timeout ms, default `10000` (`src/config.ts`) |
 | `ALLOWED_ORIGINS` | Comma-separated CORS allowlist (`src/config.ts`) |
+| `ALERT_WEBHOOK_URL` | Optional. Runtime errors are POSTed here as JSON (`src/services/Alerter.ts`). Unset = errors reach stdout only, and startup logs a warning. Deliberately not required by `validateEnvironment()` — losing alerts is bad, refusing to boot because alerting isn't configured is worse. |
+| `ALERT_COOLDOWN_MS` | Per-error alert cooldown, default `900000` (15m) |
+| `ALERT_MAX_PER_HOUR` | Hourly alert ceiling across all errors, default `20` |
 
 The four vars above are read by `src/config.ts` but **not listed in
 `.env.example`** — they all have safe defaults so their absence doesn't

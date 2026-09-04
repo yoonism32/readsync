@@ -229,12 +229,29 @@ this file is the trimmed, current-facing view of it.
       [DATABASE.md](./DATABASE.md) covering the transactional-vs-
       `CONCURRENTLY` failure modes and the manual `schema_migrations` retry
       procedure.
-- [ ] **No error-reporting/alerting beyond stdout logs.** Generalizes the
-      "no egress alarm short of a human staring at the dashboard" gap
-      (08-18 incident above) to all runtime errors — nothing pages or
-      surfaces an exception outside of Render's log tail. A lightweight
-      option (Sentry free tier, or a webhook-based log alert) would close
-      this without new infra.
+- [x] **No error-reporting/alerting beyond stdout logs.** Done 2026-09-04.
+      Generalized the "no egress alarm short of a human staring at the
+      dashboard" gap (08-18 incident above) to all runtime errors — nothing
+      paged or surfaced an exception outside of Render's log tail.
+      Closed with a webhook rather than an SDK: every error in the app
+      already funnels through `handleDbError` and `globalErrorHandler`
+      (`src/middleware/errorHandler.ts`), so `src/services/Alerter.ts`
+      only needed to hook those two plus process-level
+      `unhandledRejection`/`uncaughtException` in `server.ts`. Node's
+      global `fetch` — **no new dependency**. Alerts are deduped by
+      fingerprint (error name + message + first stack frame) with a 15-min
+      cooldown, and capped at 20/hour overall, because a bad deploy can
+      throw a *distinct* error per request that the per-error cooldown
+      alone would not hold down. `ALERT_WEBHOOK_URL` is optional and
+      deliberately absent from `validateEnvironment()`'s required list;
+      unset disables alerting and warns at startup. Delivery verified
+      end-to-end against a local receiver. Tests:
+      `__tests__/regression/alerter.test.ts` (7).
+      **Scope limit, stated plainly:** this alarms on *runtime errors*,
+      not on egress volume — egress has no exception to catch, it is a
+      Supabase usage metric. The 2026-09-04 verification above is still a
+      manual check; a real egress alarm would need Supabase's usage API
+      and is not closed by this.
 
 ## Accessibility (2026-08-31 audit)
 

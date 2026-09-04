@@ -6,6 +6,7 @@ import {
   IS_PRODUCTION,
 } from '../config.js';
 import logger from '../logger.js';
+import { notify } from '../services/Alerter.js';
 
 interface PgError extends Error {
   code?: string;
@@ -18,6 +19,7 @@ export function handleDbError(
   operation: string,
 ): void {
   logger.error({ error, operation }, 'Database error');
+  notify(error, { operation: `db:${operation}` });
 
   const pg = error as PgError;
   switch (pg.code) {
@@ -45,11 +47,16 @@ export function handleDbError(
 /** Express global error handler — catches anything thrown or passed to next(err). */
 export function globalErrorHandler(
   err: Error,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction,
 ): void {
   logger.error({ err }, 'Unhandled error');
+  notify(err, {
+    operation: 'http:unhandled',
+    method: req.method,
+    path: req.path,
+  });
   res.status(HTTP_INTERNAL_ERROR).json({
     error: IS_PRODUCTION ? 'Internal server error' : err.message,
   });
