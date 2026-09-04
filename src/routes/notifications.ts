@@ -46,6 +46,31 @@ router.get(
   },
 );
 
+// GET /api/v1/notifications/unread-count — badge-only, no list, no JOIN.
+// The bell in Layout.tsx renders on every page in every open tab and only
+// needs a number. Polling the full list for it made GET /api/v1/notifications
+// the highest-call-count query in the database (68,070 calls / 3.4M rows in
+// the 17 days after the 2026-08-18 pg_stat_statements reset) — more calls than
+// GET /api/v1/novels, and never identified in any of the three egress
+// incidents, all of which hunted /novels and getLatestStates(). This endpoint
+// runs the COUNT alone; the list is now fetched only when the panel opens.
+router.get(
+  '/api/v1/notifications/unread-count',
+  validateApiKey,
+  async (req: Request, res: Response) => {
+    try {
+      const userId = (req as AuthenticatedRequest).user.id;
+      const unread = await pool.query<{ count: string }>(
+        'SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND read = FALSE',
+        [userId],
+      );
+      res.json({ unread_count: Number(unread.rows[0]?.count ?? 0) });
+    } catch (error) {
+      handleDbError(res, error, 'Get unread notification count');
+    }
+  },
+);
+
 // POST /api/v1/notifications/:id/read
 router.post(
   '/api/v1/notifications/:id/read',

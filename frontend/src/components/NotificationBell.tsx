@@ -14,13 +14,32 @@ export function NotificationBell() {
   const panelRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const { data, mutate } = useSWR<NotificationsResponse>(
-    'notifications-list',
-    () => notificationsApi.list(),
+  // Two SWR keys, deliberately: this bell mounts in Layout, so it renders on
+  // every page in every open tab. Polling the full 50-row list (with its JOIN
+  // to novels) to draw a number made GET /api/v1/notifications the single
+  // highest-call-count query in the database — see the comment on the
+  // unread-count route in src/routes/notifications.ts. The badge now polls a
+  // bare COUNT; the list is fetched only while the panel is actually open.
+  const { data: countData, mutate: mutateCount } = useSWR(
+    'notifications-count',
+    () => notificationsApi.unreadCount(),
     { refreshInterval: POLL_MS, revalidateOnFocus: true }
   );
 
-  const unread = data?.unread_count ?? 0;
+  const { data, mutate: mutateList } = useSWR<NotificationsResponse>(
+    open ? 'notifications-list' : null,
+    () => notificationsApi.list(),
+  );
+
+  const mutate = () => {
+    void mutateCount();
+    void mutateList();
+  };
+
+  // countData is authoritative for the badge; the list response carries its
+  // own unread_count, so prefer that while open to keep the two in step after
+  // a mark-read without waiting for the next poll.
+  const unread = data?.unread_count ?? countData?.unread_count ?? 0;
   const items = data?.notifications ?? [];
 
   useEffect(() => {
@@ -149,7 +168,9 @@ export function NotificationBell() {
 
           {items.length === 0 ? (
             <p className="text-muted" style={{ padding: '20px 14px', fontSize: 'var(--text-sm)', margin: 0 }}>
-              Nothing yet — new chapters found by Update All land here.
+              {data
+                ? 'Nothing yet — new chapters found by Update All land here.'
+                : 'Loading…'}
             </p>
           ) : (
             items.map(n => (

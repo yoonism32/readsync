@@ -112,6 +112,40 @@ this file is the trimmed, current-facing view of it.
       volume actually dropped before trusting another "fixed" — this
       project still has no egress alarm short of a human staring at the
       dashboard, which is the real gap across all three incidents.
+      **Verified 2026-09-04 — mixed, and it found a fourth cause.**
+      `pg_stat_statements` reset 2026-08-18 18:13 UTC; sampled at 16.92
+      days vs. the baseline's 14, so the figures below are normalised
+      per-day.
+      - `getLatestStates()`'s two queries: ~689k calls each (49,214/day)
+        → 160,722 each (9,499/day). **−81%.** The explicit-columns and
+        debounce fixes worked, and this was the largest single source.
+      - `GET /api/v1/novels`'s `latest_activity` CTE: 32,931 calls /
+        4.54M rows (2,352/day) → 34,327 calls / 4.84M rows (2,029/day).
+        **−14%** — essentially flat, and still 4.8M rows and ~44 minutes
+        of DB time per sample. The `progress:updated` → in-place
+        `applyProgressPatch` rewrite in `Layout.tsx` removed the burst
+        path, so what remains looks like baseline load rather than sync
+        pings. Still open.
+      - **New, never previously identified:** `GET /api/v1/notifications`
+        was the *highest-call-count query in the database* — 68,070 calls
+        (4,023/day, roughly one every 21s) returning 3,403,500 rows.
+        Cause: `NotificationBell` mounts in `Layout.tsx`, so it renders on
+        every page in every open tab, and it polled the full 50-row list
+        (with its `LEFT JOIN novels`) every 60s purely to draw an
+        unread-count badge. Same shape as the 08-12 incident's userscript
+        `/compare` poll — a cheap-looking interval fetching an expensive
+        payload. Fixed 2026-09-04: a new
+        `GET /api/v1/notifications/unread-count` runs the bare `COUNT` for
+        the badge, and the list is fetched only while the panel is open
+        (`src/routes/notifications.ts`,
+        `frontend/src/components/NotificationBell.tsx`; regression test
+        `frontend/src/components/NotificationBell.test.tsx`). Should
+        remove ~3.4M rows per 17-day sample.
+      Lesson for the next check: all three prior write-ups hunted
+      `/novels` and `getLatestStates()` because those were the known
+      suspects, and none of them ordered `pg_stat_statements` by `calls`
+      across the whole table — which is how a top-two source sat unnoticed
+      through three investigations. Do that first next time.
 - [x] **2026-08-12 incident: chapter-count corruption via nav-link
       false-positive.** Done 2026-08-15. `extractLatestChapterInfo()` had no
       way to tell a chapter page's "Next Chapter" nav link (current + 1)

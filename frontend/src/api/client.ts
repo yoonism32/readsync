@@ -254,6 +254,8 @@ export const categories = {
 import type { NotificationsResponse } from '../types/index.js';
 
 export const notifications = {
+  unreadCount: () =>
+    request<{ unread_count: number }>('/notifications/unread-count'),
   list: (unreadOnly = false) =>
     request<NotificationsResponse>('/notifications', {
       qs: unreadOnly ? { unread_only: true } : {},
