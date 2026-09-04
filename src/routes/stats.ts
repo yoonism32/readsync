@@ -477,6 +477,73 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
   }
 });
 
+// GET /api/v1/stats/on-this-day — what you were reading at past milestones.
+//
+// Anchored on 1/3/6/12/24-month lookbacks, but matched over a ±3 day window
+// rather than the exact date: reading isn't daily, and an exact-date match
+// hit only 1 of 4 anchors against real production history. The response
+// carries the *actual* date found so the UI can say "a year ago" and show the
+// real day underneath rather than implying an exact anniversary.
+//
+// Range predicates (not created_at::date = X) so the created_at index is
+// usable. CURRENT_DATE is the server's date, i.e. UTC on Render — close
+// enough for a nostalgia card, not for anything that has to be exact.
+const ON_THIS_DAY_WINDOW_DAYS = 3;
+const ON_THIS_DAY_PER_ANCHOR = 2;
+
+router.get('/api/v1/stats/on-this-day', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const result = await pool.query(
+      `WITH bounds AS (
+         SELECT m AS months, (CURRENT_DATE - (m || ' months')::interval)::date AS anchor
+         FROM (VALUES (1),(3),(6),(12),(24)) AS o(m)
+       )
+       -- to_char, not a JS Date: node-postgres hands back DATE as a local-
+       -- midnight Date, and toISOString() on that shifts the day backwards for
+       -- any negative UTC offset.
+       SELECT months, to_char(day, 'YYYY-MM-DD') AS day, novel_id, title,
+              min_chapter, max_chapter, snapshots
+       FROM (
+         SELECT b.months, b.anchor, ps.created_at::date AS day,
+                n.id AS novel_id, n.title,
+                MIN(ps.chapter_num) AS min_chapter,
+                MAX(ps.chapter_num) AS max_chapter,
+                COUNT(*) AS snapshots,
+                ROW_NUMBER() OVER (
+                  PARTITION BY b.months
+                  ORDER BY abs(ps.created_at::date - b.anchor), COUNT(*) DESC, n.title
+                ) AS rn
+         FROM bounds b
+         JOIN progress_snapshots ps
+           ON ps.created_at >= (b.anchor - $2)::timestamptz
+          AND ps.created_at <  (b.anchor + $2 + 1)::timestamptz
+         JOIN novels n ON n.id = ps.novel_id
+         WHERE ps.user_id = $1 AND ps.chapter_num IS NOT NULL
+         GROUP BY b.months, b.anchor, ps.created_at::date, n.id, n.title
+       ) ranked
+       WHERE rn <= $3
+       ORDER BY months, rn`,
+      [user_id, ON_THIS_DAY_WINDOW_DAYS, ON_THIS_DAY_PER_ANCHOR],
+    );
+
+    const entries = result.rows.map((r) => ({
+      months_ago: Number(r.months),
+      date: r.day as string,
+      novel_id: r.novel_id as string,
+      title: r.title as string,
+      min_chapter: Number(r.min_chapter),
+      max_chapter: Number(r.max_chapter),
+      snapshots: Number(r.snapshots),
+    }));
+
+    res.json({ entries });
+  } catch (error) {
+    handleDbError(res, error, 'Get on-this-day');
+  }
+});
+
 router.get(
   '/api/v1/stats/novels/:novelId',
   validateApiKey,

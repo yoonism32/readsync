@@ -4,6 +4,7 @@ import useSWR from 'swr';
 import { swrFetcher, fetchNovels, formatTimestamp, resumeUrl } from '../api/client.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
+import { OnThisDay } from '../components/OnThisDay.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
@@ -206,6 +207,8 @@ export function Dashboard() {
       )}
 
       <ActivityHeatmap />
+
+      <OnThisDay />
 
       {/* Currently reading — the section you act on every day, so it carries
           extra weight through type size and spacing rather than a zoom

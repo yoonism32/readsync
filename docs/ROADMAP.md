@@ -401,9 +401,25 @@ original doc, though F12/F13 were declined (see changelog) — F14 is the
 one still open (F11 shipped 2026-08-11).
 
 - [ ] **F14 — Reading Wrapped.** Ship in December. `computeStreaks` already
-      exists. **Scope caveat:** production progress history is thin before
-      December 2025 (DB was wiped for space in late 2025) — scope the first
-      one to a recent window (3–6 months), not a full calendar year.
+      exists. **Scope caveat — corrected 2026-09-04, the original reason was
+      wrong.** This said history was thin before December 2025 "because the DB
+      was wiped for space in late 2025." It wasn't. `progress_snapshots` runs
+      from `id` 1 to 139,851 with 139,065 rows surviving — only **786 missing
+      ids (0.6%)**, and 709 of those are a single 2026-01-26 gap that looks
+      like burnt sequence values from a rolled-back transaction, not a delete.
+      No mass deletion ever happened, and nothing cascaded away with removed
+      novels.
+      The real reason the early months are thin is that the app barely wrote
+      snapshots then: Aug 2025 = 5, Sep = 24, Oct = 28, Nov = 55, Dec = 307,
+      then Jan 2026 = 32,955 — a 100x jump when scroll-throttled per-ping
+      syncing started producing rows at volume. Ids are contiguous across
+      every month boundary, so the gap months (**March and June 2026 have zero
+      snapshots**) are periods where nothing synced at all, not periods that
+      were cleaned out.
+      The scoping advice still stands, but for a different reason: usable
+      density starts January 2026, and 2026 has two dead months in it. Scope
+      the first Wrapped to a recent window and state the covered range in the
+      UI rather than implying a full year.
 
 ## Product features — Tier 2: technically impressive
 
@@ -445,8 +461,16 @@ scoped or approved yet.
 
 - [ ] **Reading goals** — yearly/monthly chapter-count goal tracked against
       existing `progress_snapshots`; no new infra needed.
-- [ ] **"On this day" flashback** — surfaces what you were reading N
-      months/years ago, from existing snapshot timestamps.
+- [x] **"On this day" flashback** — Done 2026-09-04.
+      `GET /api/v1/stats/on-this-day` anchors on 1/3/6/12/24-month lookbacks
+      over `progress_snapshots`, rendered as an "Around This Time" card on the
+      Dashboard (`frontend/src/components/OnThisDay.tsx`). No migration.
+      **Matched over a ±3 day window, not the exact date** — reading isn't
+      daily, and exact-date matching hit only 1 of 4 anchors against real
+      production history. The response carries the date actually found so the
+      card can say "A year ago" with the real day beneath it rather than
+      implying an exact anniversary. The card hides itself when no anchor has
+      data (a permanent empty box on the dashboard is worse than no box).
 - [ ] **In-library rating-based recommendations** — "loved this, try these"
       using the half-star `rating` (migration 011) plus `novel_categories`
       tags already in the schema; no external API.
