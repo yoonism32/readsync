@@ -263,10 +263,21 @@ this file is the trimmed, current-facing view of it.
       a real Tab/Shift+Tab trap (`trapFocus` in `CommandPalette.tsx`) that
       cycles focus among the dialog's own focusable elements instead of
       letting it escape to the page behind the overlay.
-- [ ] **No live-region announcement for socket-driven updates** — SPA
-      state updates silently on `progress:updated`/`chapters:updated` (see
+- [x] **No live-region announcement for socket-driven updates** — Done
+      2026-09-04. SPA state updated silently on
+      `progress:updated`/`chapters:updated` (see
       [ARCHITECTURE.md](./ARCHITECTURE.md#data-flow-reading-progress-sync));
-      a screen-reader user gets no signal that the page changed under them.
+      a screen-reader user got no signal that the page changed under them.
+      Added an `aria-live="polite"` region in `Layout.tsx`, fed from the two
+      socket handlers already there. **Rate-limited to one announcement per
+      30s**, which is the whole design of the item: `progress:updated` fires
+      on every scroll-throttled sync ping, so an unthrottled region would
+      read out continuously for a whole reading session. The region is also
+      cleared before each new message, since assistive tech announces on text
+      *change* and setting the same string twice would be silent. Tests:
+      `frontend/src/components/Layout.test.tsx` (4), which required stubbing
+      `ResizeObserver` in `frontend/src/test/setup.ts` — jsdom has none, and
+      its absence had also been failing `Login.test.tsx` on main.
       Related to, but distinct from, the userscript-side "ARIA live-region
       sync announcements" already listed under accepted field-audit ideas
       below — that one covers the injected overlay on the source site, not

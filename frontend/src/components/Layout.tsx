@@ -37,6 +37,12 @@ export function Layout({ children }: Props) {
   const [keyMissing, setKeyMissing] = useState(false);
   const socket = useSocket();
   const navRef = useRef<HTMLElement>(null);
+  // Screen readers get no signal when the socket patches the page under them.
+  // progress:updated fires on every scroll-throttled sync ping, so this is
+  // rate-limited rather than announced per event — an unthrottled live region
+  // here would read out a continuous stream during any reading session.
+  const [announcement, setAnnouncement] = useState('');
+  const lastAnnouncedAt = useRef(0);
   // The edge-fade mask below is only a "there's more, scroll for it" signal
   // — it should stay off whenever every nav item already fits, otherwise it
   // fades the first/last item's content (including an active tab's
@@ -68,7 +74,23 @@ export function Layout({ children }: Props) {
   // source of truth and this never becomes a second, divergent data path.
   useEffect(() => {
     if (!socket) return;
-    const refreshNovels = () => { void mutate('/novels'); };
+
+    const ANNOUNCE_INTERVAL_MS = 30_000;
+    const announce = (message: string) => {
+      const now = Date.now();
+      if (now - lastAnnouncedAt.current < ANNOUNCE_INTERVAL_MS) return;
+      lastAnnouncedAt.current = now;
+      // Re-announce an identical message by clearing first — assistive tech
+      // reads a live region on text *change*, so setting the same string
+      // twice in a row would be silent.
+      setAnnouncement('');
+      requestAnimationFrame(() => setAnnouncement(message));
+    };
+
+    const refreshNovels = () => {
+      void mutate('/novels');
+      announce('Library updated with new chapters.');
+    };
 
     // progress:updated fires on every scroll-throttled sync ping from an
     // active reading session, already scoped to one novel_id, and its
@@ -102,6 +124,7 @@ export function Layout({ children }: Props) {
           ),
         { revalidate: false },
       );
+      announce('Reading progress updated.');
     };
 
     // chapters:updated means the novel's chapter count/title changed (a
@@ -321,6 +344,9 @@ export function Layout({ children }: Props) {
           </div>
         )}
         {children}
+        <div aria-live="polite" aria-atomic="true" className="sr-only">
+          {announcement}
+        </div>
       </main>
     </div>
   );
