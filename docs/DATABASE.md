@@ -65,6 +65,28 @@ its row from `schema_migrations` (`DELETE FROM schema_migrations WHERE name =
 '0XX_name.sql'`) — the runner treats it as never-applied and reruns the file
 from `src/db/migrations/` on the next `runMigrations()` call.
 
+## Schema drift: `progress_snapshots.id` is `integer`, not `bigint`
+
+Found 2026-09-04. Both `src/db/schema.ts:57` and
+`001_initial_schema.sql:42` declare `id BIGSERIAL`, but the live column is
+`integer` (`int4`). The live table predates that declaration, and every
+definition uses `CREATE TABLE IF NOT EXISTS` — which silently no-ops against
+an existing table and never alters it. `notifications.id` is `integer` too,
+but that one is correct: it's declared `SERIAL` in both `001` and `006`.
+
+**Not worth migrating.** `int4` tops out at 2,147,483,647; the table is at
+139,851, and even at August 2026's rate (~66k rows/month) that is roughly
+2,600 years of headroom. `ALTER TABLE ... TYPE bigint` would rewrite the
+whole table and lock it for no practical gain.
+
+**What it does cost:** a fresh deploy that runs migrations from scratch
+builds `bigint`, so a restored or newly provisioned environment does not
+match production. Keep it in mind when comparing environments, and know that
+this class of drift is invisible to the migration runner — `IF NOT EXISTS`
+means a changed column type in a migration file is never applied to an
+existing table. Any future column-type change needs an explicit
+`ALTER TABLE` migration, not an edited `CREATE TABLE`.
+
 ## Known dead config
 
 `.env.example` lists `BOT_DISABLED`, `API_KEY`, and `SUPABASE_ANON_KEY` —
