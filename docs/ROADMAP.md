@@ -403,14 +403,23 @@ one still open (F11 shipped 2026-08-11).
 - [ ] **F14 — Reading Wrapped.** Ship in December. `computeStreaks` already
       exists. **Scope caveat — corrected 2026-09-04, the original reason was
       wrong.** This said history was thin before December 2025 "because the DB
-      was wiped for space in late 2025." It wasn't. `progress_snapshots` runs
-      from `id` 1 to 139,851 with 139,065 rows surviving — only **786 missing
-      ids (0.6%)**, and 709 of those are a single 2026-01-26 gap that looks
-      like burnt sequence values from a rolled-back transaction, not a delete.
-      No mass deletion ever happened, and nothing cascaded away with removed
-      novels.
-      The real reason the early months are thin is that the app barely wrote
-      snapshots then: Aug 2025 = 5, Sep = 24, Oct = 28, Nov = 55, Dec = 307,
+      was wiped for space in late 2025."
+      **Snapshots *were* deleted — but not in that period.** `progress_snapshots`
+      runs from `id` 1 to 139,851 with 139,065 rows surviving: 786 missing ids
+      across 28 gap sites. Split by era, **785 of those 786 are in 2026; the
+      Aug–Dec 2025 range is missing exactly one id.** Ids 1–5, 6–29, 59–113 and
+      114–420 are fully contiguous, so nothing was removed from the thin months.
+      The single 709-id gap on 2026-01-26 is almost certainly **one deleted
+      novel**, cascade-removed via `progress_snapshots.novel_id REFERENCES
+      novels ON DELETE CASCADE`. Reading in that era was one novel at a time in
+      dense bursts — the rows either side are `this-human-immortal-is-too-serious`
+      (102 rows / 3 chapters / 6m35s) and `country-weapon` (139 rows / 6
+      chapters / 6m36s) — and the hole spans 14:23→16:13, i.e. ~110 minutes at
+      the ~4s ping cadence, which is the exact shape of one novel's continuous
+      session. The remaining 27 gaps (12 of exactly 1 id, 15 of 2–20) look like
+      ordinary failed inserts.
+      So deletion is real but irrelevant here. The real reason the early months
+      are thin is that the app barely wrote snapshots then: Aug 2025 = 5, Sep = 24, Oct = 28, Nov = 55, Dec = 307,
       then Jan 2026 = 32,955 — a 100x jump when scroll-throttled per-ping
       syncing started producing rows at volume. Ids are contiguous across
       every month boundary, so the gap months (**March and June 2026 have zero
