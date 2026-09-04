@@ -332,46 +332,127 @@ const WEEKDAY_LABELS = [
   'Saturday',
 ];
 
+// The hourly card's hover needs reading *context*, not just a duration, so
+// this endpoint returns per-hour novel attribution alongside the totals.
+// Two source tables, deliberately: reading_sessions carries the time but has
+// no chapter column (src/db/schema.ts), so the chapter range has to come from
+// progress_snapshots. That means the two figures sit on different clocks —
+// session start_time vs. snapshot created_at — and can disagree at an hour
+// boundary. Correct enough for a hover card; do not present them as one
+// measurement.
+const HOUR_NOVELS_LIMIT = 3;
+
 router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
   const user_id = (req as AuthenticatedRequest).user.id;
+  const weekOnly = req.query.window === 'week';
+
+  // date_trunc('week') is Monday-based in Postgres, matching the weekday card.
+  const sessionWindow = weekOnly
+    ? "AND start_time >= date_trunc('week', now())"
+    : '';
+  const snapshotWindow = weekOnly
+    ? "AND created_at >= date_trunc('week', now())"
+    : '';
 
   try {
-    const [hourly, weekday, byDevice] = await Promise.all([
-      pool.query(
-        `SELECT EXTRACT(HOUR FROM start_time)::int AS hour,
+    const [hourly, weekday, byDevice, hourNovels, hourChapters] =
+      await Promise.all([
+        pool.query(
+          `SELECT EXTRACT(HOUR FROM start_time)::int AS hour,
                 COUNT(*) AS sessions,
                 COALESCE(SUM(time_spent_seconds), 0) AS seconds
          FROM reading_sessions
-         WHERE user_id = $1 AND end_time IS NOT NULL
+         WHERE user_id = $1 AND end_time IS NOT NULL ${sessionWindow}
          GROUP BY hour`,
-        [user_id],
-      ),
-      pool.query(
-        `SELECT EXTRACT(DOW FROM start_time)::int AS weekday,
+          [user_id],
+        ),
+        pool.query(
+          `SELECT EXTRACT(DOW FROM start_time)::int AS weekday,
                 COUNT(*) AS sessions,
                 COALESCE(SUM(time_spent_seconds), 0) AS seconds
          FROM reading_sessions
-         WHERE user_id = $1 AND end_time IS NOT NULL
+         WHERE user_id = $1 AND end_time IS NOT NULL ${sessionWindow}
          GROUP BY weekday`,
-        [user_id],
-      ),
-      pool.query(
-        `SELECT d.id AS device_id, d.device_label,
+          [user_id],
+        ),
+        pool.query(
+          `SELECT d.id AS device_id, d.device_label,
                 COUNT(rs.*) AS sessions,
                 COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds
          FROM reading_sessions rs
          JOIN devices d ON d.id = rs.device_id
          WHERE rs.user_id = $1 AND rs.end_time IS NOT NULL
+           ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
          GROUP BY d.id, d.device_label
          ORDER BY seconds DESC`,
-        [user_id],
-      ),
-    ]);
+          [user_id],
+        ),
+        // Top novels per hour, by time. rank() keeps this one round-trip
+        // instead of 24.
+        pool.query(
+          `SELECT hour, novel_id, title, seconds
+         FROM (
+           SELECT EXTRACT(HOUR FROM rs.start_time)::int AS hour,
+                  n.id AS novel_id,
+                  n.title,
+                  COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY EXTRACT(HOUR FROM rs.start_time)::int
+                    ORDER BY COALESCE(SUM(rs.time_spent_seconds), 0) DESC, n.title
+                  ) AS rn
+           FROM reading_sessions rs
+           JOIN novels n ON n.id = rs.novel_id
+           WHERE rs.user_id = $1 AND rs.end_time IS NOT NULL
+             ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
+           GROUP BY hour, n.id, n.title
+         ) ranked
+         WHERE rn <= $2`,
+          [user_id, HOUR_NOVELS_LIMIT],
+        ),
+        // Chapter span per (hour, novel) — the "Ch. 18–42" half of the hover.
+        pool.query(
+          `SELECT EXTRACT(HOUR FROM created_at)::int AS hour,
+                novel_id,
+                MIN(chapter_num) AS min_chapter,
+                MAX(chapter_num) AS max_chapter
+         FROM progress_snapshots
+         WHERE user_id = $1 AND chapter_num IS NOT NULL ${snapshotWindow}
+         GROUP BY hour, novel_id`,
+          [user_id],
+        ),
+      ]);
+
+    const chapterSpans = new Map<string, { min: number; max: number }>();
+    for (const r of hourChapters.rows) {
+      chapterSpans.set(`${r.hour}:${r.novel_id}`, {
+        min: Number(r.min_chapter),
+        max: Number(r.max_chapter),
+      });
+    }
+
+    const novelsByHour = new Map<
+      number,
+      { novel_id: string; title: string; seconds: number; min_chapter: number | null; max_chapter: number | null }[]
+    >();
+    for (const r of hourNovels.rows) {
+      const hour = Number(r.hour);
+      const span = chapterSpans.get(`${hour}:${r.novel_id}`);
+      const list = novelsByHour.get(hour) ?? [];
+      list.push({
+        novel_id: r.novel_id as string,
+        title: r.title as string,
+        seconds: Number(r.seconds),
+        min_chapter: span?.min ?? null,
+        max_chapter: span?.max ?? null,
+      });
+      novelsByHour.set(hour, list);
+    }
 
     const by_hour = fillBuckets(hourly.rows, 24, (r) => r.hour).map((b) => ({
       hour: b.index,
       sessions: b.sessions,
       seconds: b.seconds,
+      novels: novelsByHour.get(b.index) ?? [],
     }));
 
     const by_weekday = fillBuckets(weekday.rows, 7, (r) => r.weekday).map(

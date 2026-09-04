@@ -455,7 +455,23 @@ scoped or approved yet.
       logic. Distinct from the "weekly data-health digest" below, which
       covers corrections/rejected regressions, not user-facing reading
       content.
-- [ ] **Reading Time by Hour bento upgrades** — improve the hourly chart card
+- [x] **Reading Time by Hour bento upgrades** — Done 2026-09-04, together
+      with the "Stats-chart hover copy" item under Misc (they were the same
+      request stated twice). `GET /api/v1/stats/breakdown` now takes
+      `?window=week`, and returns per-hour novel attribution
+      (`by_hour[].novels`, top 3 by time) plus each novel's chapter span for
+      that hour. The card gained a right-aligned `This week` chip (defaulting
+      to the current week, all-time as the fallback view) and a compact hover
+      card replacing the old single-string tooltip: hour and total time as the
+      headline, then a chapter range when one novel holds ≥70% of the hour, or
+      the novel list with per-novel contributions when it's shared.
+      **Known seam:** the time comes from `reading_sessions` and the chapter
+      range from `progress_snapshots`, because `reading_sessions` has no
+      chapter column — two different clocks (session start vs. snapshot time)
+      that can disagree at an hour boundary. Commented at the query. Tests:
+      `frontend/src/pages/StatsHourDetail.test.tsx` (6).
+      *(original text below)*
+      **Reading Time by Hour bento upgrades** — improve the hourly chart card
       with a right-aligned `This week` filter chip in the top-right corner,
       plus a richer hover layer that surfaces the actual reading context
       instead of a single percentage string. Product intent: if an hour has
@@ -556,7 +572,9 @@ eventually want too.
       invasive than the shipped fix. Not blocking; pick up if the badge
       flicker or cross-novel case is ever actually observed.
 
-- [ ] **Stats-chart hover copy needs a better information model.** User feedback:
+- [x] **Stats-chart hover copy needs a better information model.** — Done
+      2026-09-04; see the "Reading Time by Hour bento upgrades" item above,
+      which this duplicated. Original text: User feedback:
       the current hover text is too weak and reads like a single purple line of
       raw metadata rather than useful reading insight. The hover should not be the
       only source of meaning; the chart should present the key reading context at a

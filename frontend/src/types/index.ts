@@ -111,8 +111,18 @@ export interface StatsSummary {
   active_devices: number;
 }
 
+export interface HourNovel {
+  novel_id: string;
+  title: string;
+  seconds: number;
+  /** From progress_snapshots, not reading_sessions — see the comment on the
+   *  breakdown route. Null when no chapter-numbered snapshot fell in the hour. */
+  min_chapter: number | null;
+  max_chapter: number | null;
+}
+
 export interface StatsBreakdown {
-  by_hour: { hour: number; sessions: number; seconds: number }[];
+  by_hour: { hour: number; sessions: number; seconds: number; novels: HourNovel[] }[];
   by_weekday: { weekday: number; label: string; sessions: number; seconds: number }[];
   by_device: { device_id: string; device_label: string; sessions: number; seconds: number }[];
 }

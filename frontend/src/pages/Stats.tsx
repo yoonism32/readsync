@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
 import { Spinner } from '../components/Spinner.js';
 import { SmartphoneIcon, MonitorIcon } from '../components/Icon.js';
 import { useCountUp } from '../hooks/useCountUp.js';
-import type { StatsBreakdown, StatsSummary, GenreBreakdown, VelocityStats } from '../types/index.js';
+import type { StatsBreakdown, StatsSummary, GenreBreakdown, VelocityStats, HourNovel } from '../types/index.js';
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0m';
@@ -32,12 +33,39 @@ function CellLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-function CellTitle({ title, sub }: { title: string; sub?: string }) {
+function CellTitle({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
   return (
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>{title}</h2>
       {sub && <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{sub}</span>}
+      {action && <span style={{ marginLeft: 'auto', alignSelf: 'center' }}>{action}</span>}
     </div>
+  );
+}
+
+/** Time-window toggle for a single card, not a page-wide filter — the hourly
+ *  card is the only one whose question ("when do I read?") changes meaning
+ *  between all-time and this week. */
+function WindowChip({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      style={{
+        fontSize: 'var(--text-xs)',
+        fontWeight: 500,
+        padding: '3px 10px',
+        borderRadius: 9999,
+        cursor: 'pointer',
+        border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border)'}`,
+        background: active ? 'var(--color-accent-glow)' : 'transparent',
+        color: active ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        transition: 'background 160ms ease, border-color 160ms ease, color 160ms ease',
+      }}
+    >
+      This week
+    </button>
   );
 }
 
@@ -162,6 +190,9 @@ interface Bar {
   value: number;
   tooltip: string;
   tickLabel?: string;
+  /** Rich hover content. When present it replaces the native `title` tooltip,
+   *  which could only ever be one flat string. */
+  detail?: React.ReactNode;
 }
 
 /** Flat single-hue magnitude bars — teal is this app's existing "reading
@@ -171,8 +202,36 @@ interface Bar {
  *  every point. */
 function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; height?: number }) {
   const max = Math.max(1, ...bars.map(b => b.value));
+  const [hovered, setHovered] = useState<string | number | null>(null);
+  const hoveredBar = bars.find(b => b.key === hovered);
+
   return (
-    <div style={{ display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 4 }}>
+    <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 4 }}>
+      {hoveredBar?.detail && (
+        <div
+          role="presentation"
+          className="glass"
+          style={{
+            position: 'absolute',
+            bottom: 'calc(100% + 8px)',
+            // Track the hovered bar horizontally, then clamp so a card near
+            // either edge stays inside the cell instead of clipping.
+            left: `${Math.min(88, Math.max(12, ((bars.indexOf(hoveredBar) + 0.5) / bars.length) * 100))}%`,
+            transform: 'translateX(-50%)',
+            minWidth: 190,
+            maxWidth: 260,
+            padding: '10px 12px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--color-border)',
+            background: 'var(--color-bg-raised)',
+            boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
+            zIndex: 20,
+            pointerEvents: 'none',
+          }}
+        >
+          {hoveredBar.detail}
+        </div>
+      )}
       {bars.map(b => {
         const ratio = b.value / max;
         const barHeight = b.value > 0 ? Math.max(10, ratio * 100) : 8;
@@ -182,7 +241,14 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
               data-value={b.value}
               data-label={b.tickLabel ?? ''}
               tabIndex={0}
-              title={b.tooltip}
+              // Keep the native tooltip as the fallback when there's no rich
+              // detail, and as the accessible name either way.
+              title={b.detail ? undefined : b.tooltip}
+              aria-label={b.tooltip}
+              onMouseEnter={() => setHovered(b.key)}
+              onMouseLeave={() => setHovered(h => (h === b.key ? null : h))}
+              onFocus={() => setHovered(b.key)}
+              onBlur={() => setHovered(h => (h === b.key ? null : h))}
               className="bar-chart-bar"
               style={{
                 width: '100%',
@@ -232,9 +298,80 @@ function ShareBars({
   );
 }
 
+/** The hover card for one hour of the day. The roadmap item behind this asked
+ *  for reading *context* rather than a metadata string: novel names when the
+ *  hour is shared, a chapter range when one novel dominates it. */
+export function HourDetail({
+  hour,
+  seconds,
+  sessions,
+  novels,
+}: {
+  hour: number;
+  seconds: number;
+  sessions: number;
+  novels: HourNovel[];
+}) {
+  const lead = novels[0];
+  // "Dominates" = the top novel holds most of the hour. Below that the hour
+  // reads as shared and the novel list is the more useful answer.
+  const dominant =
+    novels.length === 1 || (lead && seconds > 0 && lead.seconds / seconds >= 0.7);
+  const range =
+    lead && lead.min_chapter !== null && lead.max_chapter !== null
+      ? lead.min_chapter === lead.max_chapter
+        ? `Ch. ${lead.min_chapter}`
+        : `Ch. ${lead.min_chapter}–${lead.max_chapter}`
+      : null;
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: novels.length ? 8 : 0 }}>
+        <span style={{ fontWeight: 600, fontSize: 'var(--text-sm)' }}>{hourLabel(hour)}</span>
+        <span className="tabular" style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-teal)' }}>
+          {formatDuration(seconds)}
+        </span>
+        <span className="text-faint" style={{ marginLeft: 'auto', fontSize: 10 }}>
+          {sessions} session{sessions === 1 ? '' : 's'}
+        </span>
+      </div>
+
+      {novels.length === 0 ? (
+        seconds > 0 ? null : (
+          <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>No reading in this hour.</span>
+        )
+      ) : dominant && lead ? (
+        <div style={{ fontSize: 'var(--text-xs)' }}>
+          <div style={{ color: 'var(--color-text)', marginBottom: 2 }}>{lead.title}</div>
+          {range && <div className="text-muted tabular">{range}</div>}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, fontSize: 'var(--text-xs)' }}>
+          {novels.map(n => (
+            <div key={n.novel_id} style={{ display: 'flex', gap: 8 }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</span>
+              <span className="text-muted tabular" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                {formatDuration(n.seconds)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Stats() {
   const { data: summary, isLoading: summaryLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
-  const { data: breakdown, isLoading: breakdownLoading } = useSWR<StatsBreakdown>('/stats/breakdown', swrFetcher);
+  const [hourWindow, setHourWindow] = useState<'all' | 'week'>('week');
+  const { data: breakdown, isLoading: breakdownLoading } = useSWR<StatsBreakdown>(
+    hourWindow === 'week' ? '/stats/breakdown?window=week' : '/stats/breakdown',
+    swrFetcher,
+    // Toggling the chip changes the SWR key. Without this the whole page drops
+    // to its loading spinner on every toggle, because isLoading is true for a
+    // key that has never been fetched.
+    { keepPreviousData: true },
+  );
   const { data: genres, isLoading: genresLoading } = useSWR<GenreBreakdown>('/stats/genres', swrFetcher);
   const { data: velocity, isLoading: velocityLoading } = useSWR<VelocityStats>('/stats/velocity', swrFetcher);
 
@@ -295,7 +432,16 @@ export function Stats() {
         </Cell>
 
         <Cell span="wide" index={3}>
-          <CellTitle title="Reading Time by Hour" sub="local session start time" />
+          <CellTitle
+            title="Reading Time by Hour"
+            sub="local session start time"
+            action={
+              <WindowChip
+                active={hourWindow === 'week'}
+                onToggle={() => setHourWindow(w => (w === 'week' ? 'all' : 'week'))}
+              />
+            }
+          />
           <BarChart
             color="var(--color-teal)"
             bars={(breakdown?.by_hour ?? []).map(b => ({
@@ -303,6 +449,9 @@ export function Stats() {
               value: b.seconds,
               tooltip: `${hourLabel(b.hour)} — ${formatDuration(b.seconds)}, ${b.sessions} session${b.sessions === 1 ? '' : 's'}`,
               tickLabel: hourLabel(b.hour),
+              detail: (
+                <HourDetail hour={b.hour} seconds={b.seconds} sessions={b.sessions} novels={b.novels} />
+              ),
             }))}
           />
         </Cell>
