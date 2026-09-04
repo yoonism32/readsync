@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 import { auth, hasApiKey, setApiKey } from '../api/client.js';
@@ -36,6 +36,23 @@ export function Layout({ children }: Props) {
   const { mutate } = useSWRConfig();
   const [keyMissing, setKeyMissing] = useState(false);
   const socket = useSocket();
+  const navRef = useRef<HTMLElement>(null);
+  // The edge-fade mask below is only a "there's more, scroll for it" signal
+  // — it should stay off whenever every nav item already fits, otherwise it
+  // fades the first/last item's content (including an active tab's
+  // highlight pill) for no reason, e.g. "My List" being first meant its
+  // pill's left edge always looked cut off behind the logo.
+  const [navOverflowing, setNavOverflowing] = useState(false);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const check = () => setNavOverflowing(nav.scrollWidth > nav.clientWidth);
+    check();
+    const observer = new ResizeObserver(check);
+    observer.observe(nav);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (location.pathname.startsWith('/novel/')) return;
@@ -196,9 +213,21 @@ export function Layout({ children }: Props) {
           </span>
 
           {/* Nav */}
+          {/* maskImage fades both edges so a scrollable overflow (narrow
+              viewports, or once more sections are added) always shows a visual
+              "there's more" signal instead of items silently scrolling off
+              with zero affordance — gated on navOverflowing so it's off
+              whenever every item already fits (the common case), since
+              otherwise it always fades the first item's content, including
+              an active tab's highlight pill. */}
           <nav
+            ref={navRef}
             aria-label="Main navigation"
-            style={{ display: 'flex', gap: 2, flex: 1, overflowX: 'auto', scrollbarWidth: 'none' }}
+            style={{
+              display: 'flex', gap: 2, flex: 1, overflowX: 'auto', scrollbarWidth: 'none',
+              maskImage: navOverflowing ? 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)' : 'none',
+              WebkitMaskImage: navOverflowing ? 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)' : 'none',
+            }}
           >
             {NAV.map(({ to, label, Icon }) => (
               <NavLink
@@ -239,7 +268,7 @@ export function Layout({ children }: Props) {
               alignItems: 'center',
               gap: 7,
               height: 52,
-              padding: '0 10px',
+              padding: '0 14px',
               background: 'none',
               border: 'none',
               cursor: 'pointer',
@@ -256,11 +285,15 @@ export function Layout({ children }: Props) {
       </header>
 
       {/* Page content */}
+      {/* MyList's table grows with its widest title (real <table>, one shared
+          column width for every row) — give it more room than the 1440
+          default so that growth doesn't immediately force the table's own
+          horizontal scrollbar. */}
       <main
         id="main-content"
         style={{
           flex: 1,
-          maxWidth: 1440,
+          maxWidth: location.pathname === '/mylist' ? 1900 : 1440,
           width: '100%',
           margin: '0 auto',
           padding: '28px 28px 56px',

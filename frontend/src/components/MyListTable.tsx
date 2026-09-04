@@ -12,19 +12,25 @@ const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', '
 const ordinal = (n: number): string =>
   n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
 
-export function Th({ label, sortable, active, asc, onClick, align = 'center', toggle }: {
+export function Th({ label, sortable, active, asc, onClick, align = 'center', toggle, width }: {
   label: string; sortable?: boolean; active?: boolean; asc?: boolean;
   onClick?: () => void; align?: 'left' | 'center';
   /** Optional sort-mode switch rendered next to the label, hidden until the
    *  header is hovered/focused (see .progress-mode-toggle in index.css). */
   toggle?: { active: boolean; symbol: string; title: string; onClick: () => void };
+  /** Pin fixed-content columns to their real width so table auto-layout
+   *  doesn't spread a wider container's extra space across every column —
+   *  Title is computed and passed in the same way (see MyList.tsx). The
+   *  table itself has no width:100%, so there's no leftover space for the
+   *  auto-layout algorithm to redistribute into any column. */
+  width?: number;
 }) {
   return (
     <th
       onClick={sortable ? onClick : undefined}
       className={toggle ? 'th-progress' : undefined}
       style={{
-        padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap',
+        padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap', width,
         fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
         color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
         cursor: sortable ? 'pointer' : 'default', userSelect: 'none',
@@ -50,10 +56,13 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
   );
 }
 
-export function Row({ novel: n, onSetStatus, onToggleFav }: {
+export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth }: {
   novel: Novel;
   onSetStatus: (id: string, s: NovelStatus) => void;
   onToggleFav: (n: Novel) => void;
+  /** Mirrors the Title column's autofit width (see Th's onAutofit) so the
+   *  body cells don't hold the column open at their 220px default minimum. */
+  titleWidth?: number;
 }) {
   const behind = behindCount(n);
   const continueHref = n.latest_url
@@ -68,14 +77,14 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
       style={{ borderBottom: '1px solid var(--color-border)' }}
     >
       {/* Cover */}
-      <td style={{ ...td, width: 52 }}>
+      <td style={{ ...td, width: 70 }}>
         <a href={continueHref ?? '#'} target="_blank" rel="noopener noreferrer" aria-label={`Open ${n.title} on site`}>
           <span style={{
-            position: 'relative', display: 'inline-block', width: 38, height: 54, borderRadius: 4,
+            position: 'relative', display: 'inline-block', width: 44, height: 62, borderRadius: 5,
             overflow: 'hidden', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--color-border)', verticalAlign: 'middle',
           }}>
             <img
-              src={coverUrl(n.novel_id)} alt="" width={38} height={54} loading="lazy"
+              src={coverUrl(n.novel_id)} alt="" width={44} height={62} loading="lazy"
               onError={e => { e.currentTarget.style.display = 'none'; }}
               style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
             />
@@ -84,20 +93,28 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
       </td>
 
       {/* Title */}
-      {/* 780, not 700/560/380: at each earlier cap a long title + star +
-          behind-count badge wrapped to two lines. The intended shape is one
-          line of title/star/delta with the "Last ch." pill beneath it. A
-          handful of 13+ word outlier titles (~830px+ of text alone) will
-          still wrap regardless of width — not worth bloating every row to
-          chase those. Keep MyList.tsx's table minWidth in sync (+80 here →
-          +80 there) or this column just gets squeezed by its siblings
-          instead of actually widening. */}
-      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: 220, maxWidth: 780 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+      {/* Star + read-through pill + behind-badge must always sit on the title's
+          line — never wrap below it. The actual bug was the title text itself
+          line-wrapping inside its own flex item (no white-space rule on the
+          Link), which pushed the flex row over height and dropped the badges
+          to a new line. `white-space: nowrap` on the Link stops that; no
+          truncation needed — this is a real <table>, so the Title column's
+          width is shared across every row and the whole table (wrapped in an
+          overflow-x:auto container, see MyList.tsx) scrolls as one unit when
+          a long title needs more room, instead of any single row growing on
+          its own. */}
+      <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: titleWidth ?? 220, width: titleWidth }}>
+        {/* inline-flex, not flex: it must shrink-wrap to its own content so
+            scrollWidth (used by the Title column's autofit, see MyList.tsx)
+            reflects the text's real width instead of the stretched cell. */}
+        <span data-col="title" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}
             className="link-accent"
-            style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none' }}
+            style={{
+              fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
           >
             {n.title}
           </Link>
@@ -105,7 +122,7 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
             type="button"
             onClick={() => onToggleFav(n)}
             aria-label={n.favorite ? 'Unfavorite' : 'Favorite'}
-            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: n.favorite ? 'var(--color-warning)' : 'var(--color-text-faint)', lineHeight: 1 }}
+            style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: n.favorite ? 'var(--color-warning)' : 'var(--color-text-faint)', lineHeight: 1, flexShrink: 0 }}
           >
             <StarIcon size={12} filled={n.favorite} />
           </button>
@@ -113,6 +130,7 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
             <span style={{
               fontSize: 'var(--text-xs)', color: 'var(--color-accent-bright)', background: 'var(--color-accent-glow)',
               border: '1px solid var(--color-accent-border)', borderRadius: 'var(--radius-full)', padding: '0 8px',
+              flexShrink: 0,
             }}>
               {ordinal(n.current_read_through)} read
             </span>
@@ -121,6 +139,7 @@ export function Row({ novel: n, onSetStatus, onToggleFav }: {
             <span className="tabular" style={{
               fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-on-teal)',
               background: 'var(--color-teal)', borderRadius: 'var(--radius-full)', padding: '1px 8px',
+              flexShrink: 0,
             }}>
               +{behind}
             </span>

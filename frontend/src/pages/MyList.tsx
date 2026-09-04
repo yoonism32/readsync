@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { fetchNovels, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
@@ -41,6 +41,25 @@ export function MyList() {
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
   const [showFailures, setShowFailures] = useState(false);
+  // Excel-style column autofit, Title column only — null means "let it flex
+  // and absorb leftover row width" (the default), a number pins it to the
+  // widest currently-rendered title after a double-click on the column border.
+  // TEST: hardcoded to 800 instead of null — autofit disabled below, so this
+  // stays fixed no matter what sort/filter is applied. Revert to `null` +
+  // re-enable the effect below once done testing.
+  const [titleWidth] = useState<number | null>(800);
+  // The table's real rendered width (measured, not estimated — headers like
+  // "Last read ▼" don't actually fit their nominal pinned width, so summing
+  // the Th width props undercounts). Drives the whole page's max-width so
+  // the Refresh bar / search row / table all shrink and center together
+  // around the table's real content instead of always spanning the page's
+  // full max-width.
+  const [contentWidth, setContentWidth] = useState<number | null>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  // TEST: guards contentWidth's measurement effect below to fire exactly
+  // once — on whichever render is the first to actually have a <table> in
+  // the DOM — instead of on every sort/filter.
+  const measuredOnceRef = useRef(false);
 
   // Live updates come from the socket in Layout.tsx (chapters:updated /
   // progress:updated → mutate('/novels')); this 30-minute interval is only a
@@ -114,6 +133,55 @@ export function MyList() {
     }
   }
 
+  /** Autofits the Title column to its widest visible row on every render of
+   *  a new page/tab/filter/sort — like Excel's column-border autofit, but
+   *  run automatically instead of behind a manual double-click. Measured
+   *  from the DOM (`data-col="title"`) rather than the raw string so it
+   *  accounts for the star icon, read-through pill, and behind-badge
+   *  sharing that line. Reading scrollWidth off up to 50 nodes is a single
+   *  synchronous layout pass — sub-millisecond — so recomputing on every
+   *  page is cheap; useLayoutEffect resolves it before paint to avoid a
+   *  visible width jump. */
+  useLayoutEffect(() => {
+    // TEST: autofit disabled, titleWidth hardcoded to 800 above.
+    // const cells = tableRef.current?.querySelectorAll<HTMLElement>('[data-col="title"]');
+    // if (!cells || cells.length === 0) return;
+    // let max = 0;
+    // cells.forEach(el => { max = Math.max(max, el.scrollWidth); });
+    // if (max > 0) setTitleWidth(max + 24 /* td padding */ + 6 /* breathing room so text isn't pressed against the border */);
+  }, [pageRows]);
+
+  /** Reads the table's true rendered width once the Title column above has
+   *  pinned itself — this is a second layout pass (keyed on titleWidth) so
+   *  it measures the DOM *after* that pin lands, not before. Still resolves
+   *  before paint, so there's no visible jump.
+   *
+   *  TEST: measures once — on the first render where the table actually
+   *  exists — then never again, guarded by measuredOnceRef rather than an
+   *  empty dep array (an empty array alone fires on the *very* first
+   *  render, which is the loading spinner, before <table> exists — that
+   *  left contentWidth stuck at null once real data arrived, undoing the
+   *  whole-page shrink/center). table-layout is `auto`, so columns like
+   *  "Last read" don't actually fit their nominal pinned width once they're
+   *  carrying the active-sort arrow (▲/▼) and the browser expands them
+   *  regardless of Title being fixed; re-measuring on every sort/filter was
+   *  faithfully picking that fluctuation up and shifting the whole page
+   *  with it. Measuring once matches "no dynamic" for this test. Restore
+   *  the guard to a plain [titleWidth, pageRows] dep array when re-enabling
+   *  autofit — or, to fix this for real (not just the test), switch the
+   *  table to `table-layout: fixed` so pinned widths become hard limits
+   *  instead of hints, and add overflow/ellipsis handling to any column
+   *  whose content might not fit. */
+  useLayoutEffect(() => {
+    if (measuredOnceRef.current || !tableRef.current) return;
+    measuredOnceRef.current = true;
+    // +2px: sub-pixel rounding between this measurement and the width the
+    // ancestor divs actually resolve to (maxWidth applied a layout pass
+    // later) could otherwise leave the table 1px wider than its wrapper,
+    // forcing a permanent horizontal scrollbar for no visible reason.
+    setContentWidth(tableRef.current.scrollWidth + 2);
+  }, [pageRows]);
+
   const changeSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a);
     else {
@@ -140,7 +208,12 @@ export function MyList() {
   }
 
   return (
-    <div className="animate-fade-in">
+    // maxWidth + margin auto: the whole page column shrinks to the table's
+    // real content width (contentWidth, measured above) and centers within
+    // main instead of always spanning main's full width — undefined
+    // (contentWidth still null on first paint) falls back to filling main
+    // normally.
+    <div className="animate-fade-in" style={{ maxWidth: contentWidth ?? undefined, margin: '0 auto' }}>
       {/* Header */}
       <div style={{ marginBottom: 6 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-3xl)', fontWeight: 600, letterSpacing: '-0.01em' }}>
@@ -329,17 +402,26 @@ export function MyList() {
         <>
           <div className="panel" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
+              <table ref={tableRef} style={{ borderCollapse: 'collapse', minWidth: 1100 }}>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                    <Th label="Cover" />
-                    <Th label="Title" sortable active={sortKey === 'title'} asc={sortAsc} onClick={() => changeSort('title')} align="left" />
+                    <Th label="Cover" width={70} />
+                    <Th
+                      label="Title"
+                      sortable
+                      active={sortKey === 'title'}
+                      asc={sortAsc}
+                      onClick={() => changeSort('title')}
+                      align="left"
+                      width={titleWidth ?? undefined}
+                    />
                     <Th
                       label="Progress"
                       sortable
                       active={sortKey === progressMode}
                       asc={sortAsc}
                       onClick={() => changeSort(progressMode)}
+                      width={100}
                       toggle={{
                         active: progressMode === 'progress',
                         symbol: progressMode === 'completion' ? '#' : '%',
@@ -349,16 +431,16 @@ export function MyList() {
                         onClick: toggleProgressMode,
                       }}
                     />
-                    <Th label="Continue" />
-                    <Th label="Status" />
-                    <Th label="Last read" sortable active={sortKey === 'last_read'} asc={sortAsc} onClick={() => changeSort('last_read')} />
-                    <Th label="Updated" sortable active={sortKey === 'updated'} asc={sortAsc} onClick={() => changeSort('updated')} />
-                    <Th label="Added" sortable active={sortKey === 'added'} asc={sortAsc} onClick={() => changeSort('added')} />
+                    <Th label="Continue" width={150} />
+                    <Th label="Status" width={130} />
+                    <Th label="Last read" sortable active={sortKey === 'last_read'} asc={sortAsc} onClick={() => changeSort('last_read')} width={80} />
+                    <Th label="Updated" sortable active={sortKey === 'updated'} asc={sortAsc} onClick={() => changeSort('updated')} width={80} />
+                    <Th label="Added" sortable active={sortKey === 'added'} asc={sortAsc} onClick={() => changeSort('added')} width={80} />
                   </tr>
                 </thead>
                 <tbody>
                   {pageRows.map(n => (
-                    <Row key={n.novel_id} novel={n} onSetStatus={setStatus} onToggleFav={toggleFav} />
+                    <Row key={n.novel_id} novel={n} onSetStatus={setStatus} onToggleFav={toggleFav} titleWidth={titleWidth ?? undefined} />
                   ))}
                 </tbody>
               </table>
