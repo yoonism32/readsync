@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { agoLabel, chapterLabel } from './OnThisDay.js';
+import { agoLabel, chapterLabel } from './onThisDay.js';
 
 describe('OnThisDay labels', () => {
   it('names the common anchors in words, not month counts', () => {

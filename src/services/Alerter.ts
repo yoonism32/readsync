@@ -1,6 +1,6 @@
 import {
-  ALERT_MAX_PER_HOUR,
   ALERT_COOLDOWN_MS,
+  ALERT_MAX_PER_HOUR,
   ALERT_WEBHOOK_URL,
   IS_PRODUCTION,
 } from '../config.js';

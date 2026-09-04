@@ -6,6 +6,35 @@ import { SmartphoneIcon, MonitorIcon } from '../components/Icon.js';
 import { useCountUp } from '../hooks/useCountUp.js';
 import type { StatsBreakdown, StatsSummary, GenreBreakdown, VelocityStats, HourNovel } from '../types/index.js';
 
+interface PaceNovel {
+  novel_id: string;
+  title: string;
+  chapters: number;
+  median_seconds: number;
+  ratio: number | null;
+}
+interface PaceStats {
+  library_median_seconds: number;
+  qualifying_novels: number;
+  fastest: PaceNovel[];
+  slowest: PaceNovel[];
+}
+
+interface RatingRow {
+  novel_id: string;
+  title: string;
+  rating: number | null;
+  chapters_read: number;
+  days_since: number | null;
+}
+interface RatingAudit {
+  rated_count: number;
+  total_count: number;
+  loved_but_stale: RatingRow[];
+  low_but_active: RatingRow[];
+  unrated_candidates: RatingRow[];
+}
+
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0m';
   const h = Math.floor(seconds / 3600);
@@ -361,6 +390,60 @@ export function HourDetail({
   );
 }
 
+/** Per-chapter medians are usually well under a minute, where formatDuration
+ *  rounds everything to "1m" and every fast novel looks identical. This keeps
+ *  seconds visible until they stop being the interesting unit. */
+function formatPace(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  if (seconds < 600) {
+    const m = Math.floor(seconds / 60);
+    const rem = Math.round(seconds % 60);
+    return rem === 0 ? `${m}m` : `${m}m ${rem}s`;
+  }
+  return formatDuration(seconds);
+}
+
+/** One side of the pace card. Ratio is against the library median, so 0.6x
+ *  reads as "you move through this 40% faster than your own average" — a
+ *  relative claim, which is the only kind this data can honestly support. */
+function PaceList({ novels, label }: { novels: PaceNovel[]; label: string }) {
+  return (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      <div className="text-faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+        {label}
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+        {novels.map(n => (
+          <div key={n.novel_id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 'var(--text-xs)' }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.title}</span>
+            <span className="text-muted tabular" style={{ marginLeft: 'auto', flexShrink: 0 }}>
+              {formatPace(n.median_seconds)}
+            </span>
+            {n.ratio !== null && (
+              <span className="tabular" style={{ flexShrink: 0, width: 40, textAlign: 'right', color: n.ratio < 1 ? 'var(--color-teal)' : 'var(--color-text-muted)' }}>
+                {n.ratio.toFixed(2)}x
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RatingRows({ rows, suffix }: { rows: RatingRow[]; suffix: (r: RatingRow) => string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {rows.map(r => (
+        <div key={r.novel_id} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 'var(--text-xs)' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.title}</span>
+          <span className="text-muted tabular" style={{ marginLeft: 'auto', flexShrink: 0 }}>{suffix(r)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function Stats() {
   const { data: summary, isLoading: summaryLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
   const [hourWindow, setHourWindow] = useState<'all' | 'week'>('week');
@@ -374,6 +457,10 @@ export function Stats() {
   );
   const { data: genres, isLoading: genresLoading } = useSWR<GenreBreakdown>('/stats/genres', swrFetcher);
   const { data: velocity, isLoading: velocityLoading } = useSWR<VelocityStats>('/stats/velocity', swrFetcher);
+  // Not part of the page's loading gate — these two cards render their own
+  // empty states, and neither should hold the whole grid behind a spinner.
+  const { data: pace } = useSWR<PaceStats>('/stats/pace', swrFetcher);
+  const { data: ratingAudit } = useSWR<RatingAudit>('/stats/rating-audit', swrFetcher);
 
   const loading = summaryLoading || breakdownLoading || genresLoading || velocityLoading;
 
@@ -503,6 +590,72 @@ export function Stats() {
                 };
               })}
             />
+          )}
+        </Cell>
+
+        <Cell span="wide" index={3}>
+          <CellTitle
+            title="Reading Pace"
+            sub={pace && pace.library_median_seconds > 0
+              ? `library median ${formatPace(pace.library_median_seconds)} per chapter`
+              : undefined}
+          />
+          {!pace || pace.fastest.length === 0 ? (
+            <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>
+              Not enough chapters yet — a novel needs 5 timed chapters to get a pace.
+            </p>
+          ) : (
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap' }}>
+              <PaceList novels={pace.fastest} label="Race through" />
+              <PaceList novels={pace.slowest} label="Linger on" />
+            </div>
+          )}
+        </Cell>
+
+        <Cell span="wide" index={0}>
+          <CellTitle
+            title="Ratings vs. Reading"
+            sub={ratingAudit ? `${ratingAudit.rated_count} of ${ratingAudit.total_count} rated` : undefined}
+          />
+          {!ratingAudit ? null : ratingAudit.loved_but_stale.length === 0 && ratingAudit.low_but_active.length === 0 ? (
+            // The primary state, not the exception: with almost nothing rated
+            // there is no disagreement to surface, so the card asks for the
+            // input that would make it work instead of showing an empty box.
+            <div>
+              <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 0, marginBottom: 10 }}>
+                Nothing to flag yet. Rate a few of these and this card starts
+                comparing what you say against what you actually read.
+              </p>
+              <RatingRows
+                rows={ratingAudit.unrated_candidates}
+                suffix={r => `${r.chapters_read} ch. read`}
+              />
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {ratingAudit.loved_but_stale.length > 0 && (
+                <div>
+                  <div className="text-faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                    Loved, but untouched
+                  </div>
+                  <RatingRows
+                    rows={ratingAudit.loved_but_stale}
+                    suffix={r => (r.days_since === null ? 'never read' : `${r.days_since}d ago`)}
+                  />
+                </div>
+              )}
+              {ratingAudit.low_but_active.length > 0 && (
+                <div>
+                  <div className="text-faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+                    Rated low, still reading
+                  </div>
+                  <RatingRows
+                    rows={ratingAudit.low_but_active}
+                    suffix={r => `${r.chapters_read} ch. read`}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </Cell>
       </div>

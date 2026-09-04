@@ -507,6 +507,39 @@ scoped or approved yet.
       view as a fallback). This should sit alongside the existing stats grid
       and not be treated as a full analytics rewrite yet.
 
+## Shipped off-roadmap (2026-09-04)
+
+Not from any prior list — built on data the schema already stored but nothing
+ever queried.
+
+- [x] **Pace fingerprint** — `GET /api/v1/stats/pace`, "Reading Pace" card on
+      Stats. Per-novel median seconds-per-chapter against the library median,
+      from `progress_snapshots.seconds_on_page`, which was written on every
+      sync since day one and read by nothing.
+      **Two correctness traps, both handled:** (1) `seconds_on_page` is
+      *cumulative* time since page load (userscript `ProgressSync.ts:48`), not
+      a per-ping delta — the per-chapter dwell is `MAX` over the pings, never
+      `SUM`, which would multiply a chapter's time by its ping count; (2) it's
+      wall-clock, so an idle tab inflates it without bound — production holds a
+      single **154,757s (43 hour)** reading. Clamped to 5–1800s, which keeps
+      129,676 of 139,065 rows (93%). Live values: library median 79s/chapter
+      across 46 qualifying novels, fastest 47s (0.59x).
+- [x] **Rating vs. behaviour audit** — `GET /api/v1/stats/rating-audit`,
+      "Ratings vs. Reading" card. Flags novels rated ≥4.5 with no activity in
+      60 days, and ≤2.5 still being read.
+      **Reality check that shaped it:** only **2 of 149** novels are rated, so
+      both buckets are empty today and the empty state is the *primary* state.
+      Rather than ship a permanently blank card, the endpoint also returns the
+      most-read unrated novels and the card uses them as a rate-these on-ramp.
+- [x] **Per-novel binge sparkline** — "Reading Timeline" card on the novel
+      page, from a fifth query added to the existing page-scoped
+      `GET /api/v1/stats/novels/:novelId` (not a new endpoint — that route is
+      already per-page, so this doesn't repeat the egress-incident mistake).
+      One point per chapter's first sighting, not per snapshot. Slope is the
+      pace: e.g. *Seeking Fortune* renders 696 chapters over 5 days (139/day).
+      Geometry guards both zero-spans, which would emit `NaN` path commands and
+      silently blank the SVG (`frontend/src/lib/readingTimeline.test.ts`).
+
 ## Accepted from the field-audit consolidation (2026-08-06)
 
 Full reasoning, the 80-item brainstorm lists, and everything declined:

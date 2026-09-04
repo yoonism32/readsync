@@ -432,7 +432,13 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
 
     const novelsByHour = new Map<
       number,
-      { novel_id: string; title: string; seconds: number; min_chapter: number | null; max_chapter: number | null }[]
+      {
+        novel_id: string;
+        title: string;
+        seconds: number;
+        min_chapter: number | null;
+        max_chapter: number | null;
+      }[]
     >();
     for (const r of hourNovels.rows) {
       const hour = Number(r.hour);
@@ -477,6 +483,186 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
   }
 });
 
+// GET /api/v1/stats/pace — per-novel reading pace against the library median.
+//
+// Built on progress_snapshots.seconds_on_page, which was written on every sync
+// and read by nothing until now.
+//
+// Two things this has to get right:
+//  1. seconds_on_page is CUMULATIVE time since page load
+//     (userscript ProgressSync.ts), not a per-ping delta — every scroll ping
+//     re-reports a larger total for the same chapter. So the per-chapter dwell
+//     is MAX over the pings, never SUM, which would multiply a chapter's time
+//     by its ping count.
+//  2. It's wall-clock, so an idle tab inflates it without bound — production
+//     holds a single 154,757s (43 hour) reading. Hence the clamp below.
+//
+// ponytail: fixed clamp rather than a per-novel percentile trim. 5s drops
+// bounce-throughs, 1800s drops abandoned tabs; together they keep 93% of
+// production rows (129,676 of 139,065). Swap in a percentile trim only if
+// these numbers start looking wrong.
+const PACE_MIN_SECONDS = 5;
+const PACE_MAX_SECONDS = 1800;
+/** Below this, a novel's median is noise rather than a reading habit. */
+const PACE_MIN_CHAPTERS = 5;
+const PACE_LIST_SIZE = 5;
+
+router.get('/api/v1/stats/pace', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const result = await pool.query(
+      `WITH per_chapter AS (
+         SELECT novel_id, chapter_num, read_through_num,
+                MAX(seconds_on_page) AS dwell
+         FROM progress_snapshots
+         WHERE user_id = $1 AND chapter_num IS NOT NULL
+         GROUP BY novel_id, chapter_num, read_through_num
+       ),
+       clamped AS (
+         SELECT * FROM per_chapter WHERE dwell BETWEEN $2 AND $3
+       ),
+       baseline AS (
+         SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY dwell) AS median
+         FROM clamped
+       )
+       SELECT n.id AS novel_id, n.title,
+              COUNT(*) AS chapters,
+              percentile_cont(0.5) WITHIN GROUP (ORDER BY c.dwell) AS median_seconds,
+              (SELECT median FROM baseline) AS library_median
+       FROM clamped c
+       JOIN novels n ON n.id = c.novel_id
+       GROUP BY n.id, n.title
+       HAVING COUNT(*) >= $4
+       ORDER BY median_seconds ASC`,
+      [user_id, PACE_MIN_SECONDS, PACE_MAX_SECONDS, PACE_MIN_CHAPTERS],
+    );
+
+    const libraryMedian = Number(result.rows[0]?.library_median ?? 0);
+
+    const novels = result.rows.map((r) => ({
+      novel_id: r.novel_id as string,
+      title: r.title as string,
+      chapters: Number(r.chapters),
+      median_seconds: Math.round(Number(r.median_seconds)),
+      ratio:
+        libraryMedian > 0
+          ? Number((Number(r.median_seconds) / libraryMedian).toFixed(2))
+          : null,
+    }));
+
+    const half = Math.min(PACE_LIST_SIZE, Math.floor(novels.length / 2));
+
+    res.json({
+      library_median_seconds: Math.round(libraryMedian),
+      qualifying_novels: novels.length,
+      // Already sorted ascending by the query, so fastest is the head and
+      // slowest is the tail reversed. Halving keeps the two lists disjoint
+      // when few novels qualify — otherwise the same novel appears as both
+      // the fastest and the slowest read, which reads as a bug.
+      fastest: novels.slice(0, half),
+      slowest: half > 0 ? novels.slice(-half).reverse() : [],
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get reading pace');
+  }
+});
+
+// GET /api/v1/stats/rating-audit — where your ratings and your behaviour
+// disagree.
+//
+// Reality check that shapes this endpoint: only 2 of 149 novels carry a
+// rating today, so the two audit buckets are empty for most users most of the
+// time. Rather than ship a card that is permanently blank, this also returns
+// the most-read *unrated* novels, so the UI can turn its own empty state into
+// the on-ramp that makes the feature work later.
+const RATING_LOVED = 4.5;
+const RATING_LOW = 2.5;
+const RATING_STALE_DAYS = 60;
+const RATING_ACTIVE_DAYS = 14;
+const RATING_LIST_SIZE = 5;
+
+router.get('/api/v1/stats/rating-audit', validateApiKey, async (req, res) => {
+  const user_id = (req as AuthenticatedRequest).user.id;
+
+  try {
+    const result = await pool.query(
+      `WITH activity AS (
+         SELECT novel_id,
+                MAX(created_at) AS last_read,
+                COUNT(DISTINCT chapter_num) AS chapters_read
+         FROM progress_snapshots
+         WHERE user_id = $1
+         GROUP BY novel_id
+       )
+       SELECT n.id AS novel_id, n.title, m.rating,
+              a.last_read, COALESCE(a.chapters_read, 0) AS chapters_read,
+              EXTRACT(DAY FROM (now() - a.last_read))::int AS days_since
+       FROM novels n
+       JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
+       LEFT JOIN activity a ON a.novel_id = n.id`,
+      [user_id],
+    );
+
+    type Row = {
+      novel_id: string;
+      title: string;
+      rating: string | null;
+      last_read: Date | null;
+      chapters_read: string;
+      days_since: number | null;
+    };
+
+    const rows = (result.rows as Row[]).map((r) => ({
+      novel_id: r.novel_id,
+      title: r.title,
+      rating: r.rating === null ? null : Number(r.rating),
+      chapters_read: Number(r.chapters_read),
+      days_since: r.days_since,
+      last_read: r.last_read ? r.last_read.toISOString() : null,
+    }));
+
+    // Rated highly, then dropped — the "you said you loved this" pile.
+    const loved_but_stale = rows
+      .filter(
+        (r) =>
+          r.rating !== null &&
+          r.rating >= RATING_LOVED &&
+          (r.days_since === null || r.days_since >= RATING_STALE_DAYS),
+      )
+      .sort((a, b) => (b.days_since ?? 1e9) - (a.days_since ?? 1e9))
+      .slice(0, RATING_LIST_SIZE);
+
+    // Rated poorly, still being read — the "why are you still here" pile.
+    const low_but_active = rows
+      .filter(
+        (r) =>
+          r.rating !== null &&
+          r.rating <= RATING_LOW &&
+          r.days_since !== null &&
+          r.days_since <= RATING_ACTIVE_DAYS,
+      )
+      .sort((a, b) => b.chapters_read - a.chapters_read)
+      .slice(0, RATING_LIST_SIZE);
+
+    // The on-ramp: novels you've clearly invested in but never rated.
+    const unrated_candidates = rows
+      .filter((r) => r.rating === null && r.chapters_read > 0)
+      .sort((a, b) => b.chapters_read - a.chapters_read)
+      .slice(0, RATING_LIST_SIZE);
+
+    res.json({
+      rated_count: rows.filter((r) => r.rating !== null).length,
+      total_count: rows.length,
+      loved_but_stale,
+      low_but_active,
+      unrated_candidates,
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get rating audit');
+  }
+});
+
 // GET /api/v1/stats/on-this-day — what you were reading at past milestones.
 //
 // Anchored on 1/3/6/12/24-month lookbacks, but matched over a ±3 day window
@@ -517,8 +703,11 @@ router.get('/api/v1/stats/on-this-day', validateApiKey, async (req, res) => {
                 ) AS rn
          FROM bounds b
          JOIN progress_snapshots ps
-           ON ps.created_at >= (b.anchor - $2)::timestamptz
-          AND ps.created_at <  (b.anchor + $2 + 1)::timestamptz
+           -- $2::int is explicit: without the cast Postgres cannot infer the
+           -- parameter's type here and fails with "cannot cast type integer
+           -- to timestamp with time zone".
+           ON ps.created_at >= (b.anchor - $2::int)::timestamptz
+          AND ps.created_at <  (b.anchor + $2::int + 1)::timestamptz
          JOIN novels n ON n.id = ps.novel_id
          WHERE ps.user_id = $1 AND ps.chapter_num IS NOT NULL
          GROUP BY b.months, b.anchor, ps.created_at::date, n.id, n.title
@@ -555,10 +744,15 @@ router.get(
     try {
       const client = await pool.connect();
       try {
-        const [novelInfo, progressStats, sessionStats, bookmarkStats] =
-          await Promise.all([
-            client.query(
-              `
+        const [
+          novelInfo,
+          progressStats,
+          sessionStats,
+          bookmarkStats,
+          timeline,
+        ] = await Promise.all([
+          client.query(
+            `
           SELECT n.title, n.author, n.genre, m.status, m.favorite, m.rating,
                  m.started_at, m.completed_at,
                  COALESCE(m.current_read_through, 1) AS current_read_through,
@@ -567,10 +761,10 @@ router.get(
           LEFT JOIN user_novel_meta m ON m.novel_id = n.id AND m.user_id = $1
           WHERE n.id = $2
         `,
-              [user_id, novelId],
-            ),
-            client.query(
-              `
+            [user_id, novelId],
+          ),
+          client.query(
+            `
           SELECT COUNT(*) AS total_snapshots,
                  MIN(created_at) AS first_read,
                  MAX(created_at) AS last_read,
@@ -578,24 +772,39 @@ router.get(
                  COUNT(DISTINCT device_id) AS devices_used
           FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2
         `,
-              [user_id, novelId],
-            ),
-            client.query(
-              `
+            [user_id, novelId],
+          ),
+          client.query(
+            `
           SELECT COUNT(*) AS total_sessions,
                  COALESCE(SUM(time_spent_seconds), 0) AS total_time_seconds,
                  ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
           FROM reading_sessions WHERE user_id = $1 AND novel_id = $2 AND end_time IS NOT NULL
         `,
-              [user_id, novelId],
-            ),
-            client.query(
-              `
+            [user_id, novelId],
+          ),
+          client.query(
+            `
           SELECT COUNT(*) AS total_bookmarks FROM bookmarks WHERE user_id = $1 AND novel_id = $2
         `,
-              [user_id, novelId],
-            ),
-          ]);
+            [user_id, novelId],
+          ),
+          // Chapter-over-time series for the reading timeline sparkline.
+          // One row per chapter (its first sighting), not per snapshot —
+          // a chapter read across 40 scroll pings is one point, not 40.
+          // This endpoint is page-scoped, not list-backing, so adding a
+          // fifth query here doesn't repeat the egress-incident mistake.
+          client.query(
+            `
+          SELECT chapter_num, MIN(created_at) AS first_read
+          FROM progress_snapshots
+          WHERE user_id = $1 AND novel_id = $2 AND chapter_num IS NOT NULL
+          GROUP BY chapter_num
+          ORDER BY first_read
+        `,
+            [user_id, novelId],
+          ),
+        ]);
 
         if (novelInfo.rows.length === 0) {
           return res.status(HTTP_NOT_FOUND).json({ error: 'Novel not found' });
@@ -606,6 +815,10 @@ router.get(
           progress: progressStats.rows[0],
           sessions: sessionStats.rows[0],
           bookmarks: { total: Number(bookmarkStats.rows[0].total_bookmarks) },
+          timeline: timeline.rows.map((r) => ({
+            chapter_num: Number(r.chapter_num),
+            first_read: (r.first_read as Date).toISOString(),
+          })),
         });
       } finally {
         client.release();

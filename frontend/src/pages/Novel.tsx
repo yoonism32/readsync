@@ -9,6 +9,7 @@ import { Spinner } from '../components/Spinner.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import { ChapterMap } from '../components/ChapterMap.js';
+import { ReadingTimeline } from '../components/ReadingTimeline.js';
 import { NotesPanel } from '../components/NotesPanel.js';
 import { RereadPanel } from '../components/RereadPanel.js';
 import { TagEditor } from '../components/TagEditor.js';
@@ -214,6 +215,8 @@ export function NovelPage() {
       )}
 
       <ChapterMap novel={novel} />
+
+      <ReadingTimeline novelId={novel.novel_id} />
 
       <SynopsisPanel novelId={novel.novel_id} />
 

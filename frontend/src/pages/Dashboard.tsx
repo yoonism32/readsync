@@ -208,8 +208,6 @@ export function Dashboard() {
 
       <ActivityHeatmap />
 
-      <OnThisDay />
-
       {/* Currently reading — the section you act on every day, so it carries
           extra weight through type size and spacing rather than a zoom
           multiplier (which compounded with the old html-level zoom). */}
@@ -254,6 +252,8 @@ export function Dashboard() {
           </div>
         )}
       </div>
+
+      <OnThisDay />
     </div>
   );
 }
