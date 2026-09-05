@@ -3,7 +3,9 @@
 Open and accepted-but-unbuilt work only. Completed work, full brainstorm
 lists, and the full decision trail (including everything declined and why)
 live in [`docs/changelog/2026-08-level-up.md`](./changelog/2026-08-level-up.md) —
-this file is the trimmed, current-facing view of it.
+this file is the trimmed, current-facing view of it. Frontend design/UX
+critique findings (not yet triaged into items below) live in
+[`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md).
 
 > Two items below were corrected against the current codebase while writing
 > this file (see notes inline) — the source document was accurate when
