@@ -89,7 +89,10 @@ function WindowChip({ active, onToggle }: { active: boolean; onToggle: () => voi
         cursor: 'pointer',
         border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border)'}`,
         background: active ? 'var(--color-accent-glow)' : 'transparent',
-        color: active ? 'var(--color-accent)' : 'var(--color-text-muted)',
+        // --color-accent measured 4.01:1 here (WCAG needs 4.5) once composited
+        // over --color-accent-glow on a panel background — accent-bright
+        // clears it (5.16:1) without touching the global accent token.
+        color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
         transition: 'background 160ms ease, border-color 160ms ease, color 160ms ease',
       }}
     >

@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { Router } from 'express';
+import sharp from 'sharp';
 import {
   HTTP_BAD_REQUEST,
   HTTP_GONE,
@@ -124,6 +125,29 @@ async function fetchCoverWithRetry(
 }
 
 /**
+ * Widest a cover is ever displayed at (Novel.tsx's `clamp(104px, 20vw, 168px)`
+ * detail-page art) times a generous 3x for high-DPR screens. Every other
+ * consumer (Explorer grid, MyList's 44x62 row thumbnail) is smaller, so one
+ * resized file covers all of them — no need for per-context variants.
+ */
+const COVER_MAX_WIDTH = 540;
+const COVER_JPEG_QUALITY = 78;
+
+/**
+ * Source covers arrive at whatever resolution novelarrow.com happens to
+ * serve — Lighthouse measured 200-380KB originals on /explorer, 65 of which
+ * load on that one page. Nothing here is ever displayed past 540px wide, so
+ * re-encoding down to that removes the waste at the one place both mirror
+ * paths (GET's server fetch and the userscript's POST) funnel through.
+ */
+export async function resizeCoverForDisplay(buffer: Buffer): Promise<Buffer> {
+  return sharp(buffer)
+    .resize({ width: COVER_MAX_WIDTH, withoutEnlargement: true })
+    .jpeg({ quality: COVER_JPEG_QUALITY })
+    .toBuffer();
+}
+
+/**
  * Upload cover bytes into the novel-covers bucket, point novels.cover_img at
  * the public URL, and clear any mirror-retry cooldown for the slug. Shared by
  * the GET route's server-side-fetch success path and the userscript upload
@@ -132,12 +156,13 @@ async function fetchCoverWithRetry(
 async function commitMirroredCover(
   novelId: string,
   slug: string,
-  buffer: Buffer,
+  rawBuffer: Buffer,
 ): Promise<string> {
   if (!supabase) {
     throw new Error('storage_not_configured');
   }
 
+  const buffer = await resizeCoverForDisplay(rawBuffer);
   const fileName = `${slug}.jpg`;
   // cacheControl is unset by default, which leaves Storage's own edge cache
   // at its 1-hour default — every reader's <img> hits Supabase Storage

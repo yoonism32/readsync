@@ -74,7 +74,7 @@ export function NotificationBell() {
     <div ref={panelRef} style={{ position: 'relative', flexShrink: 0 }}>
       <button
         onClick={() => setOpen(o => !o)}
-        aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+        aria-label={unread > 0 ? `Notifications, ${unread > 99 ? '99+' : unread} unread` : 'Notifications'}
         aria-expanded={open}
         style={{
           display: 'inline-flex',

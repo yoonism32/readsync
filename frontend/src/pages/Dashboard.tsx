@@ -154,9 +154,13 @@ export function Dashboard() {
         </a>
       )}
 
-      {/* Stats grid */}
+      {/* Stats grid. The loading placeholder is given the same minHeight as
+          the real grid below (3 AttentionStat rows + the 8-item dl, stacked
+          single-column on mobile) — without it, the spinner's ~100px box
+          collapsing into a ~450px grid the instant /stats/summary resolves
+          was the single largest layout shift on the page (CLS 0.874). */}
       {statsLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner /></div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 40, minHeight: 450, alignItems: 'center', marginBottom: 32 }}><Spinner /></div>
       ) : (
         <div className="stagger-1 animate-fade-in" style={{ marginBottom: 32 }}>
           {/* Tier 1 — the three you act on. Each goes quiet at zero, so a

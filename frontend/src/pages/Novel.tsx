@@ -35,8 +35,13 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
   return (
     <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginTop: 16 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600, marginBottom: 12 }}>Synopsis</h2>
+      {/* minHeight matches a typical multi-paragraph synopsis so the spinner
+          box doesn't collapse into it once the fetch resolves — that swap
+          was part of the page's CLS 0.157 (target <0.1). Can't be exact
+          since synopsis length varies, but any reserved space cuts the
+          shift. */}
       {isLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}><Spinner /></div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 16, minHeight: 120, alignItems: 'center' }}><Spinner /></div>
       ) : synopsisParagraphs.length > 0 ? (
         <>
           <div

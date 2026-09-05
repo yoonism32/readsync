@@ -256,6 +256,7 @@ export function Layout({ children }: Props) {
               <NavLink
                 key={to}
                 to={to}
+                aria-label={label}
                 style={({ isActive }) => ({
                   display: 'inline-flex',
                   alignItems: 'center',

@@ -38,10 +38,12 @@
   /* Text */
   --color-text: #e4e8e6;
   --color-text-muted: #8e9a96;
-  /* was #4e5754 — measured 2.67:1 against --color-bg, failing WCAG 1.4.3
-     (4.5:1 minimum for normal text). Lightened along the same hue to
-     4.72:1. */
-  --color-text-faint: #717e7a;
+  /* was #4e5754 — measured 2.67:1 against --color-bg. #717e7a (4.72:1
+     against --color-bg) still only cleared 4.4:1 against the lighter
+     #111316 a panel's semi-transparent card tint composites to, which is
+     where most .text-faint usage actually sits — lightened again to clear
+     4.5:1 there too (4.65:1). */
+  --color-text-faint: #75827e;
 
   /* Rating gold — deliberately not --color-warning below: that token is
      flat Tailwind amber-400 at 96% saturation, which reads as an

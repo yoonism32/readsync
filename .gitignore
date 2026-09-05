@@ -60,3 +60,6 @@ secrets/
 
 # Personal utility scripts (not part of the project)
 scripts/novelfire-profiler/
+
+# Lighthouse reports
+reports/
