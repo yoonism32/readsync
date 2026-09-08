@@ -71,4 +71,4 @@ export const MAX_CHAPTER_NUM = 100000;
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
 // const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';
 export const READSYNC_API_BASE = 'https://readsync-n7zp.onrender.com/api/v1';
-export const READSYNC_API_KEY = 'demo-api-key-12345';
+export const READSYNC_API_KEY = '5mrlJqFBNrhVIPBAzHmPNdpZhf5DlBSB';
