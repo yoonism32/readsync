@@ -13,27 +13,18 @@ import pool from '../db/pool.js';
 import logger from '../logger.js';
 import { validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
-import { validateNovelId } from '../middleware/validation.js';
-import { getBotStatus } from '../services/BotService.js';
 import {
   isChapterRegression,
   recordCorrectionAttempt,
 } from '../services/ChapterCorrection.js';
 import { parseTimeAgo } from '../services/NovelService.js';
-import type { AuthenticatedRequest, BotStatus } from '../types/index.js';
+import type { AuthenticatedRequest } from '../types/index.js';
 
-export type BotModule = {
-  triggerManualUpdate?: (novelId: string) => Promise<unknown>;
-  updateNovelChapters?: () => Promise<void>;
-  runSingleNovelOnly?: (novelId: string) => Promise<unknown>;
-  getBotStatus?: () => BotStatus;
-};
-
-let botModule: BotModule = {};
-
-export function setBotModule(mod: BotModule): void {
-  botModule = mod;
-}
+// Bot (bot/src/) sunset 2026-09-08: it never ran in production (setBotModule
+// was never called from src/), so every botModule-gated route below always
+// 503'd there. Removed rather than left as dead plumbing. What remains here
+// is genuinely admin-facing (stale-novels report) or userscript-facing
+// (auto-update), neither of which ever depended on the bot.
 
 export function createAdminRouter(io: SocketServer): Router {
   const router = Router();
@@ -79,117 +70,6 @@ export function createAdminRouter(io: SocketServer): Router {
       handleDbError(res, error, 'Get stale novels');
     }
   });
-
-  router.post(
-    '/api/v1/admin/novels/:novelId/update',
-    validateApiKey,
-    validateNovelId,
-    async (req, res) => {
-      const { novelId } = req.params;
-
-      try {
-        if (botModule.triggerManualUpdate) {
-          const result = await botModule.triggerManualUpdate(String(novelId));
-          res.json(result);
-        } else {
-          res.status(503).json({
-            error: 'Bot module not loaded',
-            message: 'Chapter update bot is not running',
-          });
-        }
-      } catch (error) {
-        handleDbError(res, error, 'Manual novel update');
-      }
-    },
-  );
-
-  router.get('/api/v1/admin/bot/status', validateApiKey, (_req, res) => {
-    res.json(botModule.getBotStatus?.() ?? getBotStatus());
-  });
-
-  router.post('/api/v1/admin/bot/trigger', validateApiKey, (_req, res) => {
-    if (botModule.updateNovelChapters) {
-      setImmediate(() => {
-        void botModule.updateNovelChapters?.();
-      });
-      res.json({ success: true, message: 'Bot update cycle triggered' });
-    } else {
-      res.status(503).json({
-        error: 'Bot not available',
-        message: 'Chapter update bot is not running',
-      });
-    }
-  });
-
-  router.post(
-    '/api/v1/admin/novels/single-run',
-    validateApiKey,
-    async (req, res) => {
-      const { novelId } = req.body as { novelId?: string };
-
-      if (!novelId) {
-        return res.status(HTTP_BAD_REQUEST).json({ error: 'novelId required' });
-      }
-
-      try {
-        if (botModule.runSingleNovelOnly) {
-          const result = await botModule.runSingleNovelOnly(novelId);
-          res.json(result);
-        } else {
-          res.status(503).json({
-            error: 'Single-novel mode not available',
-            message: 'Bot module not loaded with diagnostic mode',
-          });
-        }
-      } catch (error) {
-        handleDbError(res, error, 'Single novel run');
-      }
-    },
-  );
-
-  router.post('/admin/force-refresh-all', validateApiKey, async (_req, res) => {
-    try {
-      await pool.query(`UPDATE novels SET chapters_updated_at = NULL`);
-      if (botModule.updateNovelChapters) {
-        setImmediate(() => {
-          void botModule.updateNovelChapters?.();
-        });
-      }
-      res.json({ success: true, message: 'Global refresh started.' });
-    } catch (error) {
-      logger.error({ error }, 'Force refresh failed');
-      res.status(HTTP_INTERNAL_ERROR).json({
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
-    }
-  });
-
-  router.get(
-    '/api/v1/admin/bot/progress',
-    validateApiKey,
-    async (_req, res) => {
-      try {
-        const status = botModule.getBotStatus?.() ?? getBotStatus();
-        const result = await pool.query(`
-      SELECT COUNT(DISTINCT n.id) AS count
-      FROM novels n
-      WHERE n.primary_url IS NOT NULL
-        AND EXISTS (SELECT 1 FROM progress_snapshots p WHERE p.novel_id = n.id LIMIT 1)
-        AND (n.chapters_updated_at IS NULL OR n.chapters_updated_at < NOW() - INTERVAL '24 hours')
-    `);
-
-        res.json({
-          ...status,
-          remainingNovels: parseInt(
-            result.rows[0].count as string,
-            DECIMAL_RADIX,
-          ),
-        });
-      } catch (error) {
-        handleDbError(res, error, 'Get bot progress');
-      }
-    },
-  );
 
   // Auto-update endpoint called by Tampermonkey userscript.
   // Auth via validateApiKey (per-user key in the users table), same as the

@@ -21,8 +21,9 @@ version (`userscript/package.json`) is bumped and redeployed.
 
 `Dockerfile` mirrors this for container deploys: the production stage
 copies `dist/`, `public/`, `dist-userscript/`, `package.json`, and pruned
-`node_modules`. Nothing under `bot/` or `dist-bot/` is included — see
-[ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production).
+`node_modules`. There's no `bot/` or `dist-bot/` to exclude anymore — the
+bot was removed outright, see
+[ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).
 
 There is no `start:legacy` anymore — the old root-level `server.js` and its
 supporting files (`tm-live.js`, `chapter-update-bot-enhanced.js`,
@@ -69,9 +70,7 @@ scripts.
 
 ## Deliberate production tradeoffs
 
-Both of these are intentional, not oversights — see
-[ARCHITECTURE.md](./ARCHITECTURE.md) for the reasoning:
-
-- **Rate limiting is off** (`express-rate-limit` installed, not applied).
-- **The chapter-update bot is off** (never wired into `src/server.ts`, not
-  shipped in the Docker image).
+- **Rate limiting is off** (`express-rate-limit` installed, not applied) —
+  intentional, not an oversight; see [ARCHITECTURE.md](./ARCHITECTURE.md).
+- **The chapter-update bot** — removed entirely 2026-09-08, not merely off;
+  see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).

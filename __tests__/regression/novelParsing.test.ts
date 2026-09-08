@@ -1,15 +1,10 @@
 /**
- * Regression tests for the novelbin.com -> novelarrow.com migration.
- *
- * NovelArrow changed the URL grammar (/b/<slug> -> /novel/<slug>,
- * /b/<slug>/chapter-N -> /chapter/<slug>/chapter-N-<title>) and serves
- * og:novel:* metas with name= instead of property=. The fixture
- * novelarrow-novel-page.html is trimmed from the real page (2026-07-25).
+ * Regression tests for the novelbin.com -> novelarrow.com migration's URL
+ * grammar change (/b/<slug> -> /novel/<slug>,
+ * /b/<slug>/chapter-N -> /chapter/<slug>/chapter-N-<title>), covering the
+ * shared URL-handling functions in NovelService.ts.
  */
 import { describe, it, expect } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import { parseNovelInfoFromHTML } from '../../bot/src/parseNovelInfo.js';
 import {
   deriveNovelMainUrl,
   extractNovelTitle,
@@ -18,91 +13,12 @@ import {
   parseChapterFromUrl,
 } from '../../src/services/NovelService.js';
 
-const fixture = (name: string): string =>
-  fs.readFileSync(path.join(__dirname, '../fixtures', name), 'utf8');
-
-describe('parseNovelInfoFromHTML — NovelArrow page (name= metas, no .l-chapter)', () => {
-  const info = parseNovelInfoFromHTML(
-    fixture('novelarrow-novel-page.html'),
-    'https://novelarrow.com/novel/shadow-slave',
-  );
-
-  it('extracts latest chapter number and title from og:novel:latest_chapter_name', () => {
-    expect(info.chapter).toEqual({ num: 3118, title: 'Dying City' });
-  });
-
-  it('extracts genres from og:novel:genre', () => {
-    expect(info.genres).toEqual(['ACTION', 'ADVENTURE', 'FANTASY', 'ROMANCE', 'SUPERNATURAL']);
-  });
-
-  it('extracts author from og:novel:author', () => {
-    expect(info.author).toBe('Guiltythree');
-  });
-
-  it('parses ISO og:novel:update_time', () => {
-    expect(info.site_latest_chapter_time_raw).toBe('2026-07-24T18:15:04.030Z');
-    expect(info.site_latest_chapter_time).toBe('2026-07-24T18:15:04.030Z');
-  });
-
-  it('extracts every synopsis paragraph from the current Next.js page payload', () => {
-    expect(info.synopsis).toBe(
-      'Growing up in poverty, Sunny never expected anything good from life.\n\n' +
-      'He didn\'t know "fear" until the Nightmare Spell chose him & everything changed.\n\n' +
-      'Now he must survive.',
-    );
-  });
-});
-
-describe('parseNovelInfoFromHTML — synopsis edge cases', () => {
-  it('returns null synopsis when no Synopsis section is present', () => {
-    // novelbin-novel-page.html has no <dt>Synopsis:</dt> or .synopsis div
-    const info = parseNovelInfoFromHTML(
-      fixture('novelbin-novel-page.html'),
-      'https://novelbin.com/b/some-novel',
-    );
-    expect(info.synopsis).toBeNull();
-  });
-
-  it('returns null synopsis when the parsed content exceeds the max length (never truncates)', () => {
-    const oversized = 'x'.repeat(20_001);
-    const html = `<html><body><dt>Synopsis:</dt><dd>${oversized}</dd></body></html>`;
-    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
-    expect(info.synopsis).toBeNull();
-  });
-
-  it('preserves paragraphs from the modern visible synopsis when no page payload is present', () => {
-    const html = '<div class="site-reading-copy site-reading-prose"><p>First paragraph.</p><p>Second paragraph.</p></div>';
-    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
-    expect(info.synopsis).toBe('First paragraph.\n\nSecond paragraph.');
-  });
-
-  it('returns null synopsis when the section is present but empty after cleanup', () => {
-    const html = '<html><body><dt>Synopsis:</dt><dd>   <p></p>   </dd></body></html>';
-    const info = parseNovelInfoFromHTML(html, 'https://novelarrow.com/novel/x');
-    expect(info.synopsis).toBeNull();
-  });
-});
-
-describe('parseNovelInfoFromHTML — NovelBin page (property= metas, .l-chapter)', () => {
-  const info = parseNovelInfoFromHTML(
-    fixture('novelbin-novel-page.html'),
-    'https://novelbin.com/b/some-novel',
-  );
-
-  it('extracts latest chapter from the meta (title after colon)', () => {
-    expect(info.chapter).toEqual({ num: 821, title: 'The Final Stand' });
-  });
-
-  it('extracts genres and author via property= metas', () => {
-    expect(info.genres).toEqual(['Action', 'Fantasy']);
-    expect(info.author).toBe('Some Author');
-  });
-
-  it('prefers relative .item-time over the update_time meta', () => {
-    expect(info.site_latest_chapter_time_raw).toBe('2 hours ago');
-    expect(info.site_latest_chapter_time).not.toBeNull();
-  });
-});
+// The parseNovelInfoFromHTML (bot/src/parseNovelInfo.ts) describe blocks that
+// used to live here were removed with the bot (2026-09-08, never ran in
+// production — see docs/ARCHITECTURE.md). That was server-side HTML-string
+// parsing exclusive to the bot; the userscript does its own DOM-based
+// extraction (extractSynopsis() etc. in PageMetadata) with separate tests,
+// not against these same fixtures.
 
 describe('normalizeNovelId — both URL grammars map to the same legacy ID', () => {
   it.each([

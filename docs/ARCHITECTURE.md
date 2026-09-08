@@ -12,7 +12,7 @@ older docs were updated to match — see the git history and
 | Backend API | Node.js, Express 5, TypeScript | `src/` → compiled to `dist/` |
 | Frontend | React 19, React Router 7, Vite, Tailwind 4, SWR | `frontend/` → served at `/app` |
 | Browser client | Userscript (Vite-built IIFE, GM-API based — works in Tampermonkey/Violentmonkey) | `userscript/` → `dist-userscript/readsync.user.js` |
-| Chapter-update bot | Puppeteer-extra + stealth, TypeScript | `bot/src/` — **not part of the deployed system, see below** |
+| Chapter-update bot | **Removed 2026-09-08** | see below |
 | Database | Postgres (Supabase-hosted) | 14 migrations in `src/db/migrations/` |
 | Realtime | Socket.IO | wired into `src/app.ts` |
 
@@ -87,54 +87,38 @@ oversight — documented here so it reads as a choice. Reconsider if this ever
 serves more than a handful of users, or if the API key gets rotated to
 something less exposed (see above).
 
-## The bot is intentionally OFF in production
+## The bot was removed
 
-`bot/src/` is a real, working Puppeteer-based scraper for chapter updates
-on NovelArrow/NovelBin. It is **not wired into the deployed server**:
+`bot/src/` was a real, working Puppeteer-based scraper for chapter updates
+on NovelArrow/NovelBin. It was **never wired into the deployed server** —
+`src/routes/admin.ts` exported a `setBotModule()` injection hook that
+`src/server.ts` never called, so every bot-gated admin route always
+`503`'d in production — and it was deleted outright on 2026-09-08 rather
+than kept as unreachable dead code. Removed along with it: `dist-bot/`, the
+`bot` and `typecheck:bot` npm scripts, the `puppeteer-core` /
+`puppeteer-extra` / `puppeteer-extra-plugin-stealth` / `@sparticuz/chromium`
+dependencies, `src/services/BotService.ts`, and the bot-only admin routes
+(`/bot/status`, `/bot/trigger`, `/novels/:novelId/update`,
+`/novels/single-run`, `/bot/progress`, `/admin/force-refresh-all`) — see
+[API_REFERENCE.md](./API_REFERENCE.md). The frontend's Admin page already
+showed only a static "bot is off" note by this point, so nothing user-facing
+changed.
 
-- `src/routes/admin.ts` exports `setBotModule()` as an injection hook, but
-  nothing in `src/server.ts` ever calls it — every `/api/v1/admin/bot/*`
-  route and `POST /admin/force-refresh-all` therefore returns
-  `503 Bot module not loaded` in production.
-- The Dockerfile's production stage never copies `dist-bot/`.
-- The frontend's Admin page used to show a live "Chapter Update Bot" panel
-  with a working-looking status/trigger UI that silently no-op'd; that UI
-  has been removed and replaced with a static note.
-
-**Decision confirmed by production-network test (2026-08-21): do not retry
-the bot on Render.** An authenticated, read-only probe sent six NovelArrow
+**Why it was never turned on, for the record (production-network test,
+2026-08-21):** an authenticated, read-only probe sent six NovelArrow
 novel-page requests from the deployed ReadSync process in two batches of
 three. All six received HTTP 403 Cloudflare challenges before any novel
 metadata was returned. The same pages returned complete, parseable HTML from
-a local connection, so this is an outbound-network/IP-reputation problem, not
-a parser or batch-size problem. Puppeteer would still originate from Render's
-blocked network while adding Chromium overhead, so stealth settings and lower
-concurrency do not address the cause. Keep chapter refresh and one-time
-metadata imports in the reader's real browser/userscript. Revisit server-side
-scraping only if the network premise changes materially (for example,
-NovelArrow explicitly permits/allowlists it or a separately verified outbound
-route succeeds); do not periodically retry the old bot as routine maintenance.
-
-The investigation also found that normal successful NovelArrow pages now
-contain a `challenge-platform` script. The bot's current detector treats that
-string alone as an active challenge, so it false-positives even on valid pages.
-If the local-only bot tooling is ever used again, challenge detection must rely
-on actual signals such as `cf-mitigated: challenge`, a `Just a moment` title,
-HTTP 403/429, and missing required metadata.
-
-If you need a one-off chapter refresh, run the bot manually and locally:
-`npm run bot` (requires `dist-bot/`, built via `npx tsc -p bot/tsconfig.json`
-— there's no wired `build:bot` npm script today). Do not re-enable it in
-production without also revisiting rate limiting and the exposed API key
-above, since a public, unauthenticated trigger for a scraping cycle was
-exactly the CRITICAL bug this repo shipped with (`admin.ts:148`, now fixed
-to require `validateApiKey`).
-
-There is one known, pre-existing gap between the bot's URL-parsing and the
-userscript's: see the comments on `deriveNovelBaseUrl` in
-`bot/src/parseNovelInfo.ts` and `userscript/src/services/ChapterDetector.ts`,
-and the parity test in `__tests__/regression/novelBaseUrlDerivation.test.ts`.
-Low-impact today since the bot doesn't run in production.
+a local connection, so this was an outbound-network/IP-reputation problem,
+not a parser or batch-size problem — Puppeteer would still have originated
+from Render's blocked network. Chapter refresh and one-time metadata imports
+stay in the reader's real browser/userscript (see "Refresh All Novels" in
+`frontend/src/hooks/useRefreshAll.ts`, which opens each novel's page in a
+background tab so the userscript can scrape it live). If server-side
+scraping is ever revisited, it would need a fresh implementation — the old
+`bot/` code, including its Cloudflare-challenge detector (which false-
+positived on the `challenge-platform` script present on normal pages), is
+gone, not archived.
 
 ## RLS lockdown
 

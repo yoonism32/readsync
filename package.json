@@ -8,17 +8,15 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc && mkdir -p dist/db/migrations && cp src/db/migrations/*.sql dist/db/migrations/ && npm ci --prefix frontend && npm run build --prefix frontend",
     "build:all": "npm run build && npm ci --prefix userscript --legacy-peer-deps && npm run build --prefix userscript",
-    "bot": "node dist-bot/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "setup": "npm install && npm run dev",
-    "lint": "biome lint src/ bot/src/",
-    "lint:fix": "biome lint --write src/ bot/src/",
-    "format": "biome format --write src/ bot/src/",
-    "check": "biome check src/ bot/src/",
+    "lint": "biome lint src/",
+    "lint:fix": "biome lint --write src/",
+    "format": "biome format --write src/",
+    "check": "biome check src/",
     "typecheck": "tsc --noEmit",
-    "typecheck:bot": "tsc --noEmit -p bot/tsconfig.json",
-    "verify": "npm test && npm run typecheck && npm run check && npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend && npm run build --prefix userscript && npm run typecheck:bot"
+    "verify": "npm test && npm run typecheck && npm run check && npm run lint --prefix frontend && npm run test --prefix frontend && npm run build --prefix frontend && npm run build --prefix userscript"
   },
   "keywords": [
     "reading",
@@ -30,7 +28,6 @@
   "author": "ReadSync",
   "license": "MIT",
   "dependencies": {
-    "@sparticuz/chromium": "^149.0.0",
     "@supabase/supabase-js": "^2.101.0",
     "@types/compression": "^1.8.1",
     "@types/connect-pg-simple": "^7.0.3",
@@ -46,9 +43,6 @@
     "pg": "^8.20.0",
     "pino": "^10.3.1",
     "pino-pretty": "^13.1.3",
-    "puppeteer-core": "25.9.0",
-    "puppeteer-extra": "^3.3.6",
-    "puppeteer-extra-plugin-stealth": "^2.10.4",
     "sharp": "^0.35.4",
     "socket.io": "^4.8.3",
     "supabase": "^2.84.5"

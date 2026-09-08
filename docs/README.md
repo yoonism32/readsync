@@ -1,8 +1,8 @@
 # ReadSync docs
 
 Start with [ARCHITECTURE.md](./ARCHITECTURE.md) — current stack, data flow,
-auth model, and the two things intentionally turned off (rate limiting, the
-chapter-update bot).
+auth model, and rate limiting (intentionally off). The chapter-update bot
+that used to be documented there as "off" was removed outright 2026-09-08.
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — how the system actually works today
 - [API_REFERENCE.md](./API_REFERENCE.md) — every route, its auth, its validation status

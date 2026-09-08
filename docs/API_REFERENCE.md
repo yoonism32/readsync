@@ -6,7 +6,7 @@ is the middleware actually applied on that route today — see
 "Validated" means the route has an `express-validator` chain; where it
 doesn't, input is checked ad hoc inside the handler (or not at all).
 
-## auth.ts — login, session, and legacy server-rendered pages
+## auth.ts — login, session, and legacy page redirects
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
@@ -15,10 +15,10 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 | GET | `/api/auth/api-key` | `requireAuth` | |
 | GET | `/api/auth/status` | — | Used by the SPA to check login state |
 | GET | `/api/v1/auth/whoami` | `validateApiKey` | |
-| GET | `/login` | `redirectIfAuthenticated` | |
 | GET | `/` | — | Redirects to `/app/` (the SPA) |
-| GET | `/legacy/dashboard`, `/legacy/manage`, `/legacy/settings`, `/legacy/mylist`, `/legacy/novel/:novelId`, `/legacy/admin`, `/legacy/explorer`, `/legacy/practice` | `requireAuth` | Deprecated server-rendered pages, superseded by the SPA at `/app/*` (`/legacy/practice` has no SPA replacement yet) |
-| GET | `/legacy-dashboard`, `/manage`, `/settings`, `/novels`, `/mylist`, `/novel/:novelId`, `/novels/:novelId`, `/admin`, `/explorer`, `/practice` | — | 301 redirects to their `/legacy/*` home, kept for old bookmarks/links |
+| GET | `/login`, `/legacy/dashboard`, `/legacy-dashboard`, `/legacy/manage`, `/manage`, `/legacy/settings`, `/settings`, `/legacy/mylist`, `/mylist`, `/novels`, `/legacy/novel/:novelId`, `/novel/:novelId`, `/novels/:novelId`, `/legacy/admin`, `/admin`, `/legacy/explorer`, `/explorer` | — | Legacy pages sunset 2026-09-08: 301 redirect straight to their `/app/*` SPA equivalent (`/login` → `/app/login`, etc). No HTML served here anymore. |
+| GET | `/legacy/practice` | `requireAuth` | API Route Explorer — never ported to the SPA, still served as-is |
+| GET | `/practice` | — | 301 redirect to `/legacy/practice` |
 
 ## progress.ts — the sync path (factory: `createProgressRouter(io)`)
 
@@ -146,14 +146,15 @@ doesn't, input is checked ad hoc inside the handler (or not at all).
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/api/v1/admin/novels/stale` | `validateApiKey` | Works independently of the bot |
-| POST | `/api/v1/admin/novels/:novelId/update` | `validateApiKey` | Bot route — `503` in production, see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production) |
-| GET | `/api/v1/admin/bot/status` | `validateApiKey` | Bot route — `503` in production |
-| POST | `/api/v1/admin/bot/trigger` | `validateApiKey` | Bot route — `503` in production |
-| POST | `/api/v1/admin/novels/single-run` | `validateApiKey` | Bot route — `503` in production |
-| POST | `/admin/force-refresh-all` | `validateApiKey` | **Was unauthenticated** — fixed; see `__tests__/regression/adminAuth.test.ts` |
-| GET | `/api/v1/admin/bot/progress` | `validateApiKey` | DB portion works; bot-status portion is a stub in production |
+| GET | `/api/v1/admin/novels/stale` | `validateApiKey` | Read-only report, unrelated to the bot |
 | POST | `/api/v1/admin/novels/auto-update` | `validateApiKey` | Called by the userscript's "Update All" flow, not the bot |
+
+Every bot-gated route (`/api/v1/admin/novels/:novelId/update`, `/bot/status`,
+`/bot/trigger`, `/novels/single-run`, `/bot/progress`, `/admin/force-refresh-all`)
+was removed 2026-09-08 along with `bot/` itself — see
+[ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed). They always `503`'d
+in production anyway (`setBotModule()` had no caller), so nothing changes
+behaviorally; the dead plumbing is just gone now.
 
 ## userscript.ts (factory: `createUserscriptRouter(path?)`)
 

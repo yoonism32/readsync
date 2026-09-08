@@ -215,7 +215,7 @@ critique findings (not yet triaged into items below) live in
       React SPA's own bot-trigger panel (which existed but silently no-op'd
       in production) has been removed rather than fixed, because the bot is
       staying intentionally off — see
-      [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production).
+      [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).
       Not open work unless the decision to keep the bot off is revisited.
 - [ ] **Raw API explorer** — an in-app view for hitting `/api/v1/*` routes
       manually. Genuinely still unbuilt (the source doc's "legacy-only"
@@ -290,7 +290,7 @@ critique findings (not yet triaged into items below) live in
 - [x] **`@sparticuz/chromium` (bot's Puppeteer dep) bumped to latest.** Done
       2026-08-31 — `^143.0.4` → `^149.0.0` (no published CVE against the
       old pin, just version lag; the bot stays off in production regardless,
-      see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-is-intentionally-off-in-production)).
+      see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed)).
       `bot/` still compiles clean (`tsc -p bot/tsconfig.json`) and the full
       suite (38 files, 283 tests) stays green.
 - [ ] **TypeScript 6→7 and ESLint 9→10 major-version bumps deferred.** No
