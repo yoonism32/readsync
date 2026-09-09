@@ -4,8 +4,9 @@ Open and accepted-but-unbuilt work only. Completed work, full brainstorm
 lists, and the full decision trail (including everything declined and why)
 live in [`docs/changelog/2026-08-level-up.md`](./changelog/2026-08-level-up.md) —
 this file is the trimmed, current-facing view of it. Frontend design/UX
-critique findings (not yet triaged into items below) live in
-[`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md).
+critique findings live in
+[`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md),
+triaged into the "Impeccable audit" section below.
 
 > Two items below were corrected against the current codebase while writing
 > this file (see notes inline) — the source document was accurate when
@@ -612,6 +613,50 @@ Shipped for now: a simple delayed card-lift on hover. If revisited:
 If picking one: A — it's the only one that reduces clicks where the most
 browsing happens, and it forces the card restructure B and C would
 eventually want too.
+
+## Impeccable audit (2026-09-05) — triaged
+
+Priority issues and minor observations from
+[`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md)
+(score 25/40), converted into tracked items. Full reasoning and the
+per-heuristic scorecard live in that file.
+
+- [x] **`ProgressBar.tsx:36` animates `width` instead of `transform`.** Done
+      2026-09-09. The audit's deterministic scan flagged a layout-thrash
+      risk: every progress bar on My List and Novel detail animated the
+      `width` CSS property, forcing a reflow every frame. Switched to
+      `transform: scaleX()` (compositor-only) with `transformOrigin: left`;
+      visual result is identical, only the fill mechanism changed.
+- [ ] **[P1] One-accent rule violated on the busiest screens.** My List
+      paints all 148 row buttons crimson; Stats paints every genre bar
+      crimson too — on the two densest screens the accent no longer signals
+      "the one thing to do," which is DESIGN.md's own rule for it. Fix:
+      demote repeated row actions to a ghost style, give descriptive bar
+      charts a neutral fill.
+- [ ] **[P1] The two most prominent numbers on the app are both bad news.**
+      "182,407 new chapters" / "145 novels behind" (Dashboard) and
+      "Completion Rate: 1%" (Stats) lead in the same bold weight as positive
+      metrics, fighting the calm identity the design system claims. Fix:
+      reframe or visually demote catch-up-debt metrics; let
+      streak/hours/completed lead the hierarchy instead.
+- [ ] **[P2] Explorer and My List disagree about what "your library" looks
+      like.** Same 148 novels, incompatible presentations — My List shows
+      status/progress/last-read/continue per row, Explorer shows none of
+      it. Fix: status badge + progress sliver on tracked novels' Explorer
+      cards.
+- [ ] **[P2] Reading-activity heatmap is a wall of 365 unlabeled cells to
+      anything but a mouse.** Each day-cell only exposes a raw description
+      string with no grouping/summary region. Fix: one labelled region with
+      an aria-summary, mark cells presentational, group by month.
+- [ ] **[P3] "Rate" gives no hint a star widget exists.** DESIGN.md calls
+      the gold rating stars a signature component, but it's hidden behind a
+      plain underlined text link until clicked. Fix: show the empty/
+      outlined star row by default.
+- [ ] **Unreproduced: novel detail silently reverted to `/dashboard`.**
+      Observed once during the audit session with no error/toast; a
+      follow-up 10s timed test didn't reproduce it. Not confirmed — watch
+      for it, don't chase blind. If real, it breaks bookmarks/refresh/
+      shared links.
 
 ## Misc
 
