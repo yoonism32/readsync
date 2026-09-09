@@ -704,6 +704,11 @@ fall through:
       distinguishable by more than hue.** Flagged for accessibility during
       the persona walkthrough, not confirmed broken — check before treating
       as a real defect.
+- [ ] **`prefers-reduced-motion` is not handled anywhere.** Found 2026-09-09
+      while writing DESIGN.md's new Motion section — not from the audit
+      itself, but the same class of gap. Cover-lift hover-scale, nav-pill
+      background transitions, and ProgressBar's fill animation all run
+      unconditionally regardless of the user's OS-level motion preference.
 
 ## Misc
 

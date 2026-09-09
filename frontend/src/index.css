@@ -88,9 +88,29 @@
   --text-3xl: 2.1875rem;
   --text-4xl: 2.75rem;
 
+  /* ── Spacing ─────────────────────────────────────────── */
+  /* Codifies the ad hoc rhythm already in use across components (see
+     DESIGN.md § Layout) rather than inventing a new scale — existing
+     hardcoded values are not migrated by adding these; use them going
+     forward. */
+  --space-*: initial;
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 16px;
+  --space-xl: 24px;
+  --space-2xl: 32px;
+
   /* ── Motion ──────────────────────────────────────────── */
   --ease-*: initial;
   --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  /* Durations reflect what's actually shipped (150ms is the dominant
+     hover/transition duration across the app) — see DESIGN.md § Motion.
+     ProgressBar's 400ms fill is a deliberate exception, not a 4th tier. */
+  --motion-*: initial;
+  --motion-fast: 100ms;
+  --motion-standard: 150ms;
+  --motion-slow: 200ms;
 
   /* ── Radius ──────────────────────────────────────────── */
   --radius-*: initial;
