@@ -665,12 +665,17 @@ came from its per-heuristic scorecard and persona walkthroughs but were
 never promoted to a numbered priority — tracking them here so they don't
 fall through:
 
-- [ ] **[Worst score in the audit, 1/4] No help or onboarding affordance
-      anywhere.** Heuristic #10 (Help and Documentation) — no tooltip, help
-      icon, or first-run guidance across any of the 5 audited screens. Fix:
-      scope even a minimal affordance (a `?` icon linking to a short in-app
-      guide, or a visible keyboard-shortcut hint for the command palette)
-      before anything fancier.
+- [x] **[Worst score in the audit, 1/4] No help or onboarding affordance
+      anywhere.** Done 2026-09-09. Heuristic #10 (Help and Documentation) —
+      no tooltip, help icon, or first-run guidance across any of the 5
+      audited screens. Shipped the minimal affordance: a `?` icon in the
+      header (`frontend/src/components/HelpPanel.tsx`, mounted in
+      `Layout.tsx` next to the notification bell) opens a static panel
+      defining "Novels behind" / "Sync conflicts" / "New chapters" and
+      surfacing the command palette's ⌘K/Ctrl+K shortcut — also closes the
+      "command palette has no discoverability hint" item below. No backend,
+      no new dependency. A real onboarding flow is a separate, bigger item
+      if this turns out not to be enough.
 - [ ] **No bulk actions on My List.** Changing status on 10 novels means 10
       separate dropdown interactions, and there's no bulk undo either.
       Overlaps with Explorer-grid-hover candidate C (multi-select for bulk
@@ -682,9 +687,13 @@ fall through:
       reset action.
 - [ ] **No jump-to-chapter on large chapter grids.** Novels with 1500+
       chapters only get fixed 300-chapter pagination.
-- [ ] **Command palette has no discoverability hint.** A genuine power-user
-      win (per the audit's "What's Working" section), but nothing in the UI
-      signals it exists — no visible shortcut badge anywhere.
+- [x] **Command palette has no discoverability hint.** Done 2026-09-09,
+      alongside the help-affordance item above. A genuine power-user win
+      (per the audit's "What's Working" section), but nothing in the UI
+      signalled it exists. The new `HelpPanel` header icon surfaces the
+      ⌘K/Ctrl+K shortcut as its first entry — not a persistent on-screen
+      badge, but the first real discoverability signal. Revisit with an
+      actual badge if this proves insufficient.
 - [ ] **Internal IDs and jargon leak into the UI.** Scraper IDs appear in
       URLs (`novel/novelbin%3A...`); labels like "Sync Conflicts" / "Novels
       Behind" assume prior knowledge with no first-timer context or tooltip.

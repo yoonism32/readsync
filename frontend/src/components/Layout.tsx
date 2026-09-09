@@ -7,6 +7,7 @@ import type { RawLatestProgress } from '../api/normalize.js';
 import { useSocket, disconnectSocket, reconnectSocket } from '../hooks/useSocket.js';
 import type { Novel } from '../types/index.js';
 import { NotificationBell } from './NotificationBell.js';
+import { HelpPanel } from './HelpPanel.js';
 import { CommandPalette } from './CommandPalette.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
@@ -280,6 +281,7 @@ export function Layout({ children }: Props) {
             ))}
           </nav>
 
+          <HelpPanel />
           <NotificationBell />
 
           {/* Logout */}
