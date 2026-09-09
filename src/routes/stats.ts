@@ -18,85 +18,80 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
   const user_id = (req as AuthenticatedRequest).user.id;
 
   try {
-    const client = await pool.connect();
-    try {
-      const [
-        totalNovels,
-        statusCounts,
-        avgProgress,
-        sessionStats,
-        bookmarkCount,
-        deviceCount,
-      ] = await Promise.all([
-        client.query(
-          `SELECT COUNT(DISTINCT novel_id) AS total FROM progress_snapshots WHERE user_id = $1`,
-          [user_id],
-        ),
-        client.query(
-          `SELECT status, COUNT(*) AS count FROM user_novel_meta WHERE user_id = $1 AND status <> 'removed' GROUP BY status`,
-          [user_id],
-        ),
-        client.query(
-          `WITH latest AS (
-               SELECT DISTINCT ON (novel_id) novel_id, percent
-               FROM progress_snapshots WHERE user_id = $1
-               ORDER BY novel_id, created_at DESC
-             )
-             SELECT COALESCE(ROUND(AVG(percent)::numeric, 2), 0)::float AS avg_progress FROM latest`,
-          [user_id],
-        ),
-        client.query(
-          `SELECT COUNT(*) AS total_sessions,
-                    COALESCE(SUM(time_spent_seconds), 0) AS total_seconds,
-                    COALESCE(ROUND(AVG(time_spent_seconds)::numeric, 0), 0)::int AS avg_session_seconds
-             FROM reading_sessions WHERE user_id = $1 AND end_time IS NOT NULL`,
-          [user_id],
-        ),
-        client.query(
-          `SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`,
-          [user_id],
-        ),
-        client.query(
-          `SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`,
-          [user_id],
-        ),
-      ]);
+    const [
+      totalNovels,
+      statusCounts,
+      avgProgress,
+      sessionStats,
+      bookmarkCount,
+      deviceCount,
+    ] = await Promise.all([
+      pool.query(
+        `SELECT COUNT(DISTINCT novel_id) AS total FROM progress_snapshots WHERE user_id = $1`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT status, COUNT(*) AS count FROM user_novel_meta WHERE user_id = $1 AND status <> 'removed' GROUP BY status`,
+        [user_id],
+      ),
+      pool.query(
+        `WITH latest AS (
+             SELECT DISTINCT ON (novel_id) novel_id, percent
+             FROM progress_snapshots WHERE user_id = $1
+             ORDER BY novel_id, created_at DESC
+           )
+           SELECT COALESCE(ROUND(AVG(percent)::numeric, 2), 0)::float AS avg_progress FROM latest`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total_sessions,
+                  COALESCE(SUM(time_spent_seconds), 0) AS total_seconds,
+                  COALESCE(ROUND(AVG(time_spent_seconds)::numeric, 0), 0)::int AS avg_session_seconds
+           FROM reading_sessions WHERE user_id = $1 AND end_time IS NOT NULL`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`,
+        [user_id],
+      ),
+      pool.query(
+        `SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`,
+        [user_id],
+      ),
+    ]);
 
-      const statusMap: Record<string, number> = {};
-      for (const row of statusCounts.rows) {
-        statusMap[row.status as string] = Number(row.count);
-      }
-
-      const totalTracked = Object.values(statusMap).reduce((a, b) => a + b, 0);
-      const completion_rate =
-        totalTracked > 0
-          ? Math.round(((statusMap.completed ?? 0) / totalTracked) * 1000) / 10
-          : 0;
-
-      res.json({
-        total_novels: Number(totalNovels.rows[0]?.total ?? 0),
-        novels_by_status: {
-          reading: statusMap.reading ?? 0,
-          completed: statusMap.completed ?? 0,
-          'on-hold': statusMap['on-hold'] ?? 0,
-          dropped: statusMap.dropped ?? 0,
-          'plan-to-read': statusMap['plan-to-read'] ?? 0,
-        },
-        completion_rate,
-        avg_progress: Number(avgProgress.rows[0]?.avg_progress ?? 0),
-        reading_sessions: {
-          total: Number(sessionStats.rows[0]?.total_sessions ?? 0),
-          total_time_seconds: Number(sessionStats.rows[0]?.total_seconds ?? 0),
-          avg_session_seconds: Number(
-            sessionStats.rows[0]?.avg_session_seconds ?? 0,
-          ),
-        },
-        total_bookmarks: Number(bookmarkCount.rows[0]?.total ?? 0),
-        active_devices: Number(deviceCount.rows[0]?.total ?? 0),
-      });
-    } finally {
-      client.release();
+    const statusMap: Record<string, number> = {};
+    for (const row of statusCounts.rows) {
+      statusMap[row.status as string] = Number(row.count);
     }
+
+    const totalTracked = Object.values(statusMap).reduce((a, b) => a + b, 0);
+    const completion_rate =
+      totalTracked > 0
+        ? Math.round(((statusMap.completed ?? 0) / totalTracked) * 1000) / 10
+        : 0;
+
+    res.json({
+      total_novels: Number(totalNovels.rows[0]?.total ?? 0),
+      novels_by_status: {
+        reading: statusMap.reading ?? 0,
+        completed: statusMap.completed ?? 0,
+        'on-hold': statusMap['on-hold'] ?? 0,
+        dropped: statusMap.dropped ?? 0,
+        'plan-to-read': statusMap['plan-to-read'] ?? 0,
+      },
+      completion_rate,
+      avg_progress: Number(avgProgress.rows[0]?.avg_progress ?? 0),
+      reading_sessions: {
+        total: Number(sessionStats.rows[0]?.total_sessions ?? 0),
+        total_time_seconds: Number(sessionStats.rows[0]?.total_seconds ?? 0),
+        avg_session_seconds: Number(
+          sessionStats.rows[0]?.avg_session_seconds ?? 0,
+        ),
+      },
+      total_bookmarks: Number(bookmarkCount.rows[0]?.total ?? 0),
+      active_devices: Number(deviceCount.rows[0]?.total ?? 0),
+    });
   } catch (error) {
     handleDbError(res, error, 'Get statistics summary');
   }

@@ -154,35 +154,35 @@ export function Dashboard() {
         </a>
       )}
 
-      {/* Stats grid. The loading placeholder is given the same minHeight as
-          the real grid below (3 AttentionStat rows + the 8-item dl, stacked
-          single-column on mobile) — without it, the spinner's ~100px box
-          collapsing into a ~450px grid the instant /stats/summary resolves
-          was the single largest layout shift on the page (CLS 0.874). */}
-      {statsLoading ? (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 40, minHeight: 450, alignItems: 'center', marginBottom: 32 }}><Spinner /></div>
-      ) : (
-        <div className="stagger-1 animate-fade-in" style={{ marginBottom: 32 }}>
-          {/* Tier 1 — the three you act on. Each goes quiet at zero, so a
-              caught-up library reads calm instead of shouting three noughts. */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
-              gap: 12,
-              marginBottom: 14,
-            }}
-          >
-            <AttentionStat label="Novels behind" value={libraryStats.novelsBehind} />
-            <AttentionStat label="New chapters" value={libraryStats.newChapters} />
-            <AttentionStat
-              label="Sync conflicts"
-              value={libraryStats.syncConflicts}
-              sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
-            />
-          </div>
+      {/* Stats grid. Tier 1 only needs /novels (already loaded), so it no
+          longer waits on the slower /stats/summary call — only Tier 2 does.
+          Each placeholder is sized to its own content (not the whole
+          section) to avoid the layout shift a single combined spinner
+          caused (CLS 0.874) when the two tiers settled at different times. */}
+      <div className="stagger-1 animate-fade-in" style={{ marginBottom: 32 }}>
+        {/* Tier 1 — the three you act on. Each goes quiet at zero, so a
+            caught-up library reads calm instead of shouting three noughts. */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
+            gap: 12,
+            marginBottom: 14,
+          }}
+        >
+          <AttentionStat label="Novels behind" value={libraryStats.novelsBehind} />
+          <AttentionStat label="New chapters" value={libraryStats.newChapters} />
+          <AttentionStat
+            label="Sync conflicts"
+            value={libraryStats.syncConflicts}
+            sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
+          />
+        </div>
 
-          {/* Tier 2 — reference figures. Dense, quiet, scannable. */}
+        {/* Tier 2 — reference figures. Dense, quiet, scannable. */}
+        {statsLoading ? (
+          <div className="panel" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '14px 18px', minHeight: 76, borderRadius: 'var(--radius-lg)' }}><Spinner /></div>
+        ) : (
           <dl
             className="panel"
             style={{
@@ -207,8 +207,8 @@ export function Dashboard() {
               sub={`${stats?.reading_sessions.total ?? 0} sessions`}
             />
           </dl>
-        </div>
-      )}
+        )}
+      </div>
 
       <ActivityHeatmap />
 
