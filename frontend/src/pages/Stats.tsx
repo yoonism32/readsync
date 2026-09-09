@@ -322,7 +322,7 @@ function ShareBars({
             <span className="tabular text-muted" style={{ fontSize: 'var(--text-xs)' }}>{r.sub}</span>
           </div>
           <div style={{ height: 6, borderRadius: 9999, overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
-            <div style={{ width: `${r.percent}%`, height: '100%', background: 'var(--color-accent)', borderRadius: 9999 }} />
+            <div style={{ width: `${r.percent}%`, height: '100%', background: 'rgba(255,255,255,0.16)', borderRadius: 9999 }} />
           </div>
         </div>
       ))}

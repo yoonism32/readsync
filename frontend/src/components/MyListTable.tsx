@@ -164,7 +164,7 @@ export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth }: {
             href={continueHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="btn-accent"
+            className="btn-ghost"
             style={{ textDecoration: 'none', fontSize: 'var(--text-xs)', padding: '6px 12px', display: 'inline-block' }}
           >
             Continue Reading →

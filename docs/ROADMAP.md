@@ -627,12 +627,22 @@ per-heuristic scorecard live in that file.
       `width` CSS property, forcing a reflow every frame. Switched to
       `transform: scaleX()` (compositor-only) with `transformOrigin: left`;
       visual result is identical, only the fill mechanism changed.
-- [ ] **[P1] One-accent rule violated on the busiest screens.** My List
-      paints all 148 row buttons crimson; Stats paints every genre bar
-      crimson too — on the two densest screens the accent no longer signals
-      "the one thing to do," which is DESIGN.md's own rule for it. Fix:
-      demote repeated row actions to a ghost style, give descriptive bar
-      charts a neutral fill.
+- [x] **[P1] One-accent rule violated on the busiest screens.** Done
+      2026-09-09. My List painted all 148 row buttons crimson; Stats
+      painted every genre bar (and device bar — same shared `ShareBars`
+      component, same problem) crimson too. Fixed by design-skill-guided
+      color-by-job reasoning (`dataviz` skill: color signals identity/
+      magnitude/status — a repeated non-primary action and a purely
+      descriptive share bar carry neither, so neither should wear the
+      accent). My List's "Continue Reading" link
+      (`components/MyListTable.tsx`) is now `.btn-ghost`, matching its
+      existing use in 9 other files. `ShareBars`' fill
+      (`pages/Stats.tsx`, backs both "By Genre" and "By Device") is now a
+      flat neutral (`rgba(255,255,255,0.16)`) instead of
+      `var(--color-accent)` — genre/device identity is already in the text
+      label, so the bar only needs to show magnitude, not carry brand
+      color. Crimson now reads as "the one thing to do" again on both
+      screens.
 - [ ] **[P1] The two most prominent numbers on the app are both bad news.**
       "182,407 new chapters" / "145 novels behind" (Dashboard) and
       "Completion Rate: 1%" (Stats) lead in the same bold weight as positive
