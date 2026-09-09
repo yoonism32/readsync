@@ -658,6 +658,44 @@ per-heuristic scorecard live in that file.
       for it, don't chase blind. If real, it breaks bookmarks/refresh/
       shared links.
 
+### Additional findings (scorecard + persona notes, not in the audit's own Priority Issues list)
+
+The audit's "Priority Issues" section above only elevated 5 findings; these
+came from its per-heuristic scorecard and persona walkthroughs but were
+never promoted to a numbered priority — tracking them here so they don't
+fall through:
+
+- [ ] **[Worst score in the audit, 1/4] No help or onboarding affordance
+      anywhere.** Heuristic #10 (Help and Documentation) — no tooltip, help
+      icon, or first-run guidance across any of the 5 audited screens. Fix:
+      scope even a minimal affordance (a `?` icon linking to a short in-app
+      guide, or a visible keyboard-shortcut hint for the command palette)
+      before anything fancier.
+- [ ] **No bulk actions on My List.** Changing status on 10 novels means 10
+      separate dropdown interactions, and there's no bulk undo either.
+      Overlaps with Explorer-grid-hover candidate C (multi-select for bulk
+      actions, see above) — if C is ever picked up, this is solved by the
+      same build.
+- [ ] **No "clear all filters" on My List.** 10 simultaneous filter controls
+      (6 status tabs + 4 "smart" filters) are shown before any interaction —
+      at the edge of the ≤4-per-decision-point guidance — with no single
+      reset action.
+- [ ] **No jump-to-chapter on large chapter grids.** Novels with 1500+
+      chapters only get fixed 300-chapter pagination.
+- [ ] **Command palette has no discoverability hint.** A genuine power-user
+      win (per the audit's "What's Working" section), but nothing in the UI
+      signals it exists — no visible shortcut badge anywhere.
+- [ ] **Internal IDs and jargon leak into the UI.** Scraper IDs appear in
+      URLs (`novel/novelbin%3A...`); labels like "Sync Conflicts" / "Novels
+      Behind" assume prior knowledge with no first-timer context or tooltip.
+- [ ] **Novel detail's author field holds the title, not the author** — a
+      scraper data issue, not a layout bug (e.g. renders "by My Medical
+      Skills Give Me Experience Points").
+- [ ] **Verify: chapter-grid legend (Read/Current/Unread) may not be
+      distinguishable by more than hue.** Flagged for accessibility during
+      the persona walkthrough, not confirmed broken — check before treating
+      as a real defect.
+
 ## Misc
 
 - [ ] **Close the stale-sync race in `ProgressSync.ts` properly (AbortController
