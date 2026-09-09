@@ -8,22 +8,44 @@ import { OnThisDay } from '../components/OnThisDay.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
-import { ArrowRightIcon } from '../components/Icon.js';
+import { ArrowRightIcon, FlameIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
 import { behindCount } from '../lib/behindStatus.js';
+import { computeStreaks } from '../lib/streaks.js';
+import type { DailyActivity } from '../lib/streaks.js';
 import type { Novel, StatsSummary } from '../types/index.js';
 
-/** Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero. */
-function AttentionStat({ label, value, sub }: { label: string; value: number; sub?: string }) {
+/**
+ * Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero.
+ * `tone` picks the active-state accent — 'debt' (default) for catch-up
+ * metrics, 'positive' for good-news ones — so a streak doesn't compete for
+ * attention using the same alarm color as "novels behind". Fixes the
+ * Impeccable audit's "both leading numbers are bad news" finding by giving
+ * the row a positive card to lead with.
+ */
+function AttentionStat({
+  label,
+  value,
+  sub,
+  tone = 'debt',
+}: {
+  label: string;
+  value: number;
+  sub?: string;
+  tone?: 'debt' | 'positive';
+}) {
   const active = value > 0;
+  const border = tone === 'positive' ? 'var(--color-teal-border)' : 'var(--color-accent-border)';
+  const glow = tone === 'positive' ? 'var(--color-teal-glow)' : 'var(--color-accent-glow)';
+  const bright = tone === 'positive' ? 'var(--color-teal-bright)' : 'var(--color-accent-bright)';
   return (
     <div
       className="panel"
       style={{
         borderRadius: 'var(--radius-xl)',
         padding: '18px 22px',
-        borderColor: active ? 'var(--color-accent-border)' : 'var(--color-border)',
-        background: active ? 'var(--color-accent-glow)' : 'var(--color-bg-card)',
+        borderColor: active ? border : 'var(--color-border)',
+        background: active ? glow : 'var(--color-bg-card)',
       }}
     >
       <div
@@ -39,9 +61,13 @@ function AttentionStat({ label, value, sub }: { label: string; value: number; su
           lineHeight: 1.1,
           fontWeight: 700,
           fontFamily: 'var(--font-display)',
-          color: active ? 'var(--color-accent-bright)' : 'var(--color-text-faint)',
+          color: active ? bright : 'var(--color-text-faint)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
         }}
       >
+        {tone === 'positive' && active && <FlameIcon size={22} />}
         {value}
       </div>
       {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>{sub}</div>}
@@ -76,6 +102,11 @@ export function Dashboard() {
   const { data: novelsData } = useSWR<Novel[]>('/novels', fetchNovels, {
     refreshInterval: 30 * 60_000,
   });
+  // Same SWR key ActivityHeatmap uses below — deduped, not a second request.
+  const { data: dailyData } = useSWR<DailyActivity[]>('/stats/daily?days=365', swrFetcher, {
+    revalidateOnFocus: false,
+  });
+  const streak = useMemo(() => computeStreaks(dailyData ?? []), [dailyData]);
 
   const recentNovels = (novelsData ?? [])
     .filter(n => n.status === 'reading' && n.latest_read_at)
@@ -170,6 +201,12 @@ export function Dashboard() {
             marginBottom: 14,
           }}
         >
+          <AttentionStat
+            label="Day streak"
+            value={streak.current}
+            sub={streak.longest > streak.current ? `best ${streak.longest}` : undefined}
+            tone="positive"
+          />
           <AttentionStat label="Novels behind" value={libraryStats.novelsBehind} />
           <AttentionStat label="New chapters" value={libraryStats.newChapters} />
           <AttentionStat

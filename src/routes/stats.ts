@@ -50,10 +50,9 @@ router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
            FROM reading_sessions WHERE user_id = $1 AND end_time IS NOT NULL`,
         [user_id],
       ),
-      pool.query(
-        `SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`,
-        [user_id],
-      ),
+      pool.query(`SELECT COUNT(*) AS total FROM bookmarks WHERE user_id = $1`, [
+        user_id,
+      ]),
       pool.query(
         `SELECT COUNT(*) AS total FROM devices WHERE user_id = $1 AND active = TRUE`,
         [user_id],

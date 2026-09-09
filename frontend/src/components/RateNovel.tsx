@@ -37,24 +37,32 @@ export function RateNovel({ novel }: RateNovelProps) {
   };
 
   if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={openEditor}
-        style={{
-          background: 'none',
-          border: 'none',
-          padding: 0,
-          color: novel.rating > 0 ? 'var(--color-gold)' : 'var(--color-text-faint)',
-          fontSize: 'var(--text-xs)',
-          cursor: 'pointer',
-          textDecoration: 'underline',
-          textUnderlineOffset: 3,
-        }}
-      >
-        {novel.rating > 0 ? `★ ${novel.rating.toFixed(1)}` : 'Rate'}
-      </button>
-    );
+    if (novel.rating > 0) {
+      return (
+        <button
+          type="button"
+          onClick={openEditor}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            color: 'var(--color-gold)',
+            fontSize: 'var(--text-xs)',
+            cursor: 'pointer',
+            textDecoration: 'underline',
+            textUnderlineOffset: 3,
+          }}
+        >
+          {`★ ${novel.rating.toFixed(1)}`}
+        </button>
+      );
+    }
+    // Unrated: show the actual (empty) star row rather than a plain "Rate"
+    // text link — the audit flagged that DESIGN.md calls stars a signature
+    // component, yet nothing hinted the widget existed until clicked.
+    // Clicking a star saves directly; no separate open/confirm step needed
+    // for the empty case.
+    return <RatingStars value={0} onChange={rating => { void save(rating); }} size={16} readOnly={busy} />;
   }
 
   return (

@@ -510,10 +510,13 @@ export function Stats() {
         </Cell>
 
         <Cell index={1}>
+          {/* Leads with the count, not the rate — "1%" reads as bad news at
+              a glance even on a library that's actively being read; the
+              completed count is the same fact without the alarm framing. */}
           <MiniStat
-            label="Completion Rate"
-            value={`${Math.round(summary?.completion_rate ?? 0)}%`}
-            sub={`${summary?.novels_by_status.completed ?? 0} of ${totalTracked} tracked`}
+            label="Completed"
+            value={String(summary?.novels_by_status.completed ?? 0)}
+            sub={`${Math.round(summary?.completion_rate ?? 0)}% of ${totalTracked} tracked`}
           />
         </Cell>
 

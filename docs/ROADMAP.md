@@ -643,12 +643,21 @@ per-heuristic scorecard live in that file.
       label, so the bar only needs to show magnitude, not carry brand
       color. Crimson now reads as "the one thing to do" again on both
       screens.
-- [ ] **[P1] The two most prominent numbers on the app are both bad news.**
-      "182,407 new chapters" / "145 novels behind" (Dashboard) and
-      "Completion Rate: 1%" (Stats) lead in the same bold weight as positive
-      metrics, fighting the calm identity the design system claims. Fix:
-      reframe or visually demote catch-up-debt metrics; let
-      streak/hours/completed lead the hierarchy instead.
+- [x] **[P1] The two most prominent numbers on the app are both bad news.**
+      Done 2026-09-09. "182,407 new chapters" / "145 novels behind"
+      (Dashboard) and "Completion Rate: 1%" (Stats) led in the same bold
+      weight as positive metrics, fighting the calm identity the design
+      system claims. Dashboard's Tier-1 row (`AttentionStat` in
+      `frontend/src/pages/Dashboard.tsx`) now leads with a "Day streak" card
+      — reusing `computeStreaks()` and the same `/stats/daily` SWR key
+      `ActivityHeatmap` already fetches, so it's a dedup, not a new request —
+      styled with a `tone="positive"` teal accent so it doesn't borrow the
+      crimson "act on this" alarm color the debt cards use; novels-behind/
+      new-chapters/sync-conflicts still follow it, unchanged otherwise.
+      Stats' `MiniStat` (`frontend/src/pages/Stats.tsx`) now leads with the
+      completed-count ("Completed: 2") instead of the bare rate ("1%"),
+      demoting the percentage to the sub-line — same underlying facts, the
+      count just doesn't read as failure the way a low rate does.
 - [ ] **[P2] Explorer and My List disagree about what "your library" looks
       like.** Same 148 novels, incompatible presentations — My List shows
       status/progress/last-read/continue per row, Explorer shows none of
@@ -658,10 +667,13 @@ per-heuristic scorecard live in that file.
       anything but a mouse.** Each day-cell only exposes a raw description
       string with no grouping/summary region. Fix: one labelled region with
       an aria-summary, mark cells presentational, group by month.
-- [ ] **[P3] "Rate" gives no hint a star widget exists.** DESIGN.md calls
-      the gold rating stars a signature component, but it's hidden behind a
-      plain underlined text link until clicked. Fix: show the empty/
-      outlined star row by default.
+- [x] **[P3] "Rate" gives no hint a star widget exists.** Done 2026-09-09.
+      DESIGN.md calls the gold rating stars a signature component, but the
+      unrated state hid it behind a plain underlined "Rate" text link until
+      clicked. `RateNovel.tsx` now renders the actual empty `RatingStars`
+      row by default for unrated novels — clicking a star saves directly,
+      no separate open/confirm step. Already-rated novels keep the existing
+      "★ x.x" text link into the full open/close editor, unchanged.
 - [ ] **Unreproduced: novel detail silently reverted to `/dashboard`.**
       Observed once during the audit session with no error/toast; a
       follow-up 10s timed test didn't reproduce it. Not confirmed — watch
@@ -714,11 +726,17 @@ fall through:
       distinguishable by more than hue.** Flagged for accessibility during
       the persona walkthrough, not confirmed broken — check before treating
       as a real defect.
-- [ ] **`prefers-reduced-motion` is not handled anywhere.** Found 2026-09-09
-      while writing DESIGN.md's new Motion section — not from the audit
-      itself, but the same class of gap. Cover-lift hover-scale, nav-pill
-      background transitions, and ProgressBar's fill animation all run
-      unconditionally regardless of the user's OS-level motion preference.
+- [x] ~~**`prefers-reduced-motion` is not handled anywhere.**~~ —
+      **corrected: already done, this claim was stale even when written.**
+      `frontend/src/index.css` already has a global
+      `@media (prefers-reduced-motion: reduce) { *, *::before, *::after {
+      animation-duration: 0.01ms !important; transition-duration: 0.01ms
+      !important; } }` rule (shipped in `2abd22b`, before this item was
+      written). `!important` in an author stylesheet outranks a plain inline
+      `style` declaration for the same property, so it does reach
+      ProgressBar's inline `transition: transform 0.4s ...` along with the
+      cover-lift and nav-pill CSS-class transitions — nothing here was
+      actually unhandled. Verified 2026-09-09, no code change needed.
 
 ## Misc
 
