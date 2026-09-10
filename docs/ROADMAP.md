@@ -663,10 +663,21 @@ per-heuristic scorecard live in that file.
       status/progress/last-read/continue per row, Explorer shows none of
       it. Fix: status badge + progress sliver on tracked novels' Explorer
       cards.
-- [ ] **[P2] Reading-activity heatmap is a wall of 365 unlabeled cells to
-      anything but a mouse.** Each day-cell only exposes a raw description
-      string with no grouping/summary region. Fix: one labelled region with
-      an aria-summary, mark cells presentational, group by month.
+- [x] **[P2] Reading-activity heatmap is a wall of 365 unlabeled cells to
+      anything but a mouse.** Done 2026-09-09. Also fixed the layout the
+      audit didn't flag: the grid used `width: max-content` and only filled
+      part of its card, with no month/weekday labels. `ActivityHeatmap.tsx`
+      now sizes its cells from the measured card width (`ResizeObserver`),
+      adds month labels (derived from the actual dates, so the Dec→Jan
+      rolling-window crossing needs no special-casing) and Mon/Wed/Fri
+      weekday labels, and fixes the header's stale "chapters this year" to
+      "Last 365 days". Accessibility: the visual grid is `role="img"` with
+      a one-line `aria-label` summary (same convention as
+      `ReadingTimeline.tsx`'s SVG), and a `sr-only` list carries a full
+      `"<date>: N chapters"` / `"<date>: no chapters read"` description for
+      every real day — padding cells stay unlabeled. Calendar/date math
+      moved to `lib/activityHeatmap.ts` (unit-tested) so the component is
+      layout-only.
 - [x] **[P3] "Rate" gives no hint a star widget exists.** Done 2026-09-09.
       DESIGN.md calls the gold rating stars a signature component, but the
       unrated state hid it behind a plain underlined "Rate" text link until

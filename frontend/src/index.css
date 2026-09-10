@@ -361,6 +361,18 @@ p {
   }
 }
 
+/* ── Activity heatmap gap ────────────────────────────────── */
+/* The grid's 53 week columns are `1fr` (fluid, fills the card), so on a
+   narrow card the fixed gap is what eats the width — 52 gaps at 4px is
+   ~200px gone before any cell gets sized. Shrinking the gap under the
+   card's usual narrow-viewport width keeps cells legible instead of
+   collapsing to illegible dots, without any JS measurement. */
+@media (max-width: 640px) {
+  .activity-heatmap-grid {
+    --heatmap-gap: 1px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   *,
