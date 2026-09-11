@@ -6,11 +6,12 @@ const KEY_STORAGE = 'readsync_api_key';
 // ── Key management ────────────────────────────────────────
 
 export function getApiKey(): string {
-  return localStorage.getItem(KEY_STORAGE) ?? '';
+  return '';
 }
 
 export function setApiKey(key: string): void {
-  localStorage.setItem(KEY_STORAGE, key);
+  void key;
+  localStorage.removeItem(KEY_STORAGE);
 }
 
 export function hasApiKey(): boolean {
@@ -38,15 +39,13 @@ export async function request<T = unknown>(
   path: string,
   { method = 'GET', body, qs = {} }: RequestOptions = {}
 ): Promise<T> {
-  const key = getApiKey();
-  if (!key) throw new ApiError(401, 'API key required. Please authenticate first.');
+  localStorage.removeItem(KEY_STORAGE);
 
   const fullPath = path.startsWith('/api/v1') ? path
     : path.startsWith('/') ? `${API_BASE}${path}`
     : `${API_BASE}/${path}`;
 
   const url = new URL(fullPath, window.location.origin);
-  url.searchParams.set('user_key', key);
   url.searchParams.set('_t', Date.now().toString());
 
   for (const [k, v] of Object.entries(qs)) {
@@ -93,8 +92,11 @@ export const auth = {
     }).then(r => r.json()) as Promise<{ success: boolean; error?: string; api_key?: string | null }>,
   logout: () =>
     fetch('/api/auth/logout', { method: 'POST' }).then(r => r.json()),
-  recoverApiKey: () =>
-    fetch('/api/auth/api-key').then(r => r.json()) as Promise<{ api_key: string | null }>,
+  createApiKey: async () => {
+    const response = await fetch('/api/auth/api-key', { method: 'POST' });
+    if (!response.ok) throw new Error('Could not issue API key');
+    return response.json() as Promise<{ api_key: string }>;
+  },
 };
 
 // ── Novels ────────────────────────────────────────────────
@@ -108,13 +110,28 @@ import type { RawNovel } from './normalize.js';
  * (nested latest_global/latest_per_device); pages get the flat Novel[].
  */
 export async function fetchNovels(path: string): Promise<Novel[]> {
-  const raw = await request<RawNovel[]>(path);
-  return raw.map(normalizeNovel);
+  const url = new URL(path, window.location.origin);
+  // Explicitly paginated callers retain their requested slice.
+  if (url.searchParams.has('limit') || url.searchParams.has('offset')) {
+    return (await request<RawNovel[]>(path)).map(normalizeNovel);
+  }
+  const rows = new Map<string, Novel>();
+  for (let offset = 0; ; offset += 200) {
+    url.searchParams.set('limit', '200');
+    url.searchParams.set('offset', String(offset));
+    const page = await request<RawNovel[]>(url.pathname + url.search);
+    for (const row of page) {
+      const novel = normalizeNovel(row);
+      rows.set(novel.novel_id, novel);
+    }
+    if (page.length < 200) break;
+  }
+  return [...rows.values()];
 }
 
 /** Cover image URL for a novel — the endpoint requires the api key. */
 export function coverUrl(novelId: string): string {
-  return `/api/v1/covers/${encodeURIComponent(novelId)}?user_key=${encodeURIComponent(getApiKey())}`;
+  return `/api/v1/covers/${encodeURIComponent(novelId)}`;
 }
 
 export const novels = {

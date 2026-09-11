@@ -27,6 +27,7 @@ import {
   parseChapterFromUrl,
 } from '../services/NovelService.js';
 import { decideProgressUpdate } from '../services/ProgressPolicy.js';
+import { isReaderUrl } from '../services/ReaderUrl.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 /**
@@ -61,13 +62,24 @@ export function createProgressRouter(io: SocketServer): Router {
     [
       body('device_id')
         .isString()
-        .isLength({ min: 1, max: MAX_DEVICE_ID_LENGTH }),
+        .isLength({ min: 1, max: MAX_DEVICE_ID_LENGTH })
+        .not()
+        .matches(/^(manual|system|import):/),
       body('device_label')
         .isString()
         .isLength({ min: 1, max: MAX_DEVICE_LABEL_LENGTH }),
-      body('novel_url').isURL(),
+      body('novel_url').custom(isReaderUrl),
       body('percent').isFloat({ min: MIN_PERCENT, max: MAX_PERCENT }),
       body('seconds_on_page').optional().isInt({ min: 0 }),
+      body('current_chapter_num').optional().isInt({ min: 1, max: 100000 }),
+      body('latest_chapter_num')
+        .optional({ values: 'null' })
+        .isInt({ min: 1, max: 100000 }),
+      body('latest_chapter_title')
+        .optional({ values: 'null' })
+        .isString()
+        .isLength({ max: 1000 }),
+      body('latest_chapter_verified').optional().isBoolean({ strict: true }),
       handleValidationErrors,
     ],
     validateApiKey,
@@ -154,7 +166,7 @@ export function createProgressRouter(io: SocketServer): Router {
 
           const deviceType = detectDeviceType(req.get('User-Agent'));
 
-          await client.query(
+          const device = await client.query(
             `
             INSERT INTO devices (id, user_id, device_label, device_type, user_agent, last_seen, active)
             VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP, TRUE)
@@ -164,6 +176,8 @@ export function createProgressRouter(io: SocketServer): Router {
               user_agent = EXCLUDED.user_agent,
               last_seen = CURRENT_TIMESTAMP,
               active = TRUE
+            WHERE devices.user_id = EXCLUDED.user_id
+            RETURNING id
           `,
             [
               device_id,
@@ -174,11 +188,17 @@ export function createProgressRouter(io: SocketServer): Router {
             ],
           );
 
+          if (device.rows.length === 0) {
+            res.status(403).json({ error: 'Device belongs to another user' });
+            return null;
+          }
+
           if (!novelExistsInList) {
             await client.query(
               `
               INSERT INTO novels (id, title, primary_url, latest_chapter_num, latest_chapter_title, chapters_updated_at)
               VALUES ($1, $2, $3, $4::integer, $5, CASE WHEN $4::integer IS NOT NULL THEN CURRENT_TIMESTAMP ELSE NULL END)
+              ON CONFLICT (id) DO NOTHING
             `,
               [
                 novel_id,
@@ -259,7 +279,7 @@ export function createProgressRouter(io: SocketServer): Router {
             completed_at: Date | null;
             status: string;
           }>(
-            'SELECT current_read_through, started_at, completed_at, status FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2',
+            'SELECT current_read_through, started_at, completed_at, status FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2 FOR UPDATE',
             [user_id, novel_id],
           );
           let currentReadThrough =
@@ -276,7 +296,7 @@ export function createProgressRouter(io: SocketServer): Router {
             max_chapter: number;
             max_percent: string;
           }>(
-            'SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 AND device_id = $4',
+            "SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 AND device_id = $4 AND created_at >= COALESCE((SELECT progress_reset_at FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2), '-infinity'::timestamptz)",
             [user_id, novel_id, currentReadThrough, device_id],
           );
           const maxChapter = maxChapterResult.rows[0]?.max_chapter ?? 0;
@@ -358,7 +378,7 @@ export function createProgressRouter(io: SocketServer): Router {
             percent: string;
             chapter_num: number;
           }>(
-            'SELECT percent, chapter_num FROM progress_snapshots WHERE user_id = $1 AND device_id = $2 AND novel_id = $3 AND read_through_num = $4 ORDER BY created_at DESC LIMIT 1',
+            "SELECT percent, chapter_num FROM progress_snapshots WHERE user_id = $1 AND device_id = $2 AND novel_id = $3 AND read_through_num = $4 AND created_at >= COALESCE((SELECT progress_reset_at FROM user_novel_meta WHERE user_id = $1 AND novel_id = $3), '-infinity'::timestamptz) ORDER BY created_at DESC LIMIT 1",
             [user_id, device_id, novel_id, currentReadThrough],
           );
 

@@ -1,9 +1,8 @@
 import { useState } from 'react';
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
-import { Spinner } from '../components/Spinner.js';
+import { LoadError, PageLoading } from '../components/PageFeedback.js';
 import { SmartphoneIcon, MonitorIcon } from '../components/Icon.js';
-import { useCountUp } from '../hooks/useCountUp.js';
 import type { StatsBreakdown, StatsSummary, GenreBreakdown, VelocityStats, HourNovel } from '../types/index.js';
 
 interface PaceNovel {
@@ -37,8 +36,9 @@ interface RatingAudit {
 
 function formatDuration(seconds: number): string {
   if (seconds <= 0) return '0m';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
+  const minutes = Math.round(seconds / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
   if (h === 0) return `${m}m`;
   if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
@@ -64,7 +64,7 @@ function CellLabel({ children }: { children: React.ReactNode }) {
 
 function CellTitle({ title, sub, action }: { title: string; sub?: string; action?: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 10 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
       <h2 style={{ fontSize: 'var(--text-lg)', fontWeight: 600 }}>{title}</h2>
       {sub && <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>{sub}</span>}
       {action && <span style={{ marginLeft: 'auto', alignSelf: 'center' }}>{action}</span>}
@@ -77,38 +77,16 @@ function CellTitle({ title, sub, action }: { title: string; sub?: string; action
  *  between all-time and this week. */
 function WindowChip({ active, onToggle }: { active: boolean; onToggle: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-pressed={active}
-      style={{
-        fontSize: 'var(--text-xs)',
-        fontWeight: 500,
-        padding: '3px 10px',
-        borderRadius: 9999,
-        cursor: 'pointer',
-        border: `1px solid ${active ? 'var(--color-accent)' : 'var(--color-border)'}`,
-        background: active ? 'var(--color-accent-glow)' : 'transparent',
-        // --color-accent measured 4.01:1 here (WCAG needs 4.5) once composited
-        // over --color-accent-glow on a panel background — accent-bright
-        // clears it (5.16:1) without touching the global accent token.
-        color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
-        transition: 'background 160ms ease, border-color 160ms ease, color 160ms ease',
-      }}
-    >
-      This week
-    </button>
+    <div className="time-window" role="group" aria-label="Hourly chart period">
+      <button type="button" aria-pressed={active} onClick={() => { if (!active) onToggle(); }}>This week</button>
+      <button type="button" aria-pressed={!active} onClick={() => { if (active) onToggle(); }}>All time</button>
+    </div>
   );
 }
 
-/** A Bento cell — the grid's spans live in index.css (.stats-cell-*); this
- *  just wires the panel surface + a cycling stagger delay onto whichever
- *  span class the caller picks. Capped at 4 stagger buckets (existing
- *  .stagger-1..4 in index.css, 50-200ms) — well under motion.md's ~500ms
- *  total-stagger ceiling even across all 11 cells. */
+/** A statistics cell; summaries and charts use separate reading groups. */
 function Cell({
   span,
-  index,
   children,
 }: {
   span?: 'hero' | 'wide' | 'tall';
@@ -116,16 +94,16 @@ function Cell({
   children: React.ReactNode;
 }) {
   const spanClass = span ? `stats-cell-${span}` : '';
-  const staggerClass = `stagger-${(index % 4) + 1}`;
   return (
     <div
-      className={`panel animate-fade-in ${staggerClass} ${spanClass}`}
+      className={`panel stats-cell ${spanClass}`}
       style={{
         borderRadius: 'var(--radius-xl)',
         padding: '10px 16px 12px',
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        minWidth: 0,
         minHeight: span === 'wide' ? 180 : span === 'hero' ? 150 : span === 'tall' ? 150 : 92,
         alignSelf: 'stretch',
       }}
@@ -136,12 +114,12 @@ function Cell({
 }
 
 function HeroStat({ label, seconds, sub }: { label: string; seconds: number; sub: string }) {
-  const animated = useCountUp(seconds, 1200);
+  const totalSeconds = seconds;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%', minHeight: 140 }}>
       <CellLabel>{label}</CellLabel>
       <div className="stats-hero-value" style={{ fontSize: 'var(--text-4xl)', lineHeight: 1.05, fontWeight: 700, color: 'var(--color-text)' }}>
-        {formatDuration(Math.round(animated))}
+        {formatDuration(Math.round(totalSeconds))}
       </div>
       <div className="text-faint" style={{ fontSize: 'var(--text-sm)', marginTop: 8 }}>{sub}</div>
     </div>
@@ -149,7 +127,7 @@ function HeroStat({ label, seconds, sub }: { label: string; seconds: number; sub
 }
 
 function VelocityStat({ velocity }: { velocity?: VelocityStats }) {
-  const animated = useCountUp(velocity?.current_avg_per_day ?? 0, 900);
+  const chaptersPerDay = velocity?.current_avg_per_day ?? 0;
   const trend = velocity?.trend_pct ?? null;
   const trendColor =
     trend === null || trend === 0
@@ -160,10 +138,10 @@ function VelocityStat({ velocity }: { velocity?: VelocityStats }) {
 
   return (
     <div>
-      <CellLabel>Velocity</CellLabel>
+      <CellLabel>Chapters per day</CellLabel>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
         <span className="tabular" style={{ fontSize: 'var(--text-3xl)', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
-          {animated.toFixed(1)}
+          {chaptersPerDay.toFixed(1)}
         </span>
         <span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>chapters/day</span>
       </div>
@@ -194,7 +172,7 @@ function WhenYouRead({
   busiestWeekday?: { label: string; seconds: number };
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+    <div className="stats-reading-times">
       <div>
         <CellLabel>Busiest Hour</CellLabel>
         <div className="tabular" style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
@@ -204,7 +182,7 @@ function WhenYouRead({
           {busiestHour && busiestHour.seconds > 0 ? formatDuration(busiestHour.seconds) : 'no data yet'}
         </div>
       </div>
-      <div style={{ marginTop: 20 }}>
+      <div>
         <CellLabel>Busiest Day</CellLabel>
         <div className="tabular" style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--color-text)' }}>
           {busiestWeekday && busiestWeekday.seconds > 0 ? busiestWeekday.label : '—'}
@@ -238,6 +216,7 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
   const hoveredBar = bars.find(b => b.key === hovered);
 
   return (
+    <>
     <div style={{ position: 'relative', display: 'flex', alignItems: 'stretch', gap: 3, height: '100%', minHeight: height, flex: 1, paddingBottom: 4 }}>
       {hoveredBar?.detail && (
         <div
@@ -246,17 +225,13 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
           style={{
             position: 'absolute',
             bottom: 'calc(100% + 8px)',
-            // Track the hovered bar horizontally, then clamp so a card near
-            // either edge stays inside the cell instead of clipping.
-            left: `${Math.min(88, Math.max(12, ((bars.indexOf(hoveredBar) + 0.5) / bars.length) * 100))}%`,
-            transform: 'translateX(-50%)',
-            minWidth: 190,
-            maxWidth: 260,
+            // Keep the detail inside the chart cell on narrow viewports.
+            left: 0,
+            right: 0,
             padding: '10px 12px',
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--color-border)',
             background: 'var(--color-bg-raised)',
-            boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
             zIndex: 20,
             pointerEvents: 'none',
           }}
@@ -273,6 +248,7 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
               data-value={b.value}
               data-label={b.tickLabel ?? ''}
               tabIndex={0}
+              role="img"
               // Keep the native tooltip as the fallback when there's no rich
               // detail, and as the accessible name either way.
               title={b.detail ? undefined : b.tooltip}
@@ -281,6 +257,7 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
               onMouseLeave={() => setHovered(h => (h === b.key ? null : h))}
               onFocus={() => setHovered(b.key)}
               onBlur={() => setHovered(h => (h === b.key ? null : h))}
+              onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); setHovered(null); } }}
               className="bar-chart-bar"
               style={{
                 width: '100%',
@@ -296,33 +273,43 @@ function BarChart({ bars, color, height = 120 }: { bars: Bar[]; color: string; h
             />
             {b.tickLabel !== undefined && (
               <span className="text-faint" style={{ display: 'block', fontSize: 10, minHeight: 12, paddingTop: 4, whiteSpace: 'nowrap', lineHeight: 1.1, fontWeight: 500 }}>
-                {b.tickLabel}
+                {bars.length <= 12 || bars.indexOf(b) % 3 === 0 ? b.tickLabel : ''}
               </span>
             )}
           </div>
         );
       })}
     </div>
+    <details className="chart-values">
+      <summary>View chart values</summary>
+      <ul>{bars.map(bar => <li key={bar.key}>{bar.tooltip}{bar.detail && <div>{bar.detail}</div>}</li>)}</ul>
+    </details>
+    </>
   );
 }
 
 function ShareBars({
   rows,
+  tone = 'teal',
 }: {
   rows: { key: string; icon?: React.ReactNode; label: string; sub: string; percent: number }[];
+  tone?: 'teal' | 'accent';
 }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className="share-bars" data-tone={tone}>
       {rows.map(r => (
-        <div key={r.key}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 'var(--text-sm)' }}>
+        <div className="share-bar" key={r.key}>
+          <div className="share-bar-label">
             {r.icon}
             <span style={{ fontWeight: 500 }}>{r.label}</span>
             <span style={{ flex: 1 }} />
             <span className="tabular text-muted" style={{ fontSize: 'var(--text-xs)' }}>{r.sub}</span>
           </div>
-          <div style={{ height: 6, borderRadius: 9999, overflow: 'hidden', background: 'rgba(255,255,255,0.08)' }}>
-            <div style={{ width: `${r.percent}%`, height: '100%', background: 'rgba(255,255,255,0.16)', borderRadius: 9999 }} />
+          <div className="share-bar-track">
+            <div
+              className="share-bar-fill"
+              style={{ width: `${r.percent}%`, minWidth: r.percent > 0 ? 3 : 0 }}
+            />
           </div>
         </div>
       ))}
@@ -411,8 +398,8 @@ function formatPace(seconds: number): string {
  *  relative claim, which is the only kind this data can honestly support. */
 function PaceList({ novels, label }: { novels: PaceNovel[]; label: string }) {
   return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div className="text-faint" style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+    <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+      <div className="text-faint" style={{ fontSize: 'var(--text-xs)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
         {label}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
@@ -448,9 +435,9 @@ function RatingRows({ rows, suffix }: { rows: RatingRow[]; suffix: (r: RatingRow
 }
 
 export function Stats() {
-  const { data: summary, isLoading: summaryLoading } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
+  const { data: summary, error: summaryError, mutate: retrySummary } = useSWR<StatsSummary>('/stats/summary', swrFetcher);
   const [hourWindow, setHourWindow] = useState<'all' | 'week'>('week');
-  const { data: breakdown, isLoading: breakdownLoading } = useSWR<StatsBreakdown>(
+  const { data: breakdown, error: breakdownError, mutate: retryBreakdown } = useSWR<StatsBreakdown>(
     hourWindow === 'week' ? '/stats/breakdown?window=week' : '/stats/breakdown',
     swrFetcher,
     // Toggling the chip changes the SWR key. Without this the whole page drops
@@ -458,18 +445,21 @@ export function Stats() {
     // key that has never been fetched.
     { keepPreviousData: true },
   );
-  const { data: genres, isLoading: genresLoading } = useSWR<GenreBreakdown>('/stats/genres', swrFetcher);
-  const { data: velocity, isLoading: velocityLoading } = useSWR<VelocityStats>('/stats/velocity', swrFetcher);
+  const { data: genres, error: genresError, mutate: retryGenres } = useSWR<GenreBreakdown>('/stats/genres', swrFetcher);
+  const { data: velocity, error: velocityError, mutate: retryVelocity } = useSWR<VelocityStats>('/stats/velocity', swrFetcher);
   // Not part of the page's loading gate — these two cards render their own
   // empty states, and neither should hold the whole grid behind a spinner.
-  const { data: pace } = useSWR<PaceStats>('/stats/pace', swrFetcher);
-  const { data: ratingAudit } = useSWR<RatingAudit>('/stats/rating-audit', swrFetcher);
+  const { data: pace, error: paceError, mutate: retryPace } = useSWR<PaceStats>('/stats/pace', swrFetcher);
+  const { data: ratingAudit, error: ratingError, mutate: retryRating } = useSWR<RatingAudit>('/stats/rating-audit', swrFetcher);
 
-  const loading = summaryLoading || breakdownLoading || genresLoading || velocityLoading;
+  const loading = (!summary && !summaryError) || (!breakdown && !breakdownError) || (!genres && !genresError) || (!velocity && !velocityError);
+  const coreError = summaryError || breakdownError || genresError || velocityError;
+  const retryCore = () => Promise.allSettled([retrySummary(), retryBreakdown(), retryGenres(), retryVelocity()]);
 
   if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>;
+    return <PageLoading title="Stats" />;
   }
+  if (coreError && (!summary || !breakdown || !genres || !velocity)) return <div className="page-view"><h1 className="page-title">Stats</h1><LoadError subject="your statistics" onRetry={retryCore} /></div>;
 
   const busiestHour = breakdown?.by_hour.reduce((max, b) => (b.seconds > max.seconds ? b : max), breakdown.by_hour[0]);
   const busiestWeekday = breakdown?.by_weekday.reduce((max, b) => (b.seconds > max.seconds ? b : max), breakdown.by_weekday[0]);
@@ -477,10 +467,11 @@ export function Stats() {
   const totalTracked = summary ? Object.values(summary.novels_by_status).reduce((a, b) => a + b, 0) : 0;
 
   return (
-    <div className="animate-fade-in">
-      <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 24 }}>Stats</h1>
+    <div className="page-view animate-fade-in stats-page">
+      <h1 className="page-title">Stats</h1>
+      {coreError && <LoadError subject="the latest statistics" onRetry={retryCore} />}
 
-      <div className="stats-bento">
+      <div className="stats-bento stats-overview">
         <Cell span="hero" index={0}>
           <HeroStat
             label="Reading Time"
@@ -524,6 +515,9 @@ export function Stats() {
           <MiniStat label="Active Devices" value={String(summary?.active_devices ?? 0)} />
         </Cell>
 
+        </div>
+      <h2 className="section-heading">Reading patterns</h2>
+      <div className="stats-bento stats-charts">
         <Cell span="wide" index={3}>
           <CellTitle
             title="Reading Time by Hour"
@@ -581,7 +575,7 @@ export function Stats() {
         <Cell span="wide" index={2}>
           <CellTitle title="By Device" />
           {!breakdown || breakdown.by_device.length === 0 ? (
-            <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>No device data yet.</p>
+            <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>No devices registered yet.</p>
           ) : (
             <ShareBars
               rows={breakdown.by_device.map(d => {
@@ -606,7 +600,7 @@ export function Stats() {
               ? `library median ${formatPace(pace.library_median_seconds)} per chapter`
               : undefined}
           />
-          {!pace || pace.fastest.length === 0 ? (
+          {paceError ? <LoadError subject="reading pace" onRetry={() => retryPace()} /> : !pace ? <p className="text-muted" role="status">Loading reading pace…</p> : pace.fastest.length === 0 ? (
             <p className="text-faint" style={{ fontSize: 'var(--text-sm)' }}>
               Not enough chapters yet — a novel needs 5 timed chapters to get a pace.
             </p>
@@ -623,14 +617,13 @@ export function Stats() {
             title="Ratings vs. Reading"
             sub={ratingAudit ? `${ratingAudit.rated_count} of ${ratingAudit.total_count} rated` : undefined}
           />
-          {!ratingAudit ? null : ratingAudit.loved_but_stale.length === 0 && ratingAudit.low_but_active.length === 0 ? (
+          {ratingError ? <LoadError subject="rating comparisons" onRetry={() => retryRating()} /> : !ratingAudit ? <p className="text-muted" role="status">Loading rating comparisons…</p> : ratingAudit.loved_but_stale.length === 0 && ratingAudit.low_but_active.length === 0 ? (
             // The primary state, not the exception: with almost nothing rated
             // there is no disagreement to surface, so the card asks for the
             // input that would make it work instead of showing an empty box.
             <div>
               <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 0, marginBottom: 10 }}>
-                Nothing to flag yet. Rate a few of these and this card starts
-                comparing what you say against what you actually read.
+                No rating patterns yet. Rate novels in My List to compare your ratings with your reading activity.
               </p>
               <RatingRows
                 rows={ratingAudit.unrated_candidates}

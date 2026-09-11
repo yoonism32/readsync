@@ -40,6 +40,15 @@ router.put('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
 
   try {
     const updates: string[] = [];
+    if (
+      (active !== undefined && typeof active !== 'boolean') ||
+      (device_label !== undefined &&
+        (typeof device_label !== 'string' ||
+          device_label.length < 1 ||
+          device_label.length > 200))
+    ) {
+      return res.status(400).json({ error: 'Invalid device update' });
+    }
     const params: unknown[] = [user_id];
     let paramIndex = 1;
 
@@ -49,7 +58,7 @@ router.put('/api/v1/devices/:deviceId', validateApiKey, async (req, res) => {
     }
     if (active !== undefined) {
       updates.push(`active = $${++paramIndex}`);
-      params.push(Boolean(active));
+      params.push(active);
     }
 
     if (updates.length === 0) {

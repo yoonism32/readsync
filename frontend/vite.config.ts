@@ -7,6 +7,7 @@ export default defineConfig({
   base: '/app/',
   server: {
     proxy: {
+      '/u': 'http://localhost:3000',
       '/api': 'http://localhost:3000',
       '/health': 'http://localhost:3000',
       '/socket.io': { target: 'http://localhost:3000', ws: true },

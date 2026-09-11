@@ -1,4 +1,4 @@
-import { READSYNC_API_KEY, SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC, HEARTBEAT_SYNC_MIN_DELTA_PCT, RESTORE_LIMIT } from '../config.js';
+import { SYNC_DEBOUNCE_MS, COMPARE_CHECK_MS, QUIET_SYNC, HEARTBEAT_SYNC_MIN_DELTA_PCT, RESTORE_LIMIT } from '../config.js';
 import { postProgress, beaconProgress, compareProgress, postReread } from '../api/client.js';
 import { showPeekBanner, maybeShowRestore } from './UIManager.js';
 import { enqueue, flushQueue, queueSize } from './OfflineQueue.js';
@@ -20,6 +20,7 @@ interface SyncContext {
 
 let syncTimeout: ReturnType<typeof setTimeout> | null = null;
 let compareInterval: ReturnType<typeof setInterval> | null = null;
+let navigationGeneration = 0;
 
 /** Check whether the current page is a chapter page (vs novel main page) */
 function isChapterPage(): boolean {
@@ -27,6 +28,9 @@ function isChapterPage(): boolean {
 }
 
 export async function syncProgress(percent: number, ctx: SyncContext): Promise<void> {
+  const generation = navigationGeneration;
+  const path = location.pathname;
+  const isCurrent = () => generation === navigationGeneration && path === location.pathname;
   if (!isChapterPage()) {
     log('Skipping progress sync on main page', { pathname: location.pathname });
     return;
@@ -40,7 +44,6 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
   const latestChapterInfo = extractLatestChapterInfo(chapterInfo.num);
 
   const payload: SyncPayload = {
-    user_key: READSYNC_API_KEY,
     device_id: ctx.deviceId,
     device_label: ctx.deviceLabel,
     novel_url: normalizeUrl(location.href),
@@ -56,6 +59,7 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
   try {
     log('Sending payload', payload);
     const result = await postProgress(payload);
+    if (!isCurrent()) return;
     log('Server JSON', result);
     if (result?.updated && !QUIET_SYNC) {
       ctx.updateBadgeStatus('📡 Synced');
@@ -82,10 +86,11 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
           showPeekBanner(novelId, () => {
             void postReread(novelId)
               .then(() => {
+                if (!isCurrent()) return;
                 ctx.updateBadgeStatus('🔁 Re-read started');
                 void syncProgress(percent, ctx);
               })
-              .catch(() => ctx.updateBadgeStatus('⚠️ Re-read failed', true));
+              .catch(() => { if (isCurrent()) ctx.updateBadgeStatus('⚠️ Re-read failed', true); });
           });
         }
       }
@@ -93,19 +98,19 @@ export async function syncProgress(percent: number, ctx: SyncContext): Promise<v
     // Back online — drain anything queued while offline.
     if (queueSize() > 0) {
       const drained = await flushQueue();
-      if (drained > 0) ctx.updateBadgeStatus(`📡 Synced +${drained} queued`);
+      if (drained > 0 && isCurrent()) ctx.updateBadgeStatus(`📡 Synced +${drained} queued`);
     }
   } catch (error) {
     // Server rejections (4xx) are policy, not connectivity — don't queue.
     const msg = error instanceof Error ? error.message : '';
-    if (/^HTTP 4\d\d/.test(msg)) {
+    if (/^HTTP (400|404|410|413|422)\b/.test(msg)) {
       console.warn(`[${LOG_TAG}] Sync rejected`, error);
-      ctx.updateBadgeStatus('⚠️ Sync Error', true);
+      if (isCurrent()) ctx.updateBadgeStatus('⚠️ Sync Error', true);
       return;
     }
     const size = enqueue(payload);
     console.warn(`[${LOG_TAG}] Offline — sync queued`, error);
-    ctx.updateBadgeStatus(`📴 ${size} queued`, true);
+    if (isCurrent()) ctx.updateBadgeStatus(`📴 ${size} queued`, true);
   }
 }
 
@@ -141,6 +146,7 @@ export function debouncedSync(percent: number, ctx: SyncContext): void {
  * on the old chapter would attribute its percent to the new chapter's URL.
  */
 export function cancelPendingSync(): void {
+  navigationGeneration++;
   if (syncTimeout) { clearTimeout(syncTimeout); syncTimeout = null; }
 }
 
@@ -150,7 +156,6 @@ export function sendFinal(percent: number, ctx: SyncContext): void {
     if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
     const latestChapterInfo = extractLatestChapterInfo(chapterInfo.num);
     const payload: SyncPayload = {
-      user_key: READSYNC_API_KEY,
       device_id: ctx.deviceId,
       device_label: ctx.deviceLabel,
       novel_url: normalizeUrl(location.href),
@@ -262,11 +267,14 @@ function reconcileLocalScroll(
 }
 
 export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
+  const generation = navigationGeneration;
+  const path = location.pathname;
   const novelId = normalizeNovelId(location.href);
   if (!novelId) return;
   log('compare check', { novelId, deviceId: ctx.deviceId });
   try {
     const result = await compareProgress(novelId, ctx.deviceId);
+    if (generation !== navigationGeneration || path !== location.pathname) return;
     log('compare JSON', result);
     if (result.should_prompt_jump && result.global_state) {
       ctx.showSyncBanner(result.global_state);
@@ -292,10 +300,13 @@ export async function checkForSyncConflict(ctx: SyncContext): Promise<void> {
  * checker's own reconciliation only runs while the tab stays open).
  */
 export async function reconcileScrollPosition(ctx: SyncContext): Promise<void> {
+  const generation = navigationGeneration;
+  const path = location.pathname;
   const novelId = normalizeNovelId(location.href);
   if (!novelId) return;
   try {
     const result = await compareProgress(novelId, ctx.deviceId);
+    if (generation !== navigationGeneration || path !== location.pathname) return;
     reconcileLocalScroll(result.device_state, ctx, true);
   } catch (error) {
     console.warn(`[${LOG_TAG}] Failed to reconcile scroll position on init`, error);

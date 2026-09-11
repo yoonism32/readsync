@@ -125,7 +125,22 @@ router.post('/api/v1/sessions', validateApiKey, async (req, res) => {
   } = req.body as Record<string, unknown>;
   const user_id = (req as AuthenticatedRequest).user.id;
 
-  if (!novel_id || !device_id) {
+  if (
+    typeof novel_id !== 'string' ||
+    !novel_id ||
+    novel_id.length > 200 ||
+    typeof device_id !== 'string' ||
+    !device_id ||
+    device_id.length > 200 ||
+    (start_time != null &&
+      (typeof start_time !== 'string' ||
+        !Number.isFinite(Date.parse(start_time)))) ||
+    (start_percent != null &&
+      (typeof start_percent !== 'number' ||
+        !Number.isFinite(start_percent) ||
+        start_percent < 0 ||
+        start_percent > 100))
+  ) {
     return res
       .status(HTTP_BAD_REQUEST)
       .json({ error: 'Missing required fields: novel_id, device_id' });
@@ -139,10 +154,16 @@ router.post('/api/v1/sessions', validateApiKey, async (req, res) => {
   }
 
   try {
+    const device = await pool.query(
+      'SELECT id FROM devices WHERE id = $1 AND user_id = $2',
+      [device_id, user_id],
+    );
+    if (!device.rows[0])
+      return res.status(403).json({ error: 'Device not found for user' });
     const result = await pool.query(
       `
       INSERT INTO reading_sessions (user_id, novel_id, device_id, session_type, start_time, start_percent)
-      VALUES ($1, $2, $3, $4, COALESCE($5::timestamp, CURRENT_TIMESTAMP), $6)
+      VALUES ($1, $2, $3, $4, COALESCE($5::timestamptz, CURRENT_TIMESTAMP), $6)
       RETURNING id, start_time
     `,
       [
@@ -193,6 +214,21 @@ router.put(
 
       const startTime = new Date(sessionResult.rows[0].start_time);
       const endTime = end_time ? new Date(String(end_time)) : new Date();
+      if (
+        !Number.isFinite(endTime.getTime()) ||
+        endTime < startTime ||
+        (end_percent != null &&
+          (typeof end_percent !== 'number' ||
+            !Number.isFinite(end_percent) ||
+            end_percent < 0 ||
+            end_percent > 100)) ||
+        (time_spent_seconds != null &&
+          (!Number.isSafeInteger(time_spent_seconds) ||
+            Number(time_spent_seconds) < 0 ||
+            Number(time_spent_seconds) > 2147483647))
+      ) {
+        return res.status(400).json({ error: 'Invalid session end values' });
+      }
       const calculatedDuration =
         time_spent_seconds != null
           ? Number(time_spent_seconds)
@@ -206,10 +242,10 @@ router.put(
       await pool.query(
         `
       UPDATE reading_sessions
-      SET end_time = COALESCE($1::timestamp, CURRENT_TIMESTAMP),
+      SET end_time = COALESCE($1::timestamptz, CURRENT_TIMESTAMP),
           end_percent = $2,
           time_spent_seconds = $3
-      WHERE id = $4 AND user_id = $5
+      WHERE id = $4 AND user_id = $5 AND end_time IS NULL
     `,
         [
           end_time || null,

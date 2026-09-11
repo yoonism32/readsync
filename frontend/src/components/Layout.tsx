@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
-import { auth, hasApiKey, setApiKey } from '../api/client.js';
+import { auth, setApiKey } from '../api/client.js';
 import { applyProgressUpdate } from '../api/normalize.js';
 import type { RawLatestProgress } from '../api/normalize.js';
-import { useSocket, disconnectSocket, reconnectSocket } from '../hooks/useSocket.js';
+import { useSocket, disconnectSocket } from '../hooks/useSocket.js';
 import type { Novel } from '../types/index.js';
 import { NotificationBell } from './NotificationBell.js';
 import { HelpPanel } from './HelpPanel.js';
@@ -21,8 +21,8 @@ interface Props {
 type NavItem = { to: string; label: string; Icon: React.ComponentType<{ size?: number }> };
 
 const NAV: NavItem[] = [
-  { to: '/mylist', label: 'My List', Icon: BookOpenIcon },
   { to: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
+  { to: '/mylist', label: 'My List', Icon: BookOpenIcon },
   { to: '/explorer', label: 'Explorer', Icon: SearchIcon },
   { to: '/history', label: 'History', Icon: ClockIcon },
   { to: '/stats', label: 'Stats', Icon: BarChartIcon },
@@ -35,7 +35,6 @@ export function Layout({ children }: Props) {
   const location = useLocation();
   const navigate = useNavigate();
   const { mutate } = useSWRConfig();
-  const [keyMissing, setKeyMissing] = useState(false);
   const socket = useSocket();
   const navRef = useRef<HTMLElement>(null);
   // Screen readers get no signal when the socket patches the page under them.
@@ -88,9 +87,17 @@ export function Layout({ children }: Props) {
       requestAnimationFrame(() => setAnnouncement(message));
     };
 
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = undefined;
+        void mutate('/novels');
+      }, 1000);
+    };
     const refreshNovels = () => {
-      void mutate('/novels');
-      announce('Library updated with new chapters.');
+      announce('Library updated.');
+      scheduleRefresh();
     };
 
     // progress:updated fires on every scroll-throttled sync ping from an
@@ -112,8 +119,10 @@ export function Layout({ children }: Props) {
     }) => {
       void mutate<Novel[]>(
         '/novels',
-        current =>
-          current?.map(n =>
+        current => {
+          const existing = current?.find(n => n.novel_id === payload.novel_id);
+          if (!existing || existing.current_read_through !== payload.read_through) scheduleRefresh();
+          return current?.map(n =>
             n.novel_id === payload.novel_id
               ? applyProgressUpdate(n, {
                 latest_global: payload.latest_global,
@@ -122,7 +131,8 @@ export function Layout({ children }: Props) {
                 last_activity: payload.timestamp,
               })
               : n,
-          ),
+          );
+        },
         { revalidate: false },
       );
       announce('Reading progress updated.');
@@ -132,35 +142,34 @@ export function Layout({ children }: Props) {
     // scrape found a new release) — that's not in the progress payload, so
     // this one still needs a real refetch.
     socket.on('chapters:updated', refreshNovels);
+    socket.on('connect', refreshNovels);
     socket.on('progress:updated', applyProgressPatch);
     return () => {
+      clearTimeout(refreshTimer);
+      socket.off('connect', refreshNovels);
       socket.off('chapters:updated', refreshNovels);
       socket.off('progress:updated', applyProgressPatch);
     };
   }, [socket, mutate]);
 
   useEffect(() => {
-    if (hasApiKey()) return;
-    // Self-heal: the session is already authenticated at this point
-    // (RequireAuth gated the route), so recover the account's API key
-    // instead of leaving the app silently empty.
-    auth
-      .recoverApiKey()
-      .then(res => {
-        if (res.api_key) {
-          setApiKey(res.api_key);
-          reconnectSocket();
-          void mutate(() => true);
-        } else {
-          setKeyMissing(true);
-        }
-      })
-      .catch(() => setKeyMissing(true));
-  }, [mutate]);
+    setApiKey(''); // Remove credentials retained by older releases.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== 'readsync:logout') return;
+      disconnectSocket();
+      void mutate(() => true, undefined, { revalidate: false });
+      navigate('/login');
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [mutate, navigate]);
 
   async function handleLogout() {
     await auth.logout();
+    localStorage.setItem('readsync:logout', String(Date.now()));
     disconnectSocket();
+    setApiKey('');
+    await mutate(() => true, undefined, { revalidate: false });
     await mutate('auth-status');
     navigate('/login');
   }
@@ -203,6 +212,7 @@ export function Layout({ children }: Props) {
         }}
       >
         <div
+          className="app-header-inner"
           style={{
             maxWidth: 1440,
             margin: '0 auto',
@@ -245,6 +255,7 @@ export function Layout({ children }: Props) {
               otherwise it always fades the first item's content, including
               an active tab's highlight pill. */}
           <nav
+            className="app-main-nav"
             ref={navRef}
             aria-label="Main navigation"
             style={{
@@ -325,27 +336,6 @@ export function Layout({ children }: Props) {
           padding: '28px 28px 56px',
         }}
       >
-        {keyMissing && (
-          <div
-            className="panel"
-            style={{
-              borderRadius: 'var(--radius-lg)',
-              padding: '12px 16px',
-              marginBottom: 20,
-              border: '1px solid var(--color-danger)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              flexWrap: 'wrap',
-              fontSize: 'var(--text-sm)',
-            }}
-          >
-            <span>Couldn’t find your API key — your library won’t load until it’s set.</span>
-            <NavLink to="/settings" style={{ color: 'var(--color-accent-bright)', fontWeight: 600 }}>
-              Go to Settings →
-            </NavLink>
-          </div>
-        )}
         {children}
         <div aria-live="polite" aria-atomic="true" className="sr-only">
           {announcement}

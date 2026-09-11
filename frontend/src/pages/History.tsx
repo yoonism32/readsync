@@ -63,14 +63,16 @@ export function History() {
   const now = new Date();
 
   return (
-    <div className="animate-fade-in">
+    <div className="page-view animate-fade-in history-page">
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 24 }}>
-        <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700 }}>History</h1>
+        <h1 className="page-title" style={{ marginBottom: 0 }}>History</h1>
         <span style={{ flex: 1 }} />
         <div style={{ display: 'flex', gap: 4 }}>
           {RANGE_OPTIONS.map(d => (
             <button
               key={d}
+              type="button"
+              aria-label={d === 365 ? 'Last year' : `Last ${d} days`}
               onClick={() => setDays(d)}
               aria-pressed={days === d}
               style={{
@@ -78,14 +80,14 @@ export function History() {
                 borderRadius: 'var(--radius-full)',
                 border: days === d ? '1px solid var(--color-border-accent)' : '1px solid var(--color-border)',
                 background: days === d ? 'var(--color-accent-glow)' : 'transparent',
-                color: days === d ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                color: days === d ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
                 fontSize: 'var(--text-xs)',
                 cursor: 'pointer',
                 transition: 'border-color 150ms var(--ease-out-expo), background-color 150ms var(--ease-out-expo), color 150ms var(--ease-out-expo)',
                 touchAction: 'manipulation',
               }}
             >
-              {d === 365 ? '1y' : `${d}d`}
+              {d === 365 ? '1 year' : `${d} days`}
             </button>
           ))}
         </div>
@@ -105,9 +107,9 @@ export function History() {
           No reading activity in this period.
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="history-timeline" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
           {grouped.map(([day, rows], gi) => (
-            <section key={day} className="animate-fade-in" style={{ animationDelay: `${Math.min(gi * 40, 240)}ms` }}>
+            <section key={day} className="history-day animate-fade-in" style={{ animationDelay: `${Math.min(gi * 40, 240)}ms` }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 8 }}>
                 <h2 style={{ fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   {dayLabel(day, now)}
@@ -117,7 +119,7 @@ export function History() {
                 </span>
               </div>
 
-              <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '4px 16px' }}>
+              <div className="panel history-day-entries" style={{ borderRadius: 'var(--radius-xl)', padding: '4px 16px' }}>
                 {rows.map((row, i) => (
                   <div
                     key={`${row.novel_id}-${i}`}
@@ -150,7 +152,7 @@ export function History() {
                       <span className="text-faint"> · {Math.round(Number(row.max_percent))}%</span>
                     </span>
 
-                    <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxWidth: '100%' }}>
                       {row.devices.map(d => (
                         <DeviceBadge key={d} label={d} />
                       ))}

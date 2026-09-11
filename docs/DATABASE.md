@@ -89,13 +89,13 @@ existing table. Any future column-type change needs an explicit
 
 ## Known dead config
 
-`.env.example` lists `API_KEY` and `SUPABASE_ANON_KEY` — neither is read
-anywhere in `src/` today (confirmed by grep; `BOT_DISABLED` was the third
-and has since been dropped from `.env.example` along with the bot itself,
-see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed)). `API_KEY` is
-vestigial from an earlier version of the auth design — the actual
-data-plane auth is the per-user `api_key` column on `users`,
-not an env var. `SUPABASE_ANON_KEY` was never wired up — the only Supabase
-credential the backend actually uses is `SUPABASE_SERVICE_KEY` (Storage
-access in `BackupService.ts`/`covers.ts`); the `SUPABASE_KEY` export in
-`config.ts` that fell back to it was deleted as dead code alongside this.
+`API_KEY` is intentionally read by the userscript build and by the backend
+authentication middleware as the owner-approved single-user shortcut. The
+generated bundle therefore contains a bearer credential and must be treated as
+private to the owner's installation even though the update route is token-gated.
+The database `users.api_key` column remains the storage for optional issued
+keys, which are kept as hashes. `SUPABASE_ANON_KEY` is still not wired up — the
+only Supabase credential the backend actually uses is `SUPABASE_SERVICE_KEY`
+(Storage access in `BackupService.ts`/`covers.ts`); the `SUPABASE_KEY` export in
+`config.ts` that fell back to it was deleted as dead code. `BOT_DISABLED` was
+dropped with the removed bot; see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).

@@ -3,10 +3,11 @@ import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { fetchNovels, novels as novelsApi, categories as categoriesApi } from '../api/client.js';
 import { RefreshIcon, BellIcon } from '../components/Icon.js';
-import { Spinner } from '../components/Spinner.js';
+import { LoadError, PageLoading } from '../components/PageFeedback.js';
 import { Th, Row } from '../components/MyListTable.js';
 import { useRefreshAll } from '../hooks/useRefreshAll.js';
 import { lastRefreshLabel, describeFailure } from '../lib/refreshStatus.js';
+import { STATUS_OPTIONS } from '../lib/novelStatus.js';
 import { SMART_FILTERS } from '../lib/smartFilters.js';
 import type { SmartFilterId } from '../lib/smartFilters.js';
 import { compareNovels } from '../lib/novelSort.js';
@@ -16,12 +17,12 @@ import type { CategoryAssignment, Novel, NovelStatus } from '../types/index.js';
 type Tab = 'all' | 'reading' | 'plan-to-read' | 'completed' | 'on-hold' | 'dropped';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'all',          label: 'All' },
-  { id: 'reading',      label: 'Reading' },
-  { id: 'completed',    label: 'Completed' },
+  { id: 'all', label: 'All' },
+  { id: 'reading', label: 'Reading' },
+  { id: 'completed', label: 'Completed' },
   { id: 'plan-to-read', label: 'Plan to Read' },
-  { id: 'on-hold',      label: 'On Hold' },
-  { id: 'dropped',      label: 'Dropped' },
+  { id: 'on-hold', label: 'On Hold' },
+  { id: 'dropped', label: 'Dropped' },
 ];
 
 const PAGE_SIZE = 50;
@@ -40,6 +41,12 @@ export function MyList() {
   const [smartFilter, setSmartFilter] = useState<SmartFilterId | null>(null);
   const [tagFilter, setTagFilter] = useState('');
   const [page, setPage] = useState(1);
+  // Off by default — the checkbox column only earns its space once the user
+  // has asked for bulk actions, not on every visit to the page.
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<NovelStatus>('reading');
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const [showFailures, setShowFailures] = useState(false);
   // Excel-style column autofit, Title column only — null means "let it flex
   // and absorb leftover row width" (the default), a number pins it to the
@@ -56,22 +63,26 @@ export function MyList() {
   // full max-width.
   const [contentWidth, setContentWidth] = useState<number | null>(null);
   const tableRef = useRef<HTMLTableElement>(null);
-  // TEST: guards contentWidth's measurement effect below to fire exactly
-  // once — on whichever render is the first to actually have a <table> in
-  // the DOM — instead of on every sort/filter.
-  const measuredOnceRef = useRef(false);
+  // TEST: guards contentWidth's measurement effect below to fire once per
+  // selectMode value — on whichever render is the first to actually have a
+  // <table> in the DOM for that mode — instead of on every sort/filter.
+  // Tracks which selectMode the last measurement was taken under (null =
+  // never measured) so toggling the checkbox column forces one remeasure
+  // instead of leaving contentWidth locked to the pre-toggle width.
+  const measuredForRef = useRef<boolean | null>(null);
 
   // Live updates come from the socket in Layout.tsx (chapters:updated /
   // progress:updated → mutate('/novels')); this 30-minute interval is only a
   // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
-  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
+  const { data, isLoading, error, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
     revalidateOnFocus: false,
     refreshInterval: 30 * 60_000,
   });
   const { data: tagData } = useSWR<CategoryAssignment[]>('categories-all', () => categoriesApi.all(), { revalidateOnFocus: false });
   const refresh = useRefreshAll();
 
-  const novels = data ?? [];
+  const novels = useMemo(() => data ?? [], [data]);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const tagCounts = useMemo(() => {
     const c = new Map<string, number>();
@@ -94,7 +105,7 @@ export function MyList() {
     }
     if (taggedNovelIds) list = list.filter(n => taggedNovelIds.has(n.novel_id));
     if (search.trim()) {
-      const q = search.toLowerCase();
+      const q = search.trim().toLowerCase();
       list = list.filter(n => n.title.toLowerCase().includes(q));
     }
     return [...list].sort((a, b) => compareNovels(a, b, sortKey, sortAsc));
@@ -133,6 +144,86 @@ export function MyList() {
     }
   }
 
+  const toggleSelect = (id: string) =>
+    setSelected(s => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const clearSelection = () => setSelected(new Set());
+
+  const toggleSelectMode = () =>
+    setSelectMode(m => {
+      if (m) clearSelection();
+      return !m;
+    });
+
+  const allPageSelected = pageRows.length > 0 && pageRows.every(n => selected.has(n.novel_id));
+  const selectedOnPage = pageRows.filter(n => selected.has(n.novel_id)).length;
+  const toggleSelectAll = () =>
+    setSelected(s => {
+      const next = new Set(s);
+      for (const n of pageRows) {
+        if (allPageSelected) next.delete(n.novel_id);
+        else next.add(n.novel_id);
+      }
+      return next;
+    });
+
+  // The header checkbox's indeterminate state can only be set via the DOM
+  // property, not a React prop.
+  useLayoutEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedOnPage > 0 && !allPageSelected;
+    }
+  }, [selectedOnPage, allPageSelected]);
+
+  async function bulkSetStatus(status: NovelStatus) {
+    if (bulkBusy) return;
+    const ids = [...selected];
+    if (status === 'removed' && !window.confirm(`Mark ${ids.length} novel${ids.length === 1 ? '' : 's'} as removed?`)) {
+      return;
+    }
+    // allSettled, not all: a rejected request must not hide the ones that
+    // already succeeded server-side — mutate() always runs below so the
+    // table never silently drifts from what the server actually has.
+    setBulkBusy(true);
+    // Bound in-flight requests while preserving partial-success reporting.
+    const results: PromiseSettledResult<unknown>[] = [];
+    for (let offset = 0; offset < ids.length; offset += 4) {
+      results.push(...await Promise.allSettled(ids.slice(offset, offset + 4).map(id => novelsApi.setStatus(id, status))));
+    }
+    const failed = results.filter(r => r.status === 'rejected').length;
+    try {
+      await mutate();
+    } catch {
+      // The writes have already settled; keep the partial-success result
+      // visible even if the follow-up revalidation is temporarily unavailable.
+      toast.error('Updates saved, but the library could not be refreshed');
+    } finally {
+      setBulkBusy(false);
+    }
+    clearSelection();
+    if (failed === 0) {
+      toast.success(`Updated ${ids.length} novel${ids.length === 1 ? '' : 's'}`);
+    } else if (failed === ids.length) {
+      toast.error('Failed to update selected novels');
+    } else {
+      toast.error(`Updated ${ids.length - failed} of ${ids.length} novels — ${failed} failed`);
+    }
+  }
+
+  const filtersActive = tab !== 'all' || search.trim() !== '' || smartFilter !== null || tagFilter !== '';
+  const clearFilters = () => {
+    setTab('all');
+    setSearch('');
+    setSmartFilter(null);
+    setTagFilter('');
+    setPage(1);
+  };
+
   /** Autofits the Title column to its widest visible row on every render of
    *  a new page/tab/filter/sort — like Excel's column-border autofit, but
    *  run automatically instead of behind a manual double-click. Measured
@@ -156,31 +247,36 @@ export function MyList() {
    *  it measures the DOM *after* that pin lands, not before. Still resolves
    *  before paint, so there's no visible jump.
    *
-   *  TEST: measures once — on the first render where the table actually
-   *  exists — then never again, guarded by measuredOnceRef rather than an
-   *  empty dep array (an empty array alone fires on the *very* first
-   *  render, which is the loading spinner, before <table> exists — that
-   *  left contentWidth stuck at null once real data arrived, undoing the
-   *  whole-page shrink/center). table-layout is `auto`, so columns like
-   *  "Last read" don't actually fit their nominal pinned width once they're
-   *  carrying the active-sort arrow (▲/▼) and the browser expands them
-   *  regardless of Title being fixed; re-measuring on every sort/filter was
-   *  faithfully picking that fluctuation up and shifting the whole page
-   *  with it. Measuring once matches "no dynamic" for this test. Restore
-   *  the guard to a plain [titleWidth, pageRows] dep array when re-enabling
-   *  autofit — or, to fix this for real (not just the test), switch the
-   *  table to `table-layout: fixed` so pinned widths become hard limits
-   *  instead of hints, and add overflow/ellipsis handling to any column
-   *  whose content might not fit. */
+   *  TEST: measures once per selectMode value — on the first render where
+   *  the table actually exists for that mode — then not again until
+   *  selectMode flips, guarded by measuredForRef rather than an empty dep
+   *  array (an empty array alone fires on the *very* first render, which is
+   *  the loading spinner, before <table> exists — that left contentWidth
+   *  stuck at null once real data arrived, undoing the whole-page
+   *  shrink/center). table-layout is `auto`, so columns like "Last read"
+   *  don't actually fit their nominal pinned width once they're carrying
+   *  the active-sort arrow (▲/▼) and the browser expands them regardless of
+   *  Title being fixed; re-measuring on every sort/filter was faithfully
+   *  picking that fluctuation up and shifting the whole page with it.
+   *  selectMode is the one thing besides sort/filter that changes the
+   *  table's real column count (the checkbox column), so it's the one
+   *  dependency this effect *does* react to — without it, toggling select
+   *  mode grows the table but leaves the wrapper's maxWidth locked to the
+   *  pre-toggle width, clipping the last column. Restore the guard to a
+   *  plain [titleWidth, pageRows] dep array when re-enabling autofit — or,
+   *  to fix this for real (not just the test), switch the table to
+   *  `table-layout: fixed` so pinned widths become hard limits instead of
+   *  hints, and add overflow/ellipsis handling to any column whose content
+   *  might not fit. */
   useLayoutEffect(() => {
-    if (measuredOnceRef.current || !tableRef.current) return;
-    measuredOnceRef.current = true;
+    if (measuredForRef.current === selectMode || !tableRef.current) return;
+    measuredForRef.current = selectMode;
     // +2px: sub-pixel rounding between this measurement and the width the
     // ancestor divs actually resolve to (maxWidth applied a layout pass
     // later) could otherwise leave the table 1px wider than its wrapper,
     // forcing a permanent horizontal scrollbar for no visible reason.
     setContentWidth(tableRef.current.scrollWidth + 2);
-  }, [pageRows]);
+  }, [pageRows, selectMode]);
 
   const changeSort = (key: SortKey) => {
     if (sortKey === key) setSortAsc(a => !a);
@@ -204,7 +300,10 @@ export function MyList() {
   };
 
   if (isLoading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', padding: '80px 0' }}><Spinner size={32} /></div>;
+    return <PageLoading title="My List" />;
+  }
+  if (error && !data) {
+    return <div className="page-view"><h1 className="page-title">My List</h1><LoadError subject="your library" onRetry={() => mutate()} /></div>;
   }
 
   return (
@@ -213,9 +312,10 @@ export function MyList() {
     // main instead of always spanning main's full width — undefined
     // (contentWidth still null on first paint) falls back to filling main
     // normally.
-    <div className="animate-fade-in" style={{ maxWidth: contentWidth ?? undefined, margin: '0 auto' }}>
+    <div className="page-view animate-fade-in library-page" style={{ maxWidth: contentWidth ?? undefined, margin: '0 auto' }}>
+      {error && <LoadError subject="the latest library changes" onRetry={() => mutate()} />}
       {/* Header */}
-      <div style={{ marginBottom: 6 }}>
+      <div className="library-heading" style={{ marginBottom: 6 }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--text-3xl)', fontWeight: 600, letterSpacing: '-0.01em' }}>
           My List
         </h1>
@@ -226,7 +326,7 @@ export function MyList() {
 
       {/* Refresh All bar */}
       <div
-        className="panel"
+        className="panel library-refresh"
         style={{
           display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
           borderRadius: 'var(--radius-lg)', padding: '12px 16px', margin: '14px 0 18px',
@@ -313,6 +413,7 @@ export function MyList() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
         <input
           type="search"
+          aria-label="Search titles"
           placeholder="Search titles…"
           autoComplete="off"
           value={search}
@@ -343,6 +444,20 @@ export function MyList() {
             ))}
           </select>
         )}
+        <button
+          type="button"
+          onClick={toggleSelectMode}
+          aria-pressed={selectMode}
+          style={{
+            padding: '8px 14px', borderRadius: 'var(--radius-md)',
+            border: selectMode ? '1px solid var(--color-teal-border)' : '1px solid var(--color-border)',
+            background: selectMode ? 'var(--color-teal-glow)' : 'transparent',
+            color: selectMode ? 'var(--color-teal)' : 'var(--color-text-muted)',
+            fontSize: 'var(--text-sm)', fontWeight: 500, cursor: 'pointer', touchAction: 'manipulation',
+          }}
+        >
+          {selectMode ? 'Done selecting' : 'Select'}
+        </button>
       </div>
 
       <div role="tablist" aria-label="Filter by status" style={{ display: 'flex', gap: 4, marginBottom: 10, overflowX: 'auto', scrollbarWidth: 'none' }}>
@@ -350,10 +465,23 @@ export function MyList() {
           <button
             key={t.id}
             role="tab"
+            id={`status-tab-${t.id}`}
+            aria-controls="status-results"
+            tabIndex={tab === t.id ? 0 : -1}
+            onKeyDown={event => {
+              const index = TABS.findIndex(item => item.id === t.id);
+              const next = event.key === 'ArrowRight' ? (index + 1) % TABS.length
+                : event.key === 'ArrowLeft' ? (index + TABS.length - 1) % TABS.length
+                : event.key === 'Home' ? 0 : event.key === 'End' ? TABS.length - 1 : null;
+              if (next === null) return;
+              event.preventDefault();
+              setTab(TABS[next].id); setPage(1);
+              document.getElementById(`status-tab-${TABS[next].id}`)?.focus();
+            }}
             aria-selected={tab === t.id}
             onClick={() => { setTab(t.id); setPage(1); }}
             style={{
-              padding: '5px 13px', minHeight: 36, borderRadius: 'var(--radius-full)',
+              padding: '5px 13px', minHeight: 44, flexShrink: 0, borderRadius: 'var(--radius-full)',
               border: tab === t.id ? '1px solid var(--color-accent-border)' : '1px solid var(--color-border)',
               background: tab === t.id ? 'var(--color-accent-glow)' : 'transparent',
               color: tab === t.id ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
@@ -363,7 +491,7 @@ export function MyList() {
           >
             {t.label}
             {counts[t.id] != null && (
-              <span className="tabular" style={{ marginLeft: 6, fontSize: 'var(--text-xs)', opacity: 0.7 }}>{counts[t.id]}</span>
+              <span className="tabular" style={{ marginLeft: 6, fontSize: 'var(--text-xs)' }}>{counts[t.id]}</span>
             )}
           </button>
         ))}
@@ -391,20 +519,89 @@ export function MyList() {
             </button>
           );
         })}
+        {filtersActive && (
+          <button
+            type="button"
+            className="btn-ghost"
+            onClick={clearFilters}
+            style={{ fontSize: 'var(--text-xs)', padding: '3px 11px' }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
+      {selected.size > 0 && (
+        <div
+          className="panel disclosure-enter"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+            borderRadius: 'var(--radius-lg)', padding: '10px 16px', marginBottom: 12,
+          }}
+        >
+          <span className="tabular" style={{ fontSize: 'var(--text-sm)', fontWeight: 600 }}>
+            {selected.size} selected
+          </span>
+          <select
+            value={bulkStatus}
+            onChange={e => setBulkStatus(e.target.value as NovelStatus)}
+            aria-label="Set status for selected novels"
+            style={{
+              background: 'var(--color-bg-input)', border: '1px solid var(--color-border)',
+              borderRadius: 'var(--radius-md)', padding: '6px 10px',
+              color: 'var(--color-text)', fontSize: 'var(--text-sm)', cursor: 'pointer', outline: 'none',
+            }}
+          >
+            {STATUS_OPTIONS.map(s => (
+              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
+            ))}
+          </select>
+          <button type="button" className="btn-accent" disabled={bulkBusy} onClick={() => { void bulkSetStatus(bulkStatus); }}>
+            Apply
+          </button>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="btn-ghost" onClick={clearSelection}>
+            Clear selection
+          </button>
+        </div>
+      )}
+
       {/* Table */}
+      <div id="status-results" role="tabpanel" aria-labelledby={`status-tab-${tab}`}>
       {filtered.length === 0 ? (
         <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: '48px 24px', textAlign: 'center', color: 'var(--color-text-muted)' }}>
           {search ? `No novels matching "${search}"` : smartFilter || tagFilter ? 'No novels match the active filters.' : 'No novels here yet.'}
         </div>
       ) : (
         <>
-          <div className="panel" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
-            <div style={{ overflowX: 'auto' }}>
+          <div className="panel library-table" style={{ borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
+            <div className="page-table-scroll" tabIndex={0} role="region" aria-label="Novel table — scroll horizontally for more columns">
               <table ref={tableRef} style={{ borderCollapse: 'collapse', minWidth: 1100 }}>
+                <caption className="sr-only">Your novels, reading progress, status, and activity</caption>
                 <thead>
                   <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    {selectMode && (
+                      <th
+                        style={{
+                          padding: '10px 12px',
+                          width: 36,
+                          textAlign: 'center',
+                          verticalAlign: 'middle',
+                        }}
+                      >
+                        <input
+                          ref={selectAllRef}
+                          type="checkbox"
+                          checked={allPageSelected}
+                          onChange={toggleSelectAll}
+                          aria-label="Select all rows on this page"
+                          style={{
+                            display: 'block',
+                            margin: '0 auto',
+                          }}
+                        />
+                      </th>
+                    )}
                     <Th label="Cover" width={70} />
                     <Th
                       label="Title"
@@ -440,7 +637,15 @@ export function MyList() {
                 </thead>
                 <tbody>
                   {pageRows.map(n => (
-                    <Row key={n.novel_id} novel={n} onSetStatus={setStatus} onToggleFav={toggleFav} titleWidth={titleWidth ?? undefined} />
+                    <Row
+                      key={n.novel_id}
+                      novel={n}
+                      onSetStatus={setStatus}
+                      onToggleFav={toggleFav}
+                      titleWidth={titleWidth ?? undefined}
+                      selected={selectMode ? selected.has(n.novel_id) : undefined}
+                      onToggleSelect={selectMode ? toggleSelect : undefined}
+                    />
                   ))}
                 </tbody>
               </table>
@@ -466,6 +671,7 @@ export function MyList() {
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

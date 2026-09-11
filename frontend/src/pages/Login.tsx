@@ -27,22 +27,20 @@ export function Login() {
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (loading) return;
     setError('');
     setLoading(true);
 
     try {
       const res = await auth.login(username, password);
       if (res.success) {
-        // The server hands back the account's API key on login now, so
-        // the app is never left in a signed-in-but-no-data state — it
-        // used to require pasting this manually, which was easy to get
-        // wrong or skip.
+        // Clear any legacy client credential; current login uses a session.
         if (res.api_key) setApiKey(res.api_key);
         // Seed the cache from this response rather than refetching: nothing is
         // subscribed to 'auth-status' while we're on the login route, so a bare
         // mutate() has no fetcher to run and would resolve without asking.
         await mutate('auth-status', { authenticated: true, username }, { revalidate: false });
-        navigate('/mylist');
+        navigate('/dashboard');
       } else {
         setError(res.error ?? 'Invalid credentials');
       }
@@ -54,9 +52,9 @@ export function Login() {
   }
 
   return (
-    <div className="animate-fade-in login-shell">
+    <div className="page-view animate-fade-in login-shell">
       {/* Wordmark — left-aligned, and the larger of the two columns. */}
-      <div>
+      <div className="login-brand">
         <h1
           style={{
             fontFamily: 'var(--font-display)',
@@ -78,16 +76,18 @@ export function Login() {
             maxWidth: '24ch',
           }}
         >
-          Cross-device reading progress
+          Keep your reading progress across devices.
         </p>
       </div>
 
       {/* Card */}
       <form
         onSubmit={(e) => { void handleSubmit(e); }}
-        className="panel"
+        className="panel login-form"
         style={{ borderRadius: 'var(--radius-xl)', padding: 28, minWidth: 0 }}
         aria-label="Sign in form"
+        aria-busy={loading}
+        aria-describedby={error ? 'login-error' : undefined}
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {/* Username */}
@@ -99,6 +99,7 @@ export function Login() {
               type="text"
               name="username"
               autoComplete="username"
+              autoCapitalize="none"
               spellCheck={false}
               required
               value={username}
@@ -110,14 +111,15 @@ export function Login() {
           </label>
 
           {/* Password */}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <label htmlFor="login-password" style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-muted)', fontWeight: 500 }}>
               Password
-            </span>
+            </label>
             <div style={{ position: 'relative' }}>
               <input
                 type={showPassword ? 'text' : 'password'}
                 name="password"
+                id="login-password"
                 autoComplete="current-password"
                 required
                 value={password}
@@ -149,7 +151,7 @@ export function Login() {
                 {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
               </button>
             </div>
-          </label>
+          </div>
 
           {/* Error */}
           {error && (

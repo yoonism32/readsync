@@ -54,13 +54,13 @@ async function signIn() {
 /**
  * Asserts the *settled* signed-in state.
  *
- * Waiting on the URL alone is not enough: the bug pushes /mylist and replaces
+ * Waiting on the URL alone is not enough: the bug pushes /dashboard and replaces
  * it back to /login ~2 ms later, so a pathname check passes during the bounce.
  * The nav only renders inside Layout — i.e. once the guard has let us through.
  */
 async function expectSignedIn() {
-  await screen.findByRole('link', { name: /my list/i });
-  expect(window.location.pathname).toBe('/app/mylist');
+  await screen.findByRole('link', { name: /dashboard/i });
+  expect(window.location.pathname).toBe('/app/dashboard');
   expect(screen.queryByRole('button', { name: /sign in/i })).toBeNull();
 }
 
@@ -119,7 +119,7 @@ describe('sign-in', () => {
     await expectSignedIn();
   });
 
-  it('reaches My List on a cold cache', async () => {
+  it('reaches Dashboard on a cold cache', async () => {
     renderApp();
 
     await signIn();

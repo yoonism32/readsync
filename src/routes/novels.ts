@@ -14,7 +14,9 @@ import {
   validatePagination,
 } from '../middleware/validation.js';
 import { buildExport } from '../services/ExportService.js';
+import { restoreExport, validateImport } from '../services/ImportService.js';
 import { getLatestStates, healDeadSiteUrl } from '../services/NovelService.js';
+import { setNovelStatus } from '../services/NovelStatus.js';
 import type { AuthenticatedRequest, NovelStatus } from '../types/index.js';
 
 const router = Router();
@@ -57,7 +59,11 @@ router.get(
         const novelsQuery = `
         WITH latest_activity AS (
           SELECT DISTINCT ON (novel_id) novel_id, created_at as last_activity
-          FROM progress_snapshots WHERE user_id = $1
+          FROM (
+            SELECT novel_id, created_at FROM progress_snapshots WHERE user_id = $1
+            UNION ALL
+            SELECT novel_id, created_at FROM user_novel_meta WHERE user_id = $1
+          ) activity
           ORDER BY novel_id, created_at DESC
         )
         SELECT
@@ -80,6 +86,7 @@ router.get(
             FROM progress_snapshots p JOIN devices d ON p.device_id = d.id
             WHERE p.user_id = $1 AND p.novel_id = n.id
               AND p.read_through_num = COALESCE(m.current_read_through, 1)
+              AND p.created_at >= COALESCE(m.progress_reset_at, '-infinity'::timestamptz)
             ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC LIMIT 1
           ) g) as latest_global_json,
           -- LATERAL per device instead of DISTINCT ON over the whole
@@ -96,6 +103,7 @@ router.get(
               FROM progress_snapshots
               WHERE device_id = d.id AND user_id = $1 AND novel_id = n.id
                 AND read_through_num = COALESCE(m.current_read_through, 1)
+                AND created_at >= COALESCE(m.progress_reset_at, '-infinity'::timestamptz)
               ORDER BY created_at DESC LIMIT 1
             ) p
             WHERE d.user_id = $1
@@ -104,7 +112,7 @@ router.get(
         JOIN latest_activity la ON n.id = la.novel_id
         LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
         WHERE 1=1 ${whereClause}
-        ORDER BY la.last_activity DESC
+        ORDER BY la.last_activity DESC, n.id
         LIMIT $${++paramIndex} OFFSET $${++paramIndex}
       `;
 
@@ -245,75 +253,9 @@ router.put(
     const userId = (req as AuthenticatedRequest).user.id;
 
     try {
-      const result = await withTransaction(async (client) => {
-        await client.query(
-          `INSERT INTO user_novel_meta (user_id, novel_id, status, updated_at) VALUES ($1, $2, 'reading', CURRENT_TIMESTAMP) ON CONFLICT (user_id, novel_id) DO NOTHING`,
-          [userId, novelId],
-        );
-
-        const updateResult = await client.query(
-          `UPDATE user_novel_meta SET status = $3, updated_at = CURRENT_TIMESTAMP,
-            completed_at = CASE WHEN $3 = 'completed' THEN COALESCE(completed_at, CURRENT_TIMESTAMP) WHEN $3 != 'completed' THEN NULL ELSE completed_at END
-          WHERE user_id = $1 AND novel_id = $2 RETURNING *`,
-          [userId, novelId, status],
-        );
-
-        if (updateResult.rows.length === 0)
-          throw new Error('Novel not found for user');
-
-        if (status === 'completed') {
-          const meta = updateResult.rows[0];
-          const currentRT = meta.current_read_through || 1;
-          // Furthest-progressed snapshot, not most-recently-written — a
-          // synthetic completion row built from whichever device wrote last
-          // could archive and re-insert a *lower* chapter than the reader
-          // actually reached (same ordering bug as ExportService.ts).
-          const latestProgress = await client.query<{
-            chapter_num: number;
-            chapter_token: string;
-            url: string;
-            novel_id: string;
-            percent: string;
-          }>(
-            'SELECT chapter_num, chapter_token, url, novel_id, percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 ORDER BY chapter_num DESC, percent DESC, created_at DESC LIMIT 1',
-            [userId, novelId, currentRT],
-          );
-          const archiveEntry = {
-            read_through: currentRT,
-            started_at: meta.started_at,
-            completed_at: new Date().toISOString(),
-            max_chapter: latestProgress.rows[0]?.chapter_num ?? 0,
-            max_percent: parseFloat(latestProgress.rows[0]?.percent ?? '0'),
-          };
-          await client.query(
-            `
-            UPDATE user_novel_meta SET read_history = CASE
-              WHEN NOT EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(read_history, '[]'::jsonb)) elem WHERE (elem->>'read_through')::int = $3)
-              THEN COALESCE(read_history, '[]'::jsonb) || $4::jsonb ELSE read_history END
-            WHERE user_id = $1 AND novel_id = $2
-          `,
-            [userId, novelId, currentRT, JSON.stringify(archiveEntry)],
-          );
-
-          if (latestProgress.rows.length > 0) {
-            const lp = latestProgress.rows[0];
-            await client.query(
-              'INSERT INTO progress_snapshots (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page, read_through_num) VALUES ($1, $2, $3, $4, $5, 100, $6, 0, $7)',
-              [
-                userId,
-                'system',
-                lp.novel_id,
-                lp.chapter_token,
-                lp.chapter_num,
-                lp.url,
-                currentRT,
-              ],
-            );
-          }
-        }
-
-        return updateResult.rows[0];
-      });
+      const result = await withTransaction((client) =>
+        setNovelStatus(client, userId, String(novelId), status),
+      );
 
       res.json({
         success: true,
@@ -353,16 +295,20 @@ router.post(
         const meta = await client.query<{
           current_read_through: number | null;
         }>(
-          'SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2',
+          'SELECT current_read_through FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2 FOR UPDATE',
           [userId, novelId],
         );
         if (meta.rows.length === 0)
           return { error: 'Novel not found', status: 404 };
         const readThrough = meta.rows[0].current_read_through ?? 1;
+        await client.query(
+          'UPDATE user_novel_meta SET progress_reset_at = clock_timestamp() WHERE user_id = $1 AND novel_id = $2',
+          [userId, novelId],
+        );
 
         await client.query(
           `INSERT INTO devices (id, user_id, device_label, device_type)
-           VALUES ('manual', $1, 'Manual edit', 'unknown')
+           VALUES ('manual:' || $1, $1, 'Manual edit', 'unknown')
            ON CONFLICT (id) DO NOTHING`,
           [userId],
         );
@@ -374,7 +320,7 @@ router.post(
 
         await client.query(
           `INSERT INTO progress_snapshots (user_id, device_id, novel_id, chapter_token, chapter_num, percent, url, seconds_on_page, read_through_num)
-           VALUES ($1, 'manual', $2, 'chapter', $3, $4, $5, 0, $6)`,
+           VALUES ($1, 'manual:' || $1, $2, 'chapter', $3, $4, $5, 0, $6)`,
           [
             userId,
             novelId,
@@ -425,7 +371,7 @@ router.post(
     try {
       const result = await withTransaction(async (client) => {
         const metaResult = await client.query(
-          'SELECT * FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2',
+          'SELECT * FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2 FOR UPDATE',
           [userId, novelId],
         );
         if (metaResult.rows.length === 0)
@@ -438,7 +384,7 @@ router.post(
           max_chapter: number;
           max_percent: string;
         }>(
-          'SELECT MAX(chapter_num) as max_chapter, MAX(percent) as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3',
+          "SELECT chapter_num as max_chapter, percent as max_percent FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3 AND created_at >= COALESCE((SELECT progress_reset_at FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2), '-infinity'::timestamptz) ORDER BY chapter_num DESC, percent DESC, created_at DESC LIMIT 1",
           [userId, novelId, currentRT],
         );
         const archiveEntry = {
@@ -522,11 +468,23 @@ router.delete(
   async (req: Request, res: Response) => {
     const { novelId } = req.params;
     const { hard = false } = req.body as { hard?: boolean };
+    if (typeof hard !== 'boolean')
+      return res.status(400).json({ error: 'hard must be a boolean' });
     const userId = (req as AuthenticatedRequest).user.id;
 
     try {
       await withTransaction(async (client) => {
         if (hard) {
+          for (const table of [
+            'novel_notes',
+            'novel_categories',
+            'notifications',
+          ]) {
+            await client.query(
+              `DELETE FROM ${table} WHERE user_id = $1 AND novel_id = $2`,
+              [userId, novelId],
+            );
+          }
           await client.query(
             'DELETE FROM bookmarks WHERE user_id = $1 AND novel_id = $2',
             [userId, novelId],
@@ -648,6 +606,13 @@ router.put(
   validateNovelId,
   async (req: Request, res: Response) => {
     const { notes } = req.body as { notes?: string };
+    if (
+      notes !== undefined &&
+      (typeof notes !== 'string' || notes.length > 5000)
+    )
+      return res
+        .status(400)
+        .json({ error: 'Notes must be a string of at most 5000 characters' });
     const userId = (req as AuthenticatedRequest).user.id;
     try {
       await pool.query(
@@ -695,9 +660,13 @@ router.put(
 // POST /api/v1/novels/bulk-status
 router.post(
   '/api/v1/novels/bulk-status',
+  requireAuthAPI,
   validateApiKey,
   [
-    body('novel_ids').isArray({ min: 1 }),
+    body('novel_ids').isArray({ min: 1, max: 200 }),
+    body('novel_ids.*')
+      .isString()
+      .isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }),
     body('status').isIn([
       'reading',
       'completed',
@@ -711,13 +680,24 @@ router.post(
   async (req: Request, res: Response) => {
     const { novel_ids, status } = req.body as {
       novel_ids: string[];
-      status: string;
+      status: NovelStatus;
     };
     try {
-      const result = await pool.query(
-        'UPDATE user_novel_meta SET status = $1, updated_at = NOW() WHERE user_id = $2 AND novel_id = ANY($3) RETURNING novel_id',
-        [status, (req as AuthenticatedRequest).user.id, novel_ids],
-      );
+      const result = await withTransaction(async (client) => {
+        const rows: { novel_id: string }[] = [];
+        // Stable lock order avoids deadlocks between overlapping batches.
+        for (const novelId of [...new Set(novel_ids)].sort()) {
+          rows.push(
+            await setNovelStatus(
+              client,
+              (req as AuthenticatedRequest).user.id,
+              novelId,
+              status,
+            ),
+          );
+        }
+        return { rows };
+      });
       res.json({
         success: true,
         updated: result.rows.length,
@@ -743,106 +723,41 @@ router.get(
   },
 );
 
-// POST /api/v1/import
+// Import is an explicit, session-authenticated data restoration operation.
 router.post(
   '/api/v1/import',
+  requireAuthAPI,
   validateApiKey,
-  [body('data').isObject(), handleValidationErrors],
   async (req: Request, res: Response) => {
-    const { data } = req.body as { data: Record<string, unknown[]> };
-    const userId = (req as AuthenticatedRequest).user.id;
-    const client = await pool.connect();
     try {
-      await client.query('BEGIN');
-      const imported = {
-        novels: 0,
-        progress: 0,
-        bookmarks: 0,
-        notes: 0,
-        categories: 0,
-      };
-
-      if (Array.isArray(data.novels)) {
-        for (const novel of data.novels as Record<string, unknown>[]) {
-          await client.query(
-            'INSERT INTO novels (id, title, primary_url, author, genre, description) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (id) DO NOTHING',
-            [
-              novel.id,
-              novel.title,
-              novel.primary_url,
-              novel.author,
-              novel.genre,
-              novel.description,
-            ],
-          );
-          if (
-            novel.status ||
-            novel.favorite ||
-            novel.rating ||
-            novel.notes ||
-            novel.started_at ||
-            novel.completed_at
-          ) {
-            await client.query(
-              'INSERT INTO user_novel_meta (user_id, novel_id, status, favorite, rating, notes, started_at, completed_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (user_id, novel_id) DO UPDATE SET status = EXCLUDED.status, favorite = EXCLUDED.favorite, rating = EXCLUDED.rating, notes = EXCLUDED.notes, started_at = EXCLUDED.started_at, completed_at = EXCLUDED.completed_at',
-              [
-                userId,
-                novel.id,
-                novel.status,
-                novel.favorite,
-                novel.rating,
-                novel.notes,
-                novel.started_at,
-                novel.completed_at,
+      validateImport(req.body.data);
+    } catch {
+      return res
+        .status(400)
+        .json({ error: 'Invalid or unsupported ReadSync export' });
+    }
+    try {
+      const imported = await restoreExport(
+        req.body.data,
+        (req as AuthenticatedRequest).user.id,
+      );
+      res.json({
+        success: true,
+        imported,
+        warnings:
+          req.body.data.version === 2
+            ? []
+            : [
+                'Legacy exports contain only the history originally exported; missing data cannot be recovered.',
               ],
-            );
-          }
-          imported.novels++;
-        }
-      }
-      if (Array.isArray(data.bookmarks)) {
-        for (const b of data.bookmarks as Record<string, unknown>[]) {
-          await client.query(
-            'INSERT INTO bookmarks (user_id, novel_id, chapter_url, percent, bookmark_type, title, note) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT DO NOTHING',
-            [
-              userId,
-              b.novel_id,
-              b.chapter_url,
-              b.percent,
-              b.bookmark_type,
-              b.title,
-              b.note,
-            ],
-          );
-          imported.bookmarks++;
-        }
-      }
-      if (Array.isArray(data.notes)) {
-        for (const n of data.notes as Record<string, unknown>[]) {
-          await client.query(
-            'INSERT INTO novel_notes (user_id, novel_id, note_text, chapter_num) VALUES ($1, $2, $3, $4)',
-            [userId, n.novel_id, n.note_text, n.chapter_num],
-          );
-          imported.notes++;
-        }
-      }
-      if (Array.isArray(data.categories)) {
-        for (const c of data.categories as Record<string, unknown>[]) {
-          await client.query(
-            'INSERT INTO novel_categories (user_id, novel_id, category) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-            [userId, c.novel_id, c.category],
-          );
-          imported.categories++;
-        }
-      }
-
-      await client.query('COMMIT');
-      res.json({ success: true, imported });
+      });
     } catch (error) {
-      await client.query('ROLLBACK');
+      const code = (error as { code?: string }).code;
+      if (code?.startsWith('22') || code?.startsWith('23'))
+        return res
+          .status(400)
+          .json({ error: 'Export contains invalid or inconsistent records' });
       handleDbError(res, error, 'Import data');
-    } finally {
-      client.release();
     }
   },
 );

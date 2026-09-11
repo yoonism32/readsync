@@ -78,9 +78,9 @@ export function RereadPanel({ novel }: RereadPanelProps) {
         </span>
         <span style={{ flex: 1 }} />
         {confirming ? (
-          <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
-            <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>
-              Archives current progress and starts from scratch — sure?
+          <span className="reread-confirmation">
+            <span className="text-muted" style={{ fontSize: 'var(--text-sm)', flexBasis: '100%' }}>
+              Your current progress will be archived. The new read-through starts from the beginning.
             </span>
             <button type="button" className="btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
               Cancel

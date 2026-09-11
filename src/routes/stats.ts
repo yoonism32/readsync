@@ -151,6 +151,25 @@ router.get('/api/v1/stats/daily', validateApiKey, async (req, res) => {
     ? new Date(from)
     : new Date(Date.now() - Number(days) * MS_PER_DAY);
   const toDate = to ? new Date(to) : new Date();
+  if (
+    !Number.isFinite(fromDate.getTime()) ||
+    !Number.isFinite(toDate.getTime()) ||
+    !Number.isSafeInteger(Number(days)) ||
+    Number(days) < 1 ||
+    Number(days) > 3660 ||
+    fromDate > toDate ||
+    toDate.getTime() - fromDate.getTime() > 3660 * MS_PER_DAY ||
+    [from, to].some(
+      (value) =>
+        value !== undefined &&
+        (!/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+          new Date(value).toISOString().slice(0, 10) !== value),
+    )
+  ) {
+    return res
+      .status(400)
+      .json({ error: 'Invalid date range (maximum 3660 days)' });
+  }
 
   try {
     const result = await pool.query(
@@ -371,14 +390,17 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
         ),
         pool.query(
           `SELECT d.id AS device_id, d.device_label,
-                COUNT(rs.*) AS sessions,
+                COUNT(rs.id) AS sessions,
                 COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds
-         FROM reading_sessions rs
-         JOIN devices d ON d.id = rs.device_id
-         WHERE rs.user_id = $1 AND rs.end_time IS NOT NULL
-           ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
+         FROM devices d
+         LEFT JOIN reading_sessions rs
+           ON rs.device_id = d.id
+          AND rs.user_id = d.user_id
+          AND rs.end_time IS NOT NULL
+          ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
+         WHERE d.user_id = $1
          GROUP BY d.id, d.device_label
-         ORDER BY seconds DESC`,
+         ORDER BY seconds DESC, d.device_label`,
           [user_id],
         ),
         // Top novels per hour, by time. rank() keeps this one round-trip

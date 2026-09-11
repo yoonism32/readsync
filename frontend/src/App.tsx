@@ -1,4 +1,5 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
+import { useEffects } from './hooks/useEffects.js';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import useSWR from 'swr';
@@ -56,6 +57,8 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 export default function App() {
+  const effects = useEffects();
+  useEffect(() => { document.documentElement.dataset.effects = effects; }, [effects]);
   return (
     <BrowserRouter basename="/app">
       <Toaster

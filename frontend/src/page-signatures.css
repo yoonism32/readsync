@@ -1,0 +1,676 @@
+/* Page-specific expressions of “The Night Shelf.” Shared palette, different jobs. */
+
+/* Login — opening a private book. */
+.login-brand {
+  position: relative;
+  padding-left: 48px;
+}
+
+.login-brand::before {
+  content: '';
+  position: absolute;
+  inset: -12px auto -12px 0;
+  width: 20px;
+  background: var(--color-accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 86%, 0 100%);
+}
+
+.login-brand::after {
+  content: '';
+  position: absolute;
+  left: 29px;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  background: var(--color-teal);
+}
+
+.login-form {
+  position: relative;
+  overflow: hidden;
+}
+
+:root[data-effects="full"] .login-brand::before {
+  animation: bookmark-arrive 700ms var(--ease-out-expo);
+}
+
+:root[data-effects="full"] .login-form {
+  animation: form-open 520ms var(--ease-out-expo);
+  transform-origin: left;
+}
+
+@keyframes form-open {
+  from {
+    opacity: .45;
+    clip-path: inset(0 100% 0 0);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+}
+
+/* My List — a working shelf, dense but tactile. */
+.library-heading {
+  position: relative;
+  padding-bottom: var(--space-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.library-heading::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: min(180px, 45%);
+  height: 1px;
+  background: var(--color-accent);
+}
+
+.library-refresh {
+  position: relative;
+  overflow: hidden;
+}
+
+.library-refresh::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-teal);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 500ms var(--ease-out-expo);
+}
+
+.library-refresh:has(button:disabled)::after {
+  transform: scaleX(.72);
+  animation: refresh-scan 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes refresh-scan {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.library-table {
+  position: relative;
+}
+
+.library-table thead {
+  background: var(--color-bg-raised);
+}
+
+:root[data-effects="full"] .library-table tbody tr {
+  transition: background-color var(--motion-standard), color var(--motion-standard);
+}
+
+:root[data-effects="full"] .library-table tbody tr:hover {
+  background: var(--color-bg-hover);
+}
+
+/* Explorer — a search instrument; results emerge from the query. */
+.explorer-search {
+  padding-bottom: var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.explorer-search-field::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--color-accent);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 300ms var(--ease-out-expo);
+}
+
+.explorer-search-field:focus-within::after {
+  transform: scaleX(1);
+}
+
+.explorer-results-heading {
+  min-height: 44px;
+}
+
+.filter-workbench {
+  display: grid;
+  gap: var(--space-xl);
+  border-color: var(--color-teal-border) !important;
+}
+
+.filter-primary {
+  min-width: 0;
+  padding-bottom: var(--space-xl);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.filter-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  margin-bottom: var(--space-md);
+}
+
+.filter-section-heading h2 {
+  margin: 0 0 3px;
+  font-size: var(--text-lg);
+}
+
+.filter-section-heading p {
+  max-width: 62ch;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.genre-match {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 3px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-input);
+}
+
+.genre-match button {
+  padding: 5px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: 600 var(--text-xs)/1 var(--font-body);
+  cursor: pointer;
+}
+
+.genre-match button[aria-pressed="true"] {
+  background: var(--color-teal);
+  color: var(--color-on-teal);
+}
+
+.genre-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: var(--space-sm);
+}
+
+.tri-filter-chip {
+  transition: color var(--motion-fast), border-color var(--motion-fast), background-color var(--motion-fast), translate var(--motion-fast);
+}
+
+:root[data-effects="full"] .tri-filter-chip:hover {
+  translate: 0 -2px;
+}
+
+.genre-legend {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-sm);
+  color: var(--color-text-faint);
+  font-size: var(--text-xs);
+}
+
+.genre-legend [data-state="include"] {
+  color: var(--color-teal-bright);
+}
+
+.genre-legend [data-state="exclude"] {
+  color: var(--color-danger);
+}
+
+.status-filter-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+}
+
+.status-filter-chip {
+  padding: 8px 13px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-text-muted);
+  font: 500 var(--text-sm)/1 var(--font-body);
+  cursor: pointer;
+}
+
+.status-filter-chip[aria-pressed="true"] {
+  border-color: var(--color-teal-border);
+  background: var(--color-teal-glow);
+  color: var(--color-teal-bright);
+}
+
+.filter-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: var(--space-md);
+}
+
+:root[data-effects="full"] .explorer-page .cover-lift {
+  animation: catalog-arrive 420ms var(--ease-out-expo) both;
+}
+
+@keyframes catalog-arrive {
+  from {
+    opacity: .45;
+    transform: perspective(700px) rotateY(8deg) translateX(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* History — progress laid along a chronological spine. */
+.history-timeline {
+  position: relative;
+  padding-left: var(--space-xl);
+}
+
+.history-timeline::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: var(--space-sm);
+  bottom: var(--space-xl);
+  width: 1px;
+  background: var(--color-border);
+}
+
+.history-day {
+  position: relative;
+}
+
+.history-day::before {
+  content: '';
+  position: absolute;
+  left: calc(-1 * var(--space-xl));
+  top: 7px;
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--color-accent);
+  border-radius: var(--radius-full);
+  background: var(--color-bg);
+}
+
+.history-day:first-child::before {
+  background: var(--color-accent);
+}
+
+.history-day-entries {
+  transform-origin: top left;
+}
+
+:root[data-effects="full"] .history-day {
+  animation: timeline-arrive 420ms var(--ease-out-expo) both !important;
+}
+
+@keyframes timeline-arrive {
+  from {
+    opacity: .35;
+    transform: translateX(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Stats — an observatory: data responds from a stable baseline. */
+.stats-page>.page-title {
+  display: inline-block;
+  position: relative;
+  padding-right: 54px;
+}
+
+.stats-page>.page-title::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 7px;
+  width: 40px;
+  height: 18px;
+  border-left: 1px solid var(--color-teal);
+  border-bottom: 1px solid var(--color-teal);
+  clip-path: polygon(0 75%, 25% 55%, 45% 68%, 68% 15%, 100% 0, 100% 100%, 0 100%);
+  background: var(--color-teal-glow);
+}
+
+.stats-overview .stats-cell {
+  position: relative;
+}
+
+.stats-overview .stats-cell::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: var(--color-teal);
+  scale: 0 1;
+  transform-origin: left;
+  transition: scale 450ms var(--ease-out-expo);
+}
+
+.stats-overview .stats-cell:hover::after {
+  scale: 1;
+}
+
+.share-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.share-bar-label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 6px;
+  font-size: var(--text-sm);
+}
+
+.share-bar-track {
+  height: 9px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-input);
+}
+
+.share-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: var(--color-teal);
+  transform-origin: left;
+}
+
+.share-bars[data-tone="accent"] .share-bar-fill {
+  background: var(--color-accent);
+}
+
+:root[data-effects="full"] .share-bar-fill {
+  animation: share-bar-grow 600ms var(--ease-out-expo) both;
+}
+
+@keyframes share-bar-grow {
+  from {
+    scale: 0 1;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+:root[data-effects="full"] .stats-overview .tabular {
+  animation: value-focus 450ms var(--ease-out-expo);
+}
+
+@keyframes value-focus {
+  from {
+    opacity: .35;
+    filter: blur(3px);
+  }
+
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* Manage — a restrained control ledger, not another card feed. */
+.manage-page {
+  max-width: 1060px;
+  margin-inline: auto;
+}
+
+.manage-search {
+  border-radius: var(--radius-md) !important;
+}
+
+.manage-list {
+  counter-reset: manage-row;
+  border-top: 1px solid var(--color-border);
+}
+
+.manage-row {
+  counter-increment: manage-row;
+  position: relative;
+  border-width: 0 0 1px !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  padding-left: 52px !important;
+}
+
+.manage-row::before {
+  content: counter(manage-row, decimal-leading-zero);
+  position: absolute;
+  left: var(--space-sm);
+  color: var(--color-text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+:root[data-effects="full"] .manage-row {
+  transition: background-color var(--motion-standard), translate 260ms var(--ease-out-expo), opacity var(--motion-standard) !important;
+}
+
+:root[data-effects="full"] .manage-row:hover {
+  background: var(--color-bg-hover) !important;
+  translate: 6px 0;
+}
+
+/* Settings — quiet editorial divisions with animated choice state. */
+.settings-page>.page-title {
+  margin-bottom: var(--space-2xl);
+}
+
+.settings-group {
+  position: relative;
+}
+
+.settings-group::after {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 72px;
+  height: 1px;
+  background: var(--color-accent);
+}
+
+.settings-disclosure>div {
+  transform-origin: top;
+}
+
+:root[data-effects="full"] .settings-disclosure[open]>div {
+  animation: settings-open 300ms var(--ease-out-expo);
+}
+
+@keyframes settings-open {
+  from {
+    opacity: .35;
+    clip-path: inset(0 0 100%);
+  }
+
+  to {
+    opacity: 1;
+    clip-path: inset(0);
+  }
+}
+
+:root[data-effects="full"] .settings-page button[aria-pressed="true"] {
+  animation: choice-set 260ms var(--ease-out-expo);
+}
+
+@keyframes choice-set {
+  50% {
+    scale: .96;
+  }
+}
+
+/* Admin — clearly dormant tooling, with one truthful state signal. */
+.admin-page {
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+.bot-console {
+  position: relative;
+  padding-top: 72px !important;
+  overflow: hidden;
+}
+
+.bot-console::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 48px;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.bot-state {
+  position: absolute;
+  top: var(--space-lg);
+  left: var(--space-xl);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: .07em;
+}
+
+.bot-state span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-warning);
+}
+
+:root[data-effects="full"] .bot-state span {
+  animation: bot-wake 650ms var(--ease-out-expo);
+}
+
+@keyframes bot-wake {
+  from {
+    scale: 0;
+  }
+
+  70% {
+    scale: 1.35;
+  }
+
+  to {
+    scale: 1;
+  }
+}
+
+/* Novel — the book remains the page's physical anchor. */
+.novel-hero-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.novel-hero-panel::after {
+  content: '';
+  position: absolute;
+  right: var(--space-xl);
+  top: -1px;
+  width: 20px;
+  height: 48px;
+  background: var(--color-accent);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%);
+}
+
+.novel-cover {
+  transform: perspective(900px) rotateY(-5deg);
+  transform-origin: left;
+}
+
+.novel-actions {
+  padding-block: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+}
+
+:root[data-effects="full"] .novel-cover {
+  animation: novel-open 580ms var(--ease-out-expo);
+  transition: transform 450ms var(--ease-out-expo);
+}
+
+:root[data-effects="full"] .novel-cover:hover {
+  transform: perspective(900px) rotateY(-13deg) translateY(-4px);
+}
+
+@keyframes novel-open {
+  from {
+    opacity: .3;
+    transform: perspective(900px) rotateY(-24deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: perspective(900px) rotateY(-5deg);
+  }
+}
+
+@media (max-width: 600px) {
+  .login-brand {
+    padding-left: 36px;
+  }
+
+  .history-timeline {
+    padding-left: var(--space-lg);
+  }
+
+  .history-day::before {
+    left: calc(-1 * var(--space-lg));
+  }
+
+  .manage-row {
+    padding-left: 42px !important;
+  }
+
+  .manage-row:hover {
+    padding-left: 42px !important;
+  }
+
+  .bot-console {
+    padding-inline: var(--space-lg) !important;
+  }
+
+  .filter-section-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .filter-secondary-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 601px) and (max-width: 980px) {
+  .filter-secondary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+:root[data-effects="quiet"] :is(.login-form, .explorer-page .cover-lift, .history-day, .stats-overview .tabular, .share-bar-fill, .novel-cover, .bot-state span) {
+  animation: none !important;
+}

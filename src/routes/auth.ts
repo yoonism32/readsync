@@ -1,4 +1,3 @@
-import path from 'node:path';
 import { Router } from 'express';
 import {
   HTTP_BAD_REQUEST,
@@ -7,16 +6,19 @@ import {
 } from '../config.js';
 import pool from '../db/pool.js';
 import logger from '../logger.js';
-import { requireAuth, validateApiKey } from '../middleware/auth.js';
+import {
+  requireAuth,
+  requireAuthAPI,
+  validateApiKey,
+} from '../middleware/auth.js';
 import {
   checkRateLimit,
   clearAttempts,
   recordAttempt,
 } from '../middleware/rateLimiter.js';
+import { createApiKey } from '../services/ApiKey.js';
 import { verifyAdminCredentials } from '../services/AuthService.js';
 import type { AuthenticatedRequest } from '../types/index.js';
-
-const PUBLIC_DIR = path.join(__dirname, '..', '..', 'public');
 
 const router = Router();
 
@@ -41,8 +43,16 @@ router.post('/api/auth/login', async (req, res) => {
     });
   }
 
-  if (!username || !password) {
-    recordAttempt(clientIp);
+  // Reserve before bcrypt awaits, so parallel attempts cannot bypass the cap.
+  recordAttempt(clientIp);
+  if (
+    typeof username !== 'string' ||
+    typeof password !== 'string' ||
+    !username ||
+    !password ||
+    username.length > 200 ||
+    password.length > 1024
+  ) {
     return res
       .status(HTTP_BAD_REQUEST)
       .json({ error: 'Username and password required' });
@@ -51,38 +61,36 @@ router.post('/api/auth/login', async (req, res) => {
   try {
     const valid = await verifyAdminCredentials(username, password);
     if (valid) {
+      const users = await pool.query<{ id: string }>(
+        'SELECT id FROM users WHERE ($1::text IS NULL OR id = $1) ORDER BY id LIMIT 2',
+        [process.env.ADMIN_USER_ID || null],
+      );
+      if (users.rows.length !== 1)
+        throw new Error(
+          'Configure ADMIN_USER_ID for an existing unique account',
+        );
+      await new Promise<void>((resolve, reject) =>
+        req.session.regenerate((err) => (err ? reject(err) : resolve())),
+      );
       req.session.authenticated = true;
       req.session.username = username;
+      req.session.userId = users.rows[0].id;
+      await new Promise<void>((resolve, reject) =>
+        req.session.save((err) => (err ? reject(err) : resolve())),
+      );
       logger.info({ username, ip: clientIp }, 'Login successful');
       clearAttempts(clientIp);
 
-      // Single-tenant app: the session login (admin credentials) and the
-      // API key (used by the SPA + userscript for /api/v1/* calls) are
-      // separate credentials with no link between them, which used to
-      // mean a successful session login could still leave the app
-      // silently broken until the user manually pasted the right key.
-      // Hand it back here so the client never has to ask.
-      let api_key: string | null = null;
-      try {
-        const result = await pool.query<{ api_key: string }>(
-          'SELECT api_key FROM users LIMIT 1',
-        );
-        api_key = result.rows[0]?.api_key ?? null;
-      } catch (err) {
-        logger.warn({ err }, 'Could not look up API key after login');
-      }
-
-      return res.json({ success: true, api_key });
+      // The dashboard uses this session; userscript credentials are issued separately.
+      return res.json({ success: true });
     }
 
-    recordAttempt(clientIp);
     logger.warn({ username, ip: clientIp }, 'Login failed');
     return res
       .status(HTTP_UNAUTHORIZED)
       .json({ error: 'Invalid username or password' });
   } catch (error) {
     logger.error({ error }, 'Login error');
-    recordAttempt(clientIp);
     return res
       .status(HTTP_INTERNAL_ERROR)
       .json({ error: 'Internal server error' });
@@ -97,19 +105,23 @@ router.post('/api/auth/logout', (req, res) => {
       return res.status(HTTP_INTERNAL_ERROR).json({ error: 'Logout failed' });
     }
     logger.info({ username }, 'Logout successful');
+    res.clearCookie('connect.sid', { path: '/' });
     res.json({ success: true });
   });
 });
 
-// Session-authenticated recovery route: lets the SPA self-heal if its
-// locally stored API key ever goes missing (cleared storage, a device
-// that only ever had the session cookie) without forcing a re-login.
-router.get('/api/auth/api-key', requireAuth, async (_req, res) => {
+// Issue a one-time-visible userscript credential, revoking the prior key.
+router.post('/api/auth/api-key', requireAuthAPI, async (req, res) => {
   try {
-    const result = await pool.query<{ api_key: string }>(
-      'SELECT api_key FROM users LIMIT 1',
-    );
-    res.json({ api_key: result.rows[0]?.api_key ?? null });
+    if (!req.session.userId)
+      return res.status(401).json({ error: 'Please sign in again' });
+    const { key, hash } = createApiKey();
+    await pool.query('UPDATE users SET api_key = $1 WHERE id = $2', [
+      hash,
+      req.session.userId,
+    ]);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ api_key: key });
   } catch (error) {
     logger.error({ error }, 'API key lookup error');
     res.status(HTTP_INTERNAL_ERROR).json({ api_key: null });
@@ -192,7 +204,7 @@ router.get('/explorer', (_req, res) => res.redirect(301, '/app/explorer'));
 
 // /practice has no SPA equivalent — left in place, still served.
 router.get('/legacy/practice', requireAuth, (_req, res) => {
-  res.sendFile(path.join(PUBLIC_DIR, 'practice.html'));
+  res.status(410).send('The legacy API explorer has been retired.');
 });
 router.get('/practice', (_req, res) => res.redirect(301, '/legacy/practice'));
 

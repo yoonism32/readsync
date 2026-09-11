@@ -40,7 +40,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_novel_categories_novel_id
   ON public.novel_categories (novel_id);
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_novel_notes_novel_id
   ON public.novel_notes (novel_id);
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_novel_notifications_novel_id
-  ON public.novel_notifications (novel_id);
+-- novel_notifications was a legacy-only table, absent from fresh installs.
+-- Its existing production index is retained; no new index is required.
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_user_novel_meta_novel_id
   ON public.user_novel_meta (novel_id);

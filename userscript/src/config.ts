@@ -71,4 +71,11 @@ export const MAX_CHAPTER_NUM = 100000;
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
 // const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';
 export const READSYNC_API_BASE = 'https://readsync-n7zp.onrender.com/api/v1';
-export const READSYNC_API_KEY = '5mrlJqFBNrhVIPBAzHmPNdpZhf5DlBSB';
+
+// Explicitly embedded from API_KEY at build time for this single-user installation.
+declare const __READSYNC_API_KEY__: string;
+export const READSYNC_API_KEY = typeof __READSYNC_API_KEY__ === 'string' ? __READSYNC_API_KEY__ : '';
+
+export function getApiKey(): string {
+  return READSYNC_API_KEY;
+}

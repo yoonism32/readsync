@@ -38,8 +38,20 @@ const MIRRORED_PATH = '/storage/v1/object/public/novel-covers/';
  * its cover keeps hotlinking the source forever — the mirroring branch below is
  * unreachable once any URL is cached.
  */
-export function isMirroredCover(url: string | null): boolean {
-  return !!url && url.includes(MIRRORED_PATH);
+export function isMirroredCover(
+  url: string | null,
+  storageUrl = SUPABASE_URL,
+): boolean {
+  if (!url || !storageUrl) return false;
+  try {
+    const parsed = new URL(url);
+    return (
+      parsed.origin === new URL(storageUrl).origin &&
+      parsed.pathname.startsWith(MIRRORED_PATH)
+    );
+  } catch {
+    return false;
+  }
 }
 
 /** Novel IDs still carry the legacy novelbin: prefix; the slug on disk never does. */
@@ -75,6 +87,7 @@ export function isMirrorOnCooldown(
 
 /** slug → epoch ms before which we won't retry mirroring. */
 const mirrorCooldown = new Map<string, number>();
+const pendingMirrors = new Set<string>();
 
 /**
  * Does this source response mean the image genuinely isn't there?
@@ -98,6 +111,8 @@ async function fetchCoverWithRetry(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await fetch(url, {
+        signal: AbortSignal.timeout(10_000),
+        redirect: 'error',
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -110,6 +125,7 @@ async function fetchCoverWithRetry(
       if (response.ok) return response;
 
       lastError = new Error(`HTTP ${response.status}`);
+      await response.body?.cancel();
     } catch (err) {
       lastError = err as Error;
     }
@@ -141,7 +157,7 @@ const COVER_JPEG_QUALITY = 78;
  * paths (GET's server fetch and the userscript's POST) funnel through.
  */
 export async function resizeCoverForDisplay(buffer: Buffer): Promise<Buffer> {
-  return sharp(buffer)
+  return sharp(buffer, { limitInputPixels: 20_000_000, failOn: 'error' })
     .resize({ width: COVER_MAX_WIDTH, withoutEnlargement: true })
     .jpeg({ quality: COVER_JPEG_QUALITY })
     .toBuffer();
@@ -225,6 +241,27 @@ export function isJpegMagicBytes(buffer: Buffer): boolean {
 // tighter at the body-parser layer, since that limit is shared by every
 // route); the floor rejects empty/near-empty payloads outright.
 export const MAX_COVER_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+export async function readBoundedCover(response: Response): Promise<Buffer> {
+  if (!response.body) throw new Error('Empty cover response');
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_COVER_UPLOAD_BYTES)
+        throw new Error('Cover exceeds size limit');
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
+}
 export const MIN_COVER_UPLOAD_BYTES = 256;
 
 export function isValidCoverUploadSize(byteLength: number): boolean {
@@ -265,6 +302,7 @@ router.get(
   async (req, res) => {
     const { novelId } = req.params;
     const forceRefresh = req.query.refresh === 'true';
+    let acquiredMirror: string | undefined;
 
     try {
       const novelResult = await pool.query<{ cover_img: string | null }>(
@@ -316,14 +354,15 @@ router.get(
         return redirectToSource();
       }
 
-      if (
-        !forceRefresh &&
-        isMirrorOnCooldown(mirrorCooldown.get(slug), Date.now())
-      ) {
+      if (isMirrorOnCooldown(mirrorCooldown.get(slug), Date.now())) {
         return redirectToSource();
       }
 
       logger.debug({ slug }, 'Fetching cover');
+      if (pendingMirrors.has(slug) || pendingMirrors.size >= 4)
+        return redirectToSource();
+      pendingMirrors.add(slug);
+      acquiredMirror = slug;
 
       let response: Response;
       try {
@@ -366,8 +405,7 @@ router.get(
           .json({ error: 'Cover not found on source' });
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      const buffer = Buffer.from(arrayBuffer);
+      const buffer = await readBoundedCover(response);
 
       let publicUrl: string;
       try {
@@ -383,6 +421,8 @@ router.get(
       res.redirect(publicUrl);
     } catch (error) {
       handleDbError(res, error, 'Fetch/cache cover');
+    } finally {
+      if (acquiredMirror) pendingMirrors.delete(acquiredMirror);
     }
   },
 );

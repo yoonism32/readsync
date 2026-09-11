@@ -4,20 +4,20 @@ import {
   DECIMAL_RADIX,
   DEFAULT_ANALYTICS_HOURS,
   HTTP_BAD_REQUEST,
-  HTTP_INTERNAL_ERROR,
   HTTP_NOT_FOUND,
   MAX_ANALYTICS_HOURS,
   MIN_ANALYTICS_HOURS,
 } from '../config.js';
 import pool from '../db/pool.js';
 import logger from '../logger.js';
-import { validateApiKey } from '../middleware/auth.js';
+import { requireAuthAPI, validateApiKey } from '../middleware/auth.js';
 import { handleDbError } from '../middleware/errorHandler.js';
 import {
   isChapterRegression,
   recordCorrectionAttempt,
 } from '../services/ChapterCorrection.js';
 import { parseTimeAgo } from '../services/NovelService.js';
+import { isReaderCoverUrl } from '../services/ReaderUrl.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 // Bot (bot/src/) sunset 2026-09-08: it never ran in production (setBotModule
@@ -29,7 +29,7 @@ import type { AuthenticatedRequest } from '../types/index.js';
 export function createAdminRouter(io: SocketServer): Router {
   const router = Router();
 
-  router.get('/api/v1/admin/novels/stale', validateApiKey, async (req, res) => {
+  router.get('/api/v1/admin/novels/stale', requireAuthAPI, async (req, res) => {
     const { hours = String(DEFAULT_ANALYTICS_HOURS) } = req.query as Record<
       string,
       string
@@ -94,13 +94,24 @@ export function createAdminRouter(io: SocketServer): Router {
       // og:image from the novel page. Only trust cover CDN hosts — the server
       // can't fetch these itself (Cloudflare bot-filters datacenter IPs), so the
       // URL is stored as-is for the browser to load directly.
-      const safeCoverUrl =
-        typeof cover_url === 'string' &&
-        /^https:\/\/images\.(novelarrow|novelbin)\.[a-z]+\//.test(cover_url)
-          ? cover_url
-          : null;
+      const safeCoverUrl = isReaderCoverUrl(cover_url) ? cover_url : null;
 
-      if (!novel_id || !chapter_num) {
+      if (
+        typeof novel_id !== 'string' ||
+        novel_id.length === 0 ||
+        novel_id.length > 200 ||
+        !Number.isInteger(chapter_num) ||
+        Number(chapter_num) < 1 ||
+        Number(chapter_num) > 100000 ||
+        [chapter_title, author, update_time_raw].some(
+          (value) =>
+            value != null && (typeof value !== 'string' || value.length > 1000),
+        ) ||
+        (synopsis != null &&
+          (typeof synopsis !== 'string' || synopsis.length > 20000)) ||
+        (chapter_verified != null && typeof chapter_verified !== 'boolean') ||
+        (genres != null && (typeof genres !== 'string' || genres.length > 5000))
+      ) {
         return res.status(HTTP_BAD_REQUEST).json({
           error: 'Missing required fields',
           required: ['novel_id', 'chapter_num'],
@@ -111,9 +122,11 @@ export function createAdminRouter(io: SocketServer): Router {
         const checkResult = await pool.query<{
           id: string;
           latest_chapter_num: number | null;
-        }>('SELECT id, latest_chapter_num FROM novels WHERE id = $1', [
-          novel_id,
-        ]);
+        }>(
+          `SELECT n.id, n.latest_chapter_num FROM novels n
+          WHERE n.id = $1 AND EXISTS (SELECT 1 FROM user_novel_meta m WHERE m.novel_id = n.id AND m.user_id = $2)`,
+          [novel_id, (req as AuthenticatedRequest).user.id],
+        );
 
         if (checkResult.rows.length === 0) {
           return res
@@ -257,11 +270,7 @@ export function createAdminRouter(io: SocketServer): Router {
           },
         });
       } catch (error) {
-        logger.error({ error }, 'Auto-update error');
-        res.status(HTTP_INTERNAL_ERROR).json({
-          error: 'Internal server error',
-          message: error instanceof Error ? error.message : 'Unknown error',
-        });
+        handleDbError(res, error, 'Auto-update');
       }
     },
   );

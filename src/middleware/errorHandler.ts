@@ -51,6 +51,13 @@ export function globalErrorHandler(
   res: Response,
   _next: NextFunction,
 ): void {
+  const status = (err as Error & { status?: number }).status;
+  if (status === 400 || status === 413) {
+    res.status(status).json({
+      error: status === 413 ? 'Request body too large' : 'Invalid request body',
+    });
+    return;
+  }
   logger.error({ err }, 'Unhandled error');
   notify(err, {
     operation: 'http:unhandled',

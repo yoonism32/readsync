@@ -2,7 +2,7 @@ import type { TriState } from '../lib/explorerFilters.js';
 
 /**
  * Three-state filter box: unset → include → exclude → unset.
- * Include is the accent (the app's affirmative colour), exclude is danger red
+ * Include is teal (the app's discovery/activity colour), exclude is danger red
  * with a minus, so the two are distinguishable by shape as well as colour.
  */
 export function TriCheckbox({
@@ -18,7 +18,7 @@ export function TriCheckbox({
   const isExclude = state === 'exclude';
 
   const colour = isInclude
-    ? 'var(--color-accent)'
+    ? 'var(--color-teal-bright)'
     : isExclude
       ? 'var(--color-danger)'
       : 'var(--color-text-muted)';
@@ -26,6 +26,8 @@ export function TriCheckbox({
   return (
     <button
       type="button"
+      className="tri-filter-chip"
+      data-state={state}
       onClick={onCycle}
       // Not a checkbox role: three states, so aria-checked would be a lie.
       aria-pressed={state !== 'off'}
@@ -35,9 +37,10 @@ export function TriCheckbox({
         alignItems: 'center',
         gap: 8,
         width: '100%',
-        background: 'none',
-        border: 'none',
-        padding: '4px 2px',
+        background: state === 'off' ? 'transparent' : isInclude ? 'var(--color-teal-glow)' : 'rgba(255, 90, 90, 0.08)',
+        border: `1px solid ${state === 'off' ? 'var(--color-border)' : colour}`,
+        borderRadius: 'var(--radius-md)',
+        padding: '8px 10px',
         color: colour,
         fontSize: 'var(--text-sm)',
         fontFamily: 'inherit',
@@ -59,7 +62,7 @@ export function TriCheckbox({
           borderRadius: 3,
           border: `1px solid ${state === 'off' ? 'var(--color-border)' : colour}`,
           background: state === 'off' ? 'transparent' : colour,
-          color: 'var(--color-on-accent)',
+          color: isInclude ? 'var(--color-on-teal)' : 'var(--color-on-accent)',
         }}
       >
         {isInclude && (

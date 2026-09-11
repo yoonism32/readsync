@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
@@ -6,6 +6,7 @@ import { fetchNovels, formatTimestamp, coverUrl, resumeUrl, novels as novelsApi 
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
+import { LoadError, PageLoading } from '../components/PageFeedback.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { HiatusBadge } from '../components/HiatusBadge.js';
 import { ChapterMap } from '../components/ChapterMap.js';
@@ -21,7 +22,7 @@ import { useNow } from '../hooks/useNow.js';
 import type { Novel, NovelSynopsis } from '../types/index.js';
 
 function SynopsisPanel({ novelId }: { novelId: string }) {
-  const { data, isLoading } = useSWR<NovelSynopsis>(
+  const { data, isLoading, error, mutate } = useSWR<NovelSynopsis>(
     `synopsis-${novelId}`,
     () => novelsApi.synopsis(novelId),
     { revalidateOnFocus: false },
@@ -42,6 +43,8 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
           shift. */}
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 16, minHeight: 120, alignItems: 'center' }}><Spinner /></div>
+      ) : error ? (
+        <LoadError subject="the synopsis" onRetry={() => mutate()} />
       ) : synopsisParagraphs.length > 0 ? (
         <>
           <div
@@ -65,7 +68,8 @@ function SynopsisPanel({ novelId }: { novelId: string }) {
 export function NovelPage() {
   useNow(); // ticks so "Xm ago" labels below advance without a data refetch
   const { novelId } = useParams<{ novelId: string }>();
-  const { data: novelsData, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels);
+  const { data: novelsData, isLoading, error, mutate } = useSWR<Novel[]>('/novels', fetchNovels);
+  const [savingFavorite, setSavingFavorite] = useState(false);
   const novel = novelsData?.find(n => n.novel_id === novelId);
 
   useEffect(() => {
@@ -73,23 +77,28 @@ export function NovelPage() {
   }, [novelId, novel?.title]);
 
   async function toggleFav() {
-    if (!novel) return;
+    if (!novel || savingFavorite) return;
+    setSavingFavorite(true);
     try {
       await novelsApi.setFavorite(novel.novel_id, !novel.favorite);
       await mutate();
     } catch {
       toast.error('Failed to update favorite');
+    } finally {
+      setSavingFavorite(false);
     }
   }
 
   if (isLoading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', padding: 80 }}><Spinner size={32} /></div>;
+    return <PageLoading title="Novel" />;
   }
+
+  if (error && !novelsData) return <div className="page-view"><h1 className="page-title">Novel</h1><LoadError subject="this novel" onRetry={() => mutate()} /></div>;
 
   if (!novel) {
     return (
-      <div style={{ padding: '80px 0', textAlign: 'center' }}>
-        <p className="text-muted">Novel not found.</p>
+      <div className="page-view page-empty">
+        <h1 className="page-title">Novel not found</h1>
         <Link to="/mylist" style={{ color: 'var(--color-accent)', fontSize: 'var(--text-sm)', marginTop: 12, display: 'block' }}>
           ← Back to My List
         </Link>
@@ -98,26 +107,26 @@ export function NovelPage() {
   }
 
   return (
-    <div className="animate-fade-in">
+    <div className="page-view animate-fade-in novel-page">
+      {error && <LoadError subject="the latest novel changes" onRetry={() => mutate()} />}
       <Link to="/mylist" className="muted-btn" style={{ fontSize: 'var(--text-sm)', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 20, textDecoration: 'none' }}>
         ← My List
       </Link>
 
-      <div className="panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+      <div className="panel novel-hero-panel" style={{ borderRadius: 'var(--radius-xl)', padding: 24, marginBottom: 16 }}>
+        <div className="novel-hero">
           {/* Cover — the anchor of this page, so it is sized to carry the card
               rather than sit in its corner. Fluid between phone and desktop;
               aspect-ratio holds the 5:7 shape so nothing shifts as it loads. */}
-          <div
+          <div className="novel-cover"
             style={{
               width: 'clamp(104px, 20vw, 168px)',
               aspectRatio: '5 / 7',
               flexShrink: 0,
-              borderRadius: 10,
+              borderRadius: 'var(--radius-md)',
               overflow: 'hidden',
-              background: 'rgba(255,255,255,0.05)',
+              background: 'var(--color-bg-card)',
               border: '1px solid var(--color-border)',
-              boxShadow: '0 10px 28px rgba(0,0,0,0.45)',
             }}
           >
             <img
@@ -125,7 +134,7 @@ export function NovelPage() {
               alt=""
               width={168}
               height={235}
-              loading="lazy"
+              loading="eager"
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
               onError={e => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
@@ -133,17 +142,17 @@ export function NovelPage() {
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-              <h1 style={{ fontSize: 'var(--text-xl)' }}>{novel.title}</h1>
+              <h1 style={{ fontSize: 'var(--text-2xl)', flex: '1 1 200px', minWidth: 0 }}>{novel.title}</h1>
               <button
                 type="button"
+                disabled={savingFavorite}
+                aria-pressed={novel.favorite}
                 onClick={() => { void toggleFav(); }}
                 aria-label={novel.favorite ? 'Remove from favorites' : 'Add to favorites'}
                 style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: novel.favorite ? 'var(--color-warning)' : 'var(--color-text-faint)', lineHeight: 1 }}
               >
                 <StarIcon size={16} filled={novel.favorite} />
               </button>
-              <BehindBadge novel={novel} />
-              <HiatusBadge novel={novel} />
             </div>
             {novel.author && <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginBottom: 8 }}>by {novel.author}</p>}
             <div style={{ marginBottom: 8 }}>
@@ -151,6 +160,8 @@ export function NovelPage() {
             </div>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
               <StatusBadge status={novel.status} />
+              <BehindBadge novel={novel} />
+              <HiatusBadge novel={novel} />
               {novel.genre && (
                 <span style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-muted)', padding: '2px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: 'var(--radius-full)', border: '1px solid var(--color-border)' }}>
                   {novel.genre}
@@ -174,7 +185,7 @@ export function NovelPage() {
       </div>
 
       {(novel.latest_url ?? novel.primary_url) && (
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+        <div className="novel-actions" style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
           <a
             href={novel.latest_url ? resumeUrl(novel.latest_url, novel.latest_percent) : novel.primary_url!}
             target="_blank"
@@ -250,6 +261,7 @@ export function NovelPage() {
                     style={{
                       display: 'flex',
                       alignItems: 'center',
+                      flexWrap: 'wrap',
                       gap: 10,
                       fontSize: 'var(--text-sm)',
                       padding: '6px 10px',

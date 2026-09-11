@@ -134,4 +134,25 @@ describe('Row', () => {
     renderRow({ latest_chapter: 90, latest_chapter_num: 95 });
     expect(screen.getByText('+5')).toBeDefined();
   });
+
+  it('omits the selection checkbox when onToggleSelect is not passed', () => {
+    renderRow({});
+    expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+
+  it('renders a checkbox reflecting `selected` and calls onToggleSelect with the novel id when clicked', () => {
+    const onToggleSelect = vi.fn();
+    const n = { ...BASE_NOVEL };
+    render(
+      <MemoryRouter>
+        <table><tbody>
+          <Row novel={n} onSetStatus={vi.fn()} onToggleFav={vi.fn()} selected={false} onToggleSelect={onToggleSelect} />
+        </tbody></table>
+      </MemoryRouter>,
+    );
+    const checkbox = screen.getByRole('checkbox', { name: 'Select Some Novel' });
+    expect((checkbox as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(onToggleSelect).toHaveBeenCalledWith('n1');
+  });
 });

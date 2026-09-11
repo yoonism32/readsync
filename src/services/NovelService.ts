@@ -133,8 +133,9 @@ export async function getLatestStates(
     `
     SELECT p.device_id, p.chapter_num, p.chapter_token, p.percent, p.url, p.created_at, d.device_label
     FROM progress_snapshots p
-    JOIN devices d ON p.device_id = d.id
+    JOIN devices d ON p.device_id = d.id AND p.user_id = d.user_id
     WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3
+      AND p.created_at >= COALESCE((SELECT progress_reset_at FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2), '-infinity'::timestamptz)
     ORDER BY p.chapter_num DESC, p.percent DESC, p.created_at DESC
     LIMIT 1
   `,
@@ -145,8 +146,9 @@ export async function getLatestStates(
     `
     SELECT DISTINCT ON (p.device_id) p.device_id, p.chapter_num, p.chapter_token, p.percent, p.url, p.created_at, d.device_label
     FROM progress_snapshots p
-    JOIN devices d ON p.device_id = d.id
+    JOIN devices d ON p.device_id = d.id AND p.user_id = d.user_id
     WHERE p.user_id = $1 AND p.novel_id = $2 AND p.read_through_num = $3
+      AND p.created_at >= COALESCE((SELECT progress_reset_at FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2), '-infinity'::timestamptz)
     ORDER BY p.device_id, p.created_at DESC
   `,
     [userId, novelId, rtNum],

@@ -27,6 +27,13 @@ const MONTH_NAMES_LONG = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
+function localDateKey(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Row indices are 0=Sunday..6=Saturday, matching the pad/grid ordering
 // below. GitHub's Mon/Wed/Fri labels sit at exactly these rows under a
 // Sunday-first layout.
@@ -59,7 +66,9 @@ export function buildCells(byDate: Map<string, number>, today: Date = new Date()
 
   const cursor = new Date(start);
   while (cursor <= end) {
-    const iso = cursor.toISOString().slice(0, 10);
+    // The API and the grid both use local calendar dates. Converting local
+    // midnight through UTC can repeat a key across a daylight-saving change.
+    const iso = localDateKey(cursor);
     cells.push({ key: iso, date: iso, chapters: byDate.get(iso) ?? 0 });
     cursor.setDate(cursor.getDate() + 1);
   }

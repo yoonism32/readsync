@@ -9,22 +9,24 @@ import {
 } from '../config.js';
 import logger from '../logger.js';
 
-function forceNoVerify(dbUrl: string): string {
-  try {
-    const u = new URL(dbUrl);
-    u.searchParams.set('sslmode', 'no-verify');
-    return u.toString();
-  } catch {
-    if (/sslmode=/.test(dbUrl)) {
-      return dbUrl.replace(/sslmode=[^&]+/i, 'sslmode=no-verify');
-    }
-    return `${dbUrl + (dbUrl.includes('?') ? '&' : '?')}sslmode=no-verify`;
-  }
+const databaseUrl = new URL(DATABASE_URL);
+const localDatabase = ['localhost', '127.0.0.1', '[::1]'].includes(
+  databaseUrl.hostname,
+);
+// URL SSL flags otherwise override the verified TLS options supplied to pg.
+for (const key of ['sslmode', 'sslcert', 'sslkey', 'sslrootcert']) {
+  databaseUrl.searchParams.delete(key);
 }
 
 const pool = new Pool({
-  connectionString: forceNoVerify(DATABASE_URL),
-  ssl: { rejectUnauthorized: false },
+  connectionString: databaseUrl.toString(),
+  ssl:
+    localDatabase && process.env.NODE_ENV !== 'production'
+      ? false
+      : {
+          rejectUnauthorized: true,
+          ...(process.env.PG_SSL_CA ? { ca: process.env.PG_SSL_CA } : {}),
+        },
   max: PG_POOL_MAX,
   idleTimeoutMillis: PG_IDLE_TIMEOUT_MS,
   connectionTimeoutMillis: PG_CONN_TIMEOUT_MS,

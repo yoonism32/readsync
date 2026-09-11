@@ -1,0 +1,11 @@
+ALTER TABLE user_novel_meta ADD COLUMN IF NOT EXISTS progress_reset_at TIMESTAMPTZ;
+ALTER TABLE progress_snapshots ADD COLUMN IF NOT EXISTS import_key TEXT;
+ALTER TABLE bookmarks ADD COLUMN IF NOT EXISTS import_key TEXT;
+ALTER TABLE novel_notes ADD COLUMN IF NOT EXISTS import_key TEXT;
+ALTER TABLE reading_sessions ADD COLUMN IF NOT EXISTS import_key TEXT;
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS import_key TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_progress_import_key ON progress_snapshots (user_id, import_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_bookmarks_import_key ON bookmarks (user_id, import_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notes_import_key ON novel_notes (user_id, import_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sessions_import_key ON reading_sessions (user_id, import_key);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_import_key ON notifications (user_id, import_key);

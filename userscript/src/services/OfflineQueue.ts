@@ -15,6 +15,7 @@ const log = (...args: unknown[]) => {
 };
 
 interface QueuedSync {
+  id?: string;
   payload: SyncPayload;
   queued_at: number;
 }
@@ -24,7 +25,13 @@ function load(): QueuedSync[] {
     const raw = localStorage.getItem(QUEUE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? (parsed as QueuedSync[]) : [];
+    if (!Array.isArray(parsed)) return [];
+    const clean = (parsed as QueuedSync[])
+      .filter(entry => entry && entry.payload && typeof entry.queued_at === 'number')
+      .map(entry => ({ ...entry, payload: { ...entry.payload, user_key: undefined } }));
+    // Remove credentials written by earlier releases even while still offline.
+    if (JSON.stringify(clean) !== raw) save(clean);
+    return clean;
   } catch {
     return [];
   }
@@ -53,7 +60,7 @@ export function enqueue(payload: SyncPayload): number {
   const now = Date.now();
   const key = (p: SyncPayload) => `${p.novel_url}|${p.current_chapter_num ?? ''}`;
   let queue = fresh(load(), now).filter(e => key(e.payload) !== key(payload));
-  queue.push({ payload, queued_at: now });
+  queue.push({ id: crypto.randomUUID(), payload: { ...payload, user_key: undefined }, queued_at: now });
   if (queue.length > MAX_QUEUE_LENGTH) queue = queue.slice(-MAX_QUEUE_LENGTH);
   save(queue);
   log('enqueued', { size: queue.length });
@@ -84,7 +91,7 @@ export async function flushQueue(): Promise<number> {
       } catch (e) {
         // Server-side rejections (4xx) won't succeed on retry — drop them.
         const msg = e instanceof Error ? e.message : '';
-        if (/^HTTP 4\d\d/.test(msg)) {
+        if (/^HTTP (400|404|410|413|422)\b/.test(msg)) {
           log('dropping rejected entry', msg);
           synced++;
           continue;
@@ -93,7 +100,10 @@ export async function flushQueue(): Promise<number> {
       }
     }
 
-    save(queue.slice(synced));
+    // Reload after awaits: a scroll event may have queued a newer snapshot.
+    const removed = new Set(queue.slice(0, synced).map(entry => JSON.stringify(entry)));
+    save(fresh(load(), Date.now()).filter(entry => !removed.has(JSON.stringify(entry)))
+      .map(entry => ({ ...entry, payload: { ...entry.payload, user_key: undefined } })));
     if (synced > 0) log('flushed', { synced, remaining: queue.length - synced });
     return synced;
   } finally {

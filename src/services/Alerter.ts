@@ -38,6 +38,9 @@ function fingerprint(err: unknown, context: string): string {
  * error on every request, and each one has its own fingerprint.
  */
 function shouldSend(key: string, now: number): boolean {
+  for (const [oldKey, sentAt] of lastSentAt) {
+    if (now - sentAt >= ALERT_COOLDOWN_MS) lastSentAt.delete(oldKey);
+  }
   if (now - hourWindowStart >= HOUR_MS) {
     hourWindowStart = now;
     sentThisHour = 0;
@@ -76,15 +79,32 @@ export function notify(err: unknown, context: AlertContext): void {
     timestamp: new Date().toISOString(),
     operation: context.operation,
     name: error?.name ?? 'UnknownError',
-    message: error?.message ?? String(err),
-    stack: error?.stack?.split('\n').slice(0, 8).join('\n'),
-    context,
+    message: IS_PRODUCTION
+      ? 'Runtime error; inspect server logs'
+      : (error?.message ?? String(err)),
+    stack: IS_PRODUCTION
+      ? undefined
+      : error?.stack?.split('\n').slice(0, 8).join('\n'),
+    context: IS_PRODUCTION ? { operation: context.operation } : context,
   };
+
+  let host: string;
+  try {
+    host = new URL(ALERT_WEBHOOK_URL).hostname;
+  } catch {
+    return;
+  }
+  const summary = `ReadSync ${payload.environment}: ${context.operation} (${payload.name}). Inspect server logs.`;
+  const webhookPayload = ['discord.com', 'discordapp.com'].includes(host)
+    ? { content: summary, allowed_mentions: { parse: [] } }
+    : host === 'hooks.slack.com'
+      ? { text: summary }
+      : payload;
 
   void fetch(ALERT_WEBHOOK_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(webhookPayload),
     signal: AbortSignal.timeout(5000),
   })
     .then((res) => {

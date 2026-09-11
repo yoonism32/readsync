@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import useSWR from 'swr';
 import { swrFetcher } from '../api/client.js';
 import { computeStreaks } from '../lib/streaks.js';
@@ -73,6 +74,7 @@ function StreakStat({
 }
 
 export function ActivityHeatmap() {
+  const scrollRef = useRef<HTMLDivElement>(null);
   const { data } = useSWR<DailyRow[]>(
     `/stats/daily?days=${DAYS}`,
     swrFetcher,
@@ -80,6 +82,15 @@ export function ActivityHeatmap() {
       revalidateOnFocus: false,
     },
   );
+
+  useEffect(() => {
+    if (!data?.length) return;
+    const frame = requestAnimationFrame(() => {
+      const scroller = scrollRef.current;
+      if (scroller) scroller.scrollLeft = scroller.scrollWidth;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [data]);
 
   if (!data || data.length === 0) return null;
 
@@ -116,7 +127,7 @@ export function ActivityHeatmap() {
 
   return (
     <div
-      className="panel"
+      className="panel activity-heatmap"
       style={{
         borderRadius: 'var(--radius-xl)',
         padding: 20,
@@ -167,29 +178,36 @@ export function ActivityHeatmap() {
       </div>
 
       <div
-        role="img"
-        aria-label={summary}
-        className="activity-heatmap-grid"
-        style={{
-          display: 'grid',
+        ref={scrollRef}
+        className="activity-heatmap-scroll"
+        role="region"
+        aria-label="Scrollable reading activity chart"
+        tabIndex={0}
+      >
+        <div
+          role="img"
+          aria-label={summary}
+          className="activity-heatmap-grid"
+          style={{
+            display: 'grid',
 
           // 1 label column + only the number of week columns
           // actually required by the 365-day range.
-          gridTemplateColumns:
-            `${LABEL_COL}px repeat(${weekCount}, ${CELL_SIZE}px)`,
+            gridTemplateColumns:
+              `${LABEL_COL}px repeat(${weekCount}, ${CELL_SIZE}px)`,
 
           // Exactly 7 activity rows.
           // Row 1 = month labels
           // Rows 2–8 = Sun → Sat
-          gridTemplateRows:
-            `${MONTH_ROW}px repeat(7, ${CELL_SIZE}px)`,
+            gridTemplateRows:
+              `${MONTH_ROW}px repeat(7, ${CELL_SIZE}px)`,
 
-          columnGap: `var(--heatmap-gap, ${GAP}px)`,
-          rowGap: `var(--heatmap-gap, ${GAP}px)`,
+            columnGap: `var(--heatmap-gap, ${GAP}px)`,
+            rowGap: `var(--heatmap-gap, ${GAP}px)`,
 
-          width: 'fit-content',
-        }}
-      >
+            width: 'fit-content',
+          }}
+        >
         {/* Weekday labels — these occupy activity rows, not extra rows. */}
         {WEEKDAY_LABELS.map((w) => (
           <span
@@ -264,6 +282,7 @@ export function ActivityHeatmap() {
             />
           );
         })}
+        </div>
       </div>
 
       <ul className="sr-only">

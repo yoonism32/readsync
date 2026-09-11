@@ -13,11 +13,16 @@ healthCheckPath: /health
 `npm run build:all` does, in order: compile `src/` with `tsc`, copy SQL
 migrations into `dist/db/migrations/`, install and build `frontend/`
 (output lands in `public/app/`), then install and build `userscript/`
-(output lands in `dist-userscript/readsync.user.js`). `GET /readsync.user.js`
-serves that file directly (see `src/routes/userscript.ts`), and the built
-header carries `@updateURL`/`@downloadURL` pointing at that same route, so
-GM-API managers (Tampermonkey, Violentmonkey) self-update once the userscript
-version (`userscript/package.json`) is bumped and redeployed.
+(output lands in `dist-userscript/readsync.user.js`). `GET
+/u/:token/readsync.user.js` serves that file directly (see
+`src/routes/userscript.ts`) once `:token` matches `USERSCRIPT_UPDATE_TOKEN`
+(everything else 404s), and the built header carries `@updateURL`/`@downloadURL`
+pointing at that same gated route, so GM-API managers (Tampermonkey,
+Violentmonkey) self-update once the userscript version
+(`userscript/package.json`) is bumped and redeployed. The build embeds a live
+API key in the served file, so the token exists to keep that URL from being
+guessable — set `USERSCRIPT_UPDATE_TOKEN` in the build environment alongside
+`API_KEY` before running `npm run build:all`.
 
 `Dockerfile` mirrors this for container deploys: the production stage
 copies `dist/`, `public/`, `dist-userscript/`, `package.json`, and pruned
@@ -42,8 +47,12 @@ From `.env.example`:
 | `PORT` | HTTP port (defaults to 3000) |
 | `DATABASE_URL` | Postgres connection string (Supabase) |
 | `NODE_ENV` | `development` / `production` |
+| `ADMIN_USER_ID` | Existing `users.id` to bind dashboard sessions to; required when more than one user exists |
+| `API_KEY` | Single-user/userscript key embedded at userscript build time; treat the built bundle as credential-bearing |
+| `USERSCRIPT_UPDATE_TOKEN` | Secret path token for the automatic userscript update/download route |
 | `SUPABASE_URL`, `SUPABASE_SERVICE_KEY` | Supabase project credentials (Storage access — `BackupService.ts`, `covers.ts`) |
-| `BOT_DISABLED`, `API_KEY`, `SUPABASE_ANON_KEY` | **Not read anywhere in current code** — see [DATABASE.md](./DATABASE.md#known-dead-config) |
+| `SUPABASE_ANON_KEY` | Not read by the current backend; see [DATABASE.md](./DATABASE.md#known-dead-config) |
+| `PG_SSL_CA` | Optional PEM CA certificate for remote Postgres TLS verification |
 | `PG_POOL_MAX` | Postgres pool size, default `10` (`src/config.ts`) — see the transaction-pooler switch in [ROADMAP.md](./ROADMAP.md#ops--infrastructure) for why this value matters and why it wasn't raised |
 | `PG_IDLE_TIMEOUT` | Idle client timeout ms, default `30000` (`src/config.ts`) |
 | `PG_CONN_TIMEOUT` | Connection acquisition timeout ms, default `10000` (`src/config.ts`) |
@@ -70,7 +79,8 @@ scripts.
 
 ## Deliberate production tradeoffs
 
-- **Rate limiting is off** (`express-rate-limit` installed, not applied) —
-  intentional, not an oversight; see [ARCHITECTURE.md](./ARCHITECTURE.md).
+- **Rate limiting is in-process** — API traffic, login attempts, restore/backup
+  runs and key issuance are bounded per process/IP. A multi-instance deployment
+  needs shared limiter state; see [ARCHITECTURE.md](./ARCHITECTURE.md).
 - **The chapter-update bot** — removed entirely 2026-09-08, not merely off;
   see [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).

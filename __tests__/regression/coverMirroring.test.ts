@@ -16,7 +16,7 @@ const MIRRORED =
 
 describe('isMirroredCover', () => {
   it('treats our own bucket URL as mirrored', () => {
-    expect(isMirroredCover(MIRRORED)).toBe(true);
+    expect(isMirroredCover(MIRRORED, new URL(MIRRORED).origin)).toBe(true);
   });
 
   it('does not treat a novelarrow source URL as mirrored', () => {
@@ -37,5 +37,8 @@ describe('isMirroredCover', () => {
 
   it('is not fooled by a source URL that merely mentions the bucket name', () => {
     expect(isMirroredCover('https://evil.example.com/novel-covers/x.jpg')).toBe(false);
+  });
+  it('rejects an attacker host with the exact storage path', () => {
+    expect(isMirroredCover('https://evil.example/storage/v1/object/public/novel-covers/x.jpg', new URL(MIRRORED).origin)).toBe(false);
   });
 });

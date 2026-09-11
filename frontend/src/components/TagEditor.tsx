@@ -17,7 +17,7 @@ export function TagEditor({ novelId }: TagEditorProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const assignments = data ?? [];
+  const assignments = useMemo(() => data ?? [], [data]);
   const myTags = useMemo(
     () => assignments.filter(a => a.novel_id === novelId).map(a => a.category),
     [assignments, novelId],

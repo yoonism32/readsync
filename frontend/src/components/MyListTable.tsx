@@ -5,9 +5,8 @@ import { StarIcon } from './Icon.js';
 import { behindCount } from '../lib/behindStatus.js';
 import { compactAge } from '../lib/dateFormat.js';
 import { updatedAt } from '../lib/novelSort.js';
+import { STATUS_OPTIONS } from '../lib/novelStatus.js';
 import type { Novel, NovelStatus } from '../types/index.js';
-
-const STATUS_OPTIONS: NovelStatus[] = ['reading', 'plan-to-read', 'completed', 'on-hold', 'dropped', 'removed'];
 
 const ordinal = (n: number): string =>
   n === 2 ? '2nd' : n === 3 ? '3rd' : `${n}th`;
@@ -56,13 +55,18 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
   );
 }
 
-export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth }: {
+export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth, selected, onToggleSelect }: {
   novel: Novel;
   onSetStatus: (id: string, s: NovelStatus) => void;
   onToggleFav: (n: Novel) => void;
   /** Mirrors the Title column's autofit width (see Th's onAutofit) so the
    *  body cells don't hold the column open at their 220px default minimum. */
   titleWidth?: number;
+  /** Bulk-selection checkbox. Omitted entirely (no cell rendered) when the
+   *  caller doesn't pass onToggleSelect, so callers that don't need bulk
+   *  actions keep the table's original column count. */
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const behind = behindCount(n);
   const continueHref = n.latest_url
@@ -76,6 +80,18 @@ export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth }: {
       className="row-hover"
       style={{ borderBottom: '1px solid var(--color-border)' }}
     >
+      {/* Bulk-selection checkbox — omitted when the caller doesn't opt in. */}
+      {onToggleSelect && (
+        <td style={{ ...td, width: 36 }}>
+          <input
+            type="checkbox"
+            checked={selected ?? false}
+            onChange={() => onToggleSelect(n.novel_id)}
+            aria-label={`Select ${n.title}`}
+          />
+        </td>
+      )}
+
       {/* Cover */}
       <td style={{ ...td, width: 70 }}>
         <a href={continueHref ?? '#'} target="_blank" rel="noopener noreferrer" aria-label={`Open ${n.title} on site`}>

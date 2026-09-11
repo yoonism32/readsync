@@ -2,8 +2,8 @@ import { useState } from 'react';
 import useSWR from 'swr';
 import toast from 'react-hot-toast';
 import { ApiError, fetchNovels, novels as novelsApi } from '../api/client.js';
-import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
+import { LoadError } from '../components/PageFeedback.js';
 import type { Novel, NovelStatus } from '../types/index.js';
 
 const STATUSES = ['reading', 'completed', 'on-hold', 'dropped', 'plan-to-read'] as const;
@@ -19,7 +19,7 @@ export function Manage() {
   // Live updates come from the socket in Layout.tsx (chapters:updated /
   // progress:updated → mutate('/novels')); this 30-minute interval is only a
   // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
-  const { data, isLoading, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
+  const { data, isLoading, error, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
     refreshInterval: 30 * 60_000,
   });
   const [query, setQuery] = useState('');
@@ -28,7 +28,7 @@ export function Manage() {
 
   const novels = (data ?? []).filter(n => {
     if (!query.trim()) return true;
-    return n.title.toLowerCase().includes(query.toLowerCase());
+    return n.title.toLowerCase().includes(query.trim().toLowerCase());
   });
 
   async function handleStatusChange(novelId: string, newStatus: string) {
@@ -59,8 +59,10 @@ export function Manage() {
   }
 
   return (
-    <div className="animate-fade-in">
-      <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 24 }}>Manage</h1>
+    <div className="page-view animate-fade-in manage-page">
+      <h1 className="page-title">Manage</h1>
+      <p className="page-intro">Change reading status or remove novels from your library.</p>
+      {error && <LoadError subject="your library" onRetry={() => mutate()} />}
 
       <input
         type="search"
@@ -69,7 +71,7 @@ export function Manage() {
         autoComplete="off"
         value={query}
         onChange={e => setQuery(e.target.value)}
-        className="input"
+        className="input manage-search"
         style={{
           width: '100%',
           background: 'var(--color-bg-input)',
@@ -86,11 +88,11 @@ export function Manage() {
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size={28} /></div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="manage-list" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {novels.map(n => (
             <div
               key={n.novel_id}
-              className="panel"
+              className="panel manage-row"
               style={{
                 borderRadius: 'var(--radius-lg)',
                 padding: '12px 16px',
@@ -133,16 +135,15 @@ export function Manage() {
                 }}
               >
                 {STATUSES.map(s => (
-                  <option key={s} value={s}>{s}</option>
+                  <option key={s} value={s}>{s === 'plan-to-read' ? 'Plan to read' : s === 'on-hold' ? 'On hold' : s.charAt(0).toUpperCase() + s.slice(1)}</option>
                 ))}
               </select>
-
-              <StatusBadge status={n.status} />
 
               {/* Delete button / confirm */}
               {confirmDelete === n.novel_id ? (
                 <div style={{ display: 'flex', gap: 6 }}>
                   <button
+                    aria-label={`Confirm removal of ${n.title}`}
                     onClick={() => { void handleDelete(n.novel_id); }}
                     disabled={busy === n.novel_id}
                     style={{
@@ -194,7 +195,7 @@ export function Manage() {
               )}
             </div>
           ))}
-          {novels.length === 0 && (
+          {novels.length === 0 && !error && (
             <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
               {query ? `No results for "${query}"` : 'No novels found.'}
             </p>

@@ -1,4 +1,7 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+
+// Tests must never inherit production credentials from a developer's .env.
+if (process.env.NODE_ENV !== 'test') dotenv.config();
 
 // ── Server ──────────────────────────────────────────────────────────────────
 export const PORT = parseInt(process.env.PORT ?? '3000', 10);
@@ -90,7 +93,11 @@ export const DECIMAL_RADIX = 10;
 // ── CORS ─────────────────────────────────────────────────────────────────────
 export const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((o) => o.trim())
-  : ['https://readsync-n7zp.onrender.com', 'http://localhost:3000'];
+  : [
+      'https://readsync-n7zp.onrender.com',
+      'http://localhost:3000',
+      ...(!IS_PRODUCTION ? ['http://localhost:5173'] : []),
+    ];
 
 // ── Supabase ─────────────────────────────────────────────────────────────────
 export const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
@@ -111,10 +118,18 @@ export const DATABASE_URL = process.env.DATABASE_URL ?? '';
 // rather than refusing to boot. Losing alerts is bad; refusing to serve
 // because alerting isn't configured is worse.
 export const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL ?? '';
-export const ALERT_COOLDOWN_MS = Number(
-  process.env.ALERT_COOLDOWN_MS ?? 15 * 60 * 1000,
+function positiveInteger(value: string | undefined, fallback: number): number {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+export const ALERT_COOLDOWN_MS = positiveInteger(
+  process.env.ALERT_COOLDOWN_MS,
+  15 * 60 * 1000,
 );
-export const ALERT_MAX_PER_HOUR = Number(process.env.ALERT_MAX_PER_HOUR ?? 20);
+export const ALERT_MAX_PER_HOUR = positiveInteger(
+  process.env.ALERT_MAX_PER_HOUR,
+  20,
+);
 
 export function validateEnvironment(): void {
   const required = ['DATABASE_URL', 'SESSION_SECRET'];

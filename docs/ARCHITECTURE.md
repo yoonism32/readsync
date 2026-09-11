@@ -1,6 +1,6 @@
 # Architecture
 
-Current state of the system as of 2026-08. This document exists because
+Current state of the system as of 2026-09-12. This document exists because
 the codebase went through a full TypeScript/React rewrite and none of the
 older docs were updated to match — see the git history and
 [ROADMAP.md](./ROADMAP.md) for how it got here.
@@ -13,7 +13,7 @@ older docs were updated to match — see the git history and
 | Frontend | React 19, React Router 7, Vite, Tailwind 4, SWR | `frontend/` → served at `/app` |
 | Browser client | Userscript (Vite-built IIFE, GM-API based — works in Tampermonkey/Violentmonkey) | `userscript/` → `dist-userscript/readsync.user.js` |
 | Chapter-update bot | **Removed 2026-09-08** | see below |
-| Database | Postgres (Supabase-hosted) | 14 migrations in `src/db/migrations/` |
+| Database | Postgres (Supabase-hosted) | 18 migrations in `src/db/migrations/` |
 | Realtime | Socket.IO | wired into `src/app.ts` |
 
 The only deployed entrypoint is `dist/server.js` (compiled from
@@ -40,52 +40,39 @@ dist/server.js`) and the Dockerfile's production stage, which copies only
    pattern (`createProgressRouter(io)` / `createAdminRouter(io)` in
    `src/app.ts`), matching try/catch style so a WebSocket hiccup never fails
    the HTTP response the userscript is waiting on.
-4. The React SPA consumes both events: `frontend/src/hooks/useSocket.ts`
-   opens one Socket.IO connection per authenticated tab (reusing the same
-   `api_key` as HTTP auth), and `frontend/src/components/Layout.tsx` — the
-   single mount point shared by every routed page — subscribes to
-   `chapters:updated` and `progress:updated`, calling SWR's
-   `mutate('/novels')` on either. This is deliberately invalidation-only:
-   neither event patches state directly, so the existing `/novels` SWR
-   cache stays the single source of truth. Dashboard/Explorer/Manage/MyList
-   still poll `/api/v1/novels` as a fallback, but at 30 minutes instead of
-   3 — a safety net for a silently-dead socket (e.g. a proxy that kills
-   idle WebSockets without a clean `disconnect`), not the primary update
-   path anymore. The 3-minute interval had itself contributed to a Supabase
-   egress warning (2026-08-12); see [ROADMAP.md](./ROADMAP.md) for that
-   incident writeup.
-5. The React SPA (`frontend/`) reads the same data via SWR hooks hitting the
-   `/api/v1/*` endpoints, and receives the same WebSocket events.
+4. The React SPA uses a browser session for HTTP and one Socket.IO connection
+   per authenticated tab. Normal progress events patch the SWR library cache
+   locally. New novels, read-through changes, chapter metadata updates and
+   reconnections schedule a coalesced refetch. The 30-minute polling interval
+   remains a fallback. Large libraries fetch subsequent 200-row pages.
 
-## Auth — two tiers, deliberately different
+## Authentication
 
-| | Session cookie | API key |
+| | Dashboard session | Userscript key |
 |---|---|---|
-| Guards | Browser dashboard/SPA page access | Every data-plane endpoint (`/api/v1/*`) |
-| Mechanism | `express-session`, `requireAuth`/`requireAuthAPI` (`src/middleware/auth.ts`) | Per-user `api_key` column, `validateApiKey` middleware |
-| Storage | Postgres-backed via `connect-pg-simple` (migration 009) — see why in [DATABASE.md](./DATABASE.md) | Sent as `user_key` in request body or query string |
-| WebSocket | N/A | Same `api_key` lookup, `src/websocket/auth.ts` |
+| Use | SPA/API access, privileged routes and Socket.IO | Userscript-compatible API routes |
+| Transport | HttpOnly, SameSite=Strict cookie, Secure in production | Authorization: Bearer header |
+| Storage | Postgres session store, with explicit users.id binding | Environment key is embedded in the built userscript; optional issued keys are stored only as SHA-256 hashes |
+| Lifecycle | Regenerate and save on login; destroy on logout | Rebuild after rotating `API_KEY`; the optional API endpoint revokes a prior issued key |
 
-The admin password itself is a single `ADMIN_PASSWORD_HASH` env var
-(bcrypt via `bcryptjs`), compared in `src/services/AuthService.ts`. Generate
-a new hash locally with `node generate-password-hash.js YOUR_PASSWORD` —
-that script is a one-off CLI tool, not part of the running server.
+The shared admin password is verified against ADMIN_PASSWORD_HASH. ADMIN_USER_ID
+selects the associated user; if unset, the database must contain exactly one user.
+All /api/v1 requests authenticate before parsing bodies. Routes with requireAuthAPI
+additionally require a dashboard session. Query/body credentials are rejected.
+Socket handshakes verify browser origin/fetch metadata and session binding;
+active sessions are rechecked periodically and logout disconnects their sockets.
 
-**Known weakness, not yet fixed:** both the frontend (`frontend/src/api/client.ts`)
-and the userscript send the API key as a `?user_key=` query-string
-parameter rather than a header. This leaks into server access logs and
-`Referer` headers on outbound requests (e.g. cover-image fetches to
-third-party hosts). Left as-is for now — see
-[ROADMAP.md](./ROADMAP.md) if this gets picked up.
+Migration 015 revokes old published keys and pre-binding sessions. Deploy the
+server, SPA, userscript 5.8.1 and migrations 015–018 together, then verify the
+environment key and dashboard session binding.
+See [the release checklist](./SECURITY-REMEDIATION-2026-09-11.md).
 
-## Rate limiting — intentionally off
+## Rate limiting
 
-`express-rate-limit` is installed but not applied
-(`src/app.ts`, `// Rate limiting DISABLED for personal use`). This is a
-deliberate tradeoff for a low-traffic personal deployment, not an
-oversight — documented here so it reads as a choice. Reconsider if this ever
-serves more than a handful of users, or if the API key gets rotated to
-something less exposed (see above).
+API traffic is limited to 600 requests/minute per IP/process. Restore, backup-run
+and key-issuance paths share a five-per-minute limit; login separately reserves
+attempts before awaiting password verification. These limits suit the current
+single-process deployment. A multi-instance deployment needs shared limiter state.
 
 ## The bot was removed
 

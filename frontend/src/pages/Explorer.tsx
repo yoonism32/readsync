@@ -5,6 +5,7 @@ import { fetchNovels, coverUrl, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { useNow } from '../hooks/useNow.js';
 import { Spinner } from '../components/Spinner.js';
+import { LoadError } from '../components/PageFeedback.js';
 import { SearchIcon } from '../components/Icon.js';
 import { FilterPopover } from '../components/FilterPopover.js';
 import { TriCheckbox } from '../components/TriCheckbox.js';
@@ -16,8 +17,6 @@ import {
   activeFilterCount,
   applyExplorerFilters,
   collectGenres,
-  genreSummary,
-  genresInState,
   nextTriState,
 } from '../lib/explorerFilters.js';
 import type { ExplorerFilters } from '../lib/explorerFilters.js';
@@ -47,6 +46,7 @@ const labelStyle: React.CSSProperties = {
 };
 
 export function Explorer() {
+  useNow(); // One clock for the results, not one interval per list row.
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<ExplorerFilters>(DEFAULT_FILTERS);
   const [sortId, setSortId] = useState(DEFAULT_SORT_ID);
@@ -56,7 +56,7 @@ export function Explorer() {
   // Live updates come from the socket in Layout.tsx (chapters:updated /
   // progress:updated → mutate('/novels')); this 30-minute interval is only a
   // safety net if a tab's socket dies silently. See docs/ARCHITECTURE.md.
-  const { data, isLoading } = useSWR<Novel[]>('/novels', fetchNovels, {
+  const { data, isLoading, error, mutate } = useSWR<Novel[]>('/novels', fetchNovels, {
     refreshInterval: 30 * 60_000,
   });
   const novels = useMemo(() => data ?? [], [data]);
@@ -91,16 +91,22 @@ export function Explorer() {
       return { ...f, genres };
     });
 
-  const genreActive =
-    genresInState(filters, 'include').length > 0 || genresInState(filters, 'exclude').length > 0;
+  const toggleStatus = (status: ExplorerFilters['statuses'][number]) =>
+    set(
+      'statuses',
+      filters.statuses.includes(status)
+        ? filters.statuses.filter(item => item !== status)
+        : [...filters.statuses, status],
+    );
 
   return (
-    <div className="animate-fade-in">
-      <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 700, marginBottom: 20 }}>Explorer</h1>
+    <div className="page-view animate-fade-in explorer-page">
+      <h1 className="page-title">Explorer</h1>
+      {error && <LoadError subject="your library" onRetry={() => mutate()} />}
 
       {/* Search + Filters trigger */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+      <div className="explorer-search" style={{ display: 'flex', gap: 10, alignItems: 'stretch', flexWrap: 'wrap' }}>
+        <div className="explorer-search-field" style={{ position: 'relative', flex: 1, minWidth: 220 }}>
           <span
             style={{
               position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)',
@@ -111,7 +117,8 @@ export function Explorer() {
           </span>
           <input
             type="search"
-            placeholder="Search titles…"
+            aria-label="Search titles, authors, or genres"
+            placeholder="Search titles, authors, or genres…"
             autoComplete="off"
             value={query}
             onChange={e => setQuery(e.target.value)}
@@ -129,7 +136,7 @@ export function Explorer() {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 9,
             borderRadius: 'var(--radius-lg)', padding: '0 18px',
-            color: activeCount > 0 ? 'var(--color-accent)' : 'var(--color-text)',
+            color: activeCount > 0 ? 'var(--color-teal-bright)' : 'var(--color-text)',
             fontSize: 'var(--text-sm)', fontWeight: 600, fontFamily: 'inherit',
             cursor: 'pointer', touchAction: 'manipulation',
           }}
@@ -141,7 +148,7 @@ export function Explorer() {
               style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 minWidth: 19, height: 19, padding: '0 5px', borderRadius: 'var(--radius-full)',
-                background: 'var(--color-accent)', color: 'var(--color-on-accent)',
+                background: 'var(--color-teal)', color: 'var(--color-on-teal)',
                 fontSize: 'var(--text-xs)', fontWeight: 700,
               }}
             >
@@ -155,7 +162,7 @@ export function Explorer() {
       {panelOpen && (
         <div
           id="explorer-filters"
-          className="panel animate-fade-in"
+          className="panel disclosure-enter filter-workbench"
           style={{
             borderRadius: 'var(--radius-xl)',
             padding: 20,
@@ -168,78 +175,78 @@ export function Explorer() {
             zIndex: 30,
           }}
         >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
-              gap: 14,
-            }}
-          >
-            <div>
-              <span style={labelStyle}>Genres</span>
-              <FilterPopover label={genreSummary(filters)} active={genreActive} panelWidth={420}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-                  <span style={{ ...labelStyle, marginBottom: 0 }}>Inclusion mode</span>
-                  {(['all', 'any'] as const).map(mode => (
-                    <label key={mode} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 'var(--text-sm)', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="genre-mode"
-                        checked={filters.genreMode === mode}
-                        onChange={() => set('genreMode', mode)}
-                      />
-                      {mode === 'all' ? 'All' : 'Any'}
-                    </label>
-                  ))}
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '2px 10px' }}>
-                  {genres.map(g => (
-                    <TriCheckbox
-                      key={g}
-                      label={g}
-                      state={filters.genres[g] ?? 'off'}
-                      onCycle={() => cycleGenre(g)}
-                    />
-                  ))}
-                </div>
-
-                {genres.length === 0 && (
-                  <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>No genres recorded yet.</p>
-                )}
-              </FilterPopover>
+          <section className="filter-primary" aria-labelledby="genre-filter-heading">
+            <div className="filter-section-heading">
+              <div>
+                <h2 id="genre-filter-heading">Genres</h2>
+                <p>Select once to include a genre; select again to exclude it.</p>
+              </div>
+              <div className="genre-match" aria-label="Genre matching mode">
+                {(['all', 'any'] as const).map(mode => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={filters.genreMode === mode}
+                    onClick={() => set('genreMode', mode)}
+                  >
+                    Match {mode}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div>
-              <span style={labelStyle}>Status</span>
-              <FilterPopover
-                label={filters.statuses.length === 0
-                  ? 'Any'
-                  : filters.statuses.length === 1
-                    ? (STATUS_OPTIONS.find(o => o.id === filters.statuses[0])?.label ?? 'Any')
-                    : `${filters.statuses.length} selected`}
-                active={filters.statuses.length > 0}
-                panelWidth={220}
+            {genres.length > 0 ? (
+              <div className="genre-filter-grid">
+                {genres.map(g => (
+                  <TriCheckbox
+                    key={g}
+                    label={g}
+                    state={filters.genres[g] ?? 'off'}
+                    onCycle={() => cycleGenre(g)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>No genres recorded yet.</p>
+            )}
+
+            <div className="genre-legend" aria-hidden="true">
+              <span data-state="include">✓ Include</span>
+              <span data-state="exclude">− Exclude</span>
+            </div>
+          </section>
+
+          <section className="filter-primary" aria-labelledby="status-filter-heading">
+            <div className="filter-section-heading">
+              <div>
+                <h2 id="status-filter-heading">Reading status</h2>
+                <p>No selection shows every title. Choose more than one to broaden the results.</p>
+              </div>
+            </div>
+            <div className="status-filter-grid">
+              <button
+                type="button"
+                className="status-filter-chip"
+                aria-pressed={filters.statuses.length === 0}
+                onClick={() => set('statuses', [])}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {STATUS_OPTIONS.map(o => (
-                    <label key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', padding: '4px 2px', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={filters.statuses.includes(o.id)}
-                        onChange={e =>
-                          set('statuses', e.target.checked
-                            ? [...filters.statuses, o.id]
-                            : filters.statuses.filter(s => s !== o.id))
-                        }
-                      />
-                      {o.label}
-                    </label>
-                  ))}
-                </div>
-              </FilterPopover>
+                Any status
+              </button>
+              {STATUS_OPTIONS.map(option => (
+                <button
+                  key={option.id}
+                  type="button"
+                  className="status-filter-chip"
+                  aria-pressed={filters.statuses.includes(option.id)}
+                  onClick={() => toggleStatus(option.id)}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
+          </section>
 
+          <div className="filter-secondary-grid">
             <div>
               <label style={labelStyle} htmlFor="f-author">Author</label>
               <input id="f-author" type="text" placeholder="Search author…" autoComplete="off"
@@ -320,7 +327,7 @@ export function Explorer() {
       )}
 
       {/* Result count + view toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 12px' }}>
+      <div className="explorer-results-heading" style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0 12px' }}>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-sm)' }}>
           {results.length} {results.length === 1 ? 'title' : 'titles'}
           {results.length !== novels.length && novels.length > 0 && (
@@ -336,16 +343,17 @@ export function Explorer() {
 
       {isLoading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 40 }}><Spinner size={28} /></div>
-      ) : results.length === 0 ? (
-        <p className="text-muted" style={{ fontSize: 'var(--text-sm)', padding: '32px 0', textAlign: 'center' }}>
-          {query || activeCount > 0 ? 'Nothing matches those filters.' : 'No novels found.'}
-        </p>
+      ) : error && !data ? null : results.length === 0 ? (
+        <div className="page-empty">
+          <p>{query || activeCount > 0 ? 'Nothing matches those filters.' : 'No novels found.'}</p>
+          {(query || activeCount > 0) && <button type="button" className="btn-ghost" onClick={() => { setQuery(''); setFilters(DEFAULT_FILTERS); }}>Clear search and filters</button>}
+        </div>
       ) : view === 'grid' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
           {results.map((n, i) => <GridCard key={n.novel_id} novel={n} index={i} />)}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: 10 }}>
           {results.map((n, i) => <ListRow key={n.novel_id} novel={n} index={i} />)}
         </div>
       )}
@@ -466,7 +474,6 @@ function GridCard({ novel, index }: { novel: Novel; index: number }) {
 }
 
 function ListRow({ novel, index }: { novel: Novel; index: number }) {
-  useNow(); // ticks so the "Xm ago" label below advances without a data refetch
   return (
     <Link
       to={`/novel/${encodeURIComponent(novel.novel_id)}`}

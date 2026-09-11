@@ -23,6 +23,7 @@ import {
   extractNovelTitle,
   healDeadSiteUrl,
 } from '../services/NovelService.js';
+import { isReaderUrl } from '../services/ReaderUrl.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
@@ -107,7 +108,7 @@ router.post(
   '/api/v1/bookmarks',
   [
     body('novel_id').isString().isLength({ min: 1, max: MAX_NOVEL_ID_LENGTH }),
-    body('chapter_url').isURL(),
+    body('chapter_url').custom(isReaderUrl),
     body('percent').isFloat({ min: MIN_PERCENT, max: MAX_PERCENT }),
     body('bookmark_type')
       .optional()
@@ -198,6 +199,13 @@ router.put(
     const user_id = (req as AuthenticatedRequest).user.id;
 
     const validTypes = ['position', 'highlight', 'note', 'favorite'];
+    if (
+      (title != null && (typeof title !== 'string' || title.length > 500)) ||
+      (note != null &&
+        (typeof note !== 'string' || note.length > MAX_NOTE_TEXT_LENGTH))
+    ) {
+      return res.status(400).json({ error: 'Invalid bookmark text' });
+    }
     if (bookmark_type && !validTypes.includes(String(bookmark_type))) {
       return res
         .status(HTTP_BAD_REQUEST)

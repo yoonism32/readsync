@@ -24,7 +24,7 @@ export interface LatestChapterInfo {
 }
 
 export interface SyncPayload {
-  user_key: string;
+  user_key?: string;
   device_id: string;
   device_label: string;
   novel_url: string;

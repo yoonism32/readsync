@@ -46,14 +46,30 @@ export function validateNovelId(
 /** Parse and clamp ?limit and ?offset query params, attach to req.pagination. */
 export function validatePagination(
   req: Request,
-  _res: Response,
+  res: Response,
   next: NextFunction,
 ): void {
+  const rawLimit = req.query.limit ?? DEFAULT_PAGE_LIMIT;
+  const rawOffset = req.query.offset ?? 0;
+  if (
+    ![rawLimit, rawOffset].every(
+      (value) =>
+        (typeof value === 'string' || typeof value === 'number') &&
+        String(value).trim() !== '' &&
+        Number.isSafeInteger(Number(value)) &&
+        Number(value) >= 0,
+    )
+  ) {
+    res
+      .status(HTTP_BAD_REQUEST)
+      .json({ error: 'Pagination must use non-negative integers' });
+    return;
+  }
   const limit = Math.max(
     MIN_PAGE_LIMIT,
-    Math.min(MAX_PAGE_LIMIT, Number(req.query.limit ?? DEFAULT_PAGE_LIMIT)),
+    Math.min(MAX_PAGE_LIMIT, Number(rawLimit)),
   );
-  const offset = Math.max(0, Number(req.query.offset ?? 0));
+  const offset = Number(rawOffset);
   (req as AuthenticatedRequest).pagination = { limit, offset };
   next();
 }

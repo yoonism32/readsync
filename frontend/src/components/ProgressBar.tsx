@@ -26,6 +26,7 @@ export function ProgressBar({ percent, showLabel = false, size = 'sm', className
         }}
       >
         <div
+          className="reading-progress-fill"
           style={{
             width: '100%',
             height: '100%',
@@ -33,7 +34,7 @@ export function ProgressBar({ percent, showLabel = false, size = 'sm', className
             transform: `scaleX(${clamped / 100})`,
             background: Math.round(clamped) >= 100
               ? 'var(--color-success)'
-              : 'linear-gradient(90deg, var(--color-accent-dim), var(--color-accent))',
+              : 'var(--color-accent)',
             borderRadius: 'inherit',
             transition: 'transform 0.4s var(--ease-out-expo)',
           }}

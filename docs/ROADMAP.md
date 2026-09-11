@@ -1,6 +1,6 @@
 # Roadmap
 
-Open and accepted-but-unbuilt work only. Completed work, full brainstorm
+Current priorities and historical implementation notes. Completed work, full brainstorm
 lists, and the full decision trail (including everything declined and why)
 live in [`docs/changelog/2026-08-level-up.md`](./changelog/2026-08-level-up.md) —
 this file is the trimmed, current-facing view of it. Frontend design/UX
@@ -8,9 +8,31 @@ critique findings live in
 [`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md),
 triaged into the "Impeccable audit" section below.
 
+The latest implementation record is [the 2026-09-12 changelog](./CHANGELOG-2026-09-12.md).
+
 > Two items below were corrected against the current codebase while writing
 > this file (see notes inline) — the source document was accurate when
 > written but predates work that has since shipped.
+
+## Immediate priorities — audit follow-up (2026-09-11)
+
+Security and recovery fixes are implemented locally. Deployment remains a separate
+gate; see [the remediation and release checklist](./SECURITY-REMEDIATION-2026-09-11.md).
+
+1. Release migrations 015–018, the session-authenticated SPA and userscript 5.8.1
+   together. Verify database TLS and the dashboard user binding. Old keys and
+   old sessions are deliberately revoked by migration 015.
+2. Verify recovery and operations: restore a fresh export in isolation, inspect
+   historical device-owner mismatches, verify webhook delivery and measure egress.
+   Runtime-error alerts do not measure provider quotas.
+3. Use the updated API documentation for session/Bearer authentication and export
+   v2 when adding clients. Keep one migration runner for legacy CONCURRENTLY index files.
+4. Then prioritize library usability and data-quality-backed Reading Wrapped.
+   CRDTs, GraphQL, PWA, extensions and extra sites remain separate proposals.
+
+No live deployment, quota inspection or external monitoring configuration was
+performed during the local remediation. Items marked locally implemented are not
+claims of production rollout.
 
 ## Ops & infrastructure
 
@@ -218,10 +240,9 @@ triaged into the "Impeccable audit" section below.
       staying intentionally off — see
       [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).
       Not open work unless the decision to keep the bot off is revisited.
-- [ ] **Raw API explorer** — an in-app view for hitting `/api/v1/*` routes
-      manually. Genuinely still unbuilt (the source doc's "legacy-only"
-      framing no longer applies since legacy is deleted, but nothing was
-      ever built for the current stack either).
+- [ ] **Raw API explorer** — a session-authenticated developer tool remains
+      unbuilt in the SPA. The legacy `practice.html` did exist; its obsolete
+      URL-key client is now retired. The novel Explorer is a different feature.
 - [x] **`validateEnvironment()` (`src/config.ts:108`) is never called.** —
       Done 2026-09-01. `server.ts`'s `main()` now calls it as its first
       statement, before `runMigrations()` — a missing `SESSION_SECRET`/
@@ -316,10 +337,8 @@ triaged into the "Impeccable audit" section below.
          selectors, meta-tag parsing, base-URL derivation) is hand-branched
          directly inside `ChapterDetector.ts` (~545 lines, after page-metadata
          extraction split it down from ~630 — see `PageMetadata.ts`) and
-         hand-mirrored
-         in a second, simpler scraper (`bot/src/services/NovelScraper.ts` /
-         `parseNovelInfo.ts`) that can't share code with it (different build
-         systems). Two sites already broke this twice (2026-08-06 header-count
+         now lives in the userscript. The old bot scraper was removed on
+         2026-09-08 and is no longer an implementation dependency. Two sites already broke this twice (2026-08-06 header-count
          corruption, 2026-08-12 nav-link corruption) despite NovelArrow being
          essentially a clone of NovelBin's URL/DOM conventions. wtr-lab shares
          none of those conventions. A third site should not be hand-branched
@@ -407,27 +426,16 @@ one still open (F11 shipped 2026-08-11).
       exists. **Scope caveat — corrected 2026-09-04, the original reason was
       wrong.** This said history was thin before December 2025 "because the DB
       was wiped for space in late 2025."
-      **Snapshots *were* deleted — but not in that period.** `progress_snapshots`
-      runs from `id` 1 to 139,851 with 139,065 rows surviving: 786 missing ids
-      across 28 gap sites. Split by era, **785 of those 786 are in 2026; the
-      Aug–Dec 2025 range is missing exactly one id.** Ids 1–5, 6–29, 59–113 and
-      114–420 are fully contiguous, so nothing was removed from the thin months.
-      The single 709-id gap on 2026-01-26 is almost certainly **one deleted
-      novel**, cascade-removed via `progress_snapshots.novel_id REFERENCES
-      novels ON DELETE CASCADE`. Reading in that era was one novel at a time in
-      dense bursts — the rows either side are `this-human-immortal-is-too-serious`
-      (102 rows / 3 chapters / 6m35s) and `country-weapon` (139 rows / 6
-      chapters / 6m36s) — and the hole spans 14:23→16:13, i.e. ~110 minutes at
-      the ~4s ping cadence, which is the exact shape of one novel's continuous
-      session. The remaining 27 gaps (12 of exactly 1 id, 15 of 2–20) look like
-      ordinary failed inserts.
-      So deletion is real but irrelevant here. The real reason the early months
-      are thin is that the app barely wrote snapshots then: Aug 2025 = 5, Sep = 24, Oct = 28, Nov = 55, Dec = 307,
-      then Jan 2026 = 32,955 — a 100x jump when scroll-throttled per-ping
-      syncing started producing rows at volume. Ids are contiguous across
-      every month boundary, so the gap months (**March and June 2026 have zero
-      snapshots**) are periods where nothing synced at all, not periods that
-      were cleaned out.
+      **Evidence correction (2026-09-11):** sequence gaps do not prove deletion.
+      PostgreSQL sequences can advance on rolled-back inserts and through caching.
+      The previous inference of one cascade-deleted novel from a 709-ID gap was
+      unverified. Contiguous IDs alone also do not establish completeness.
+      Historical observations recorded here were Aug 2025 = 5 snapshots,
+      Sep = 24, Oct = 28, Nov = 55, Dec = 307 and Jan 2026 = 32,955;
+      March and June 2026 had zero recorded snapshots at that inspection.
+      These are historical counts, not a fresh database verification or proof
+      of why data is absent. Confirm coverage from backups/audit records before
+      making full-year claims.
       The scoping advice still stands, but for a different reason: usable
       density starts January 2026, and 2026 has two dead months in it. Scope
       the first Wrapped to a recent window and state the covered range in the
@@ -439,7 +447,9 @@ one still open (F11 shipped 2026-08-11).
 - [ ] Chrome Extension (Manifest V3), graduating from the userscript
 - [ ] CLI tool (`readsync status|list|progress|sync|export`)
 - [ ] GraphQL API alongside REST
-- [ ] CRDTs for conflict resolution (replace last-write-wins with Automerge/Yjs)
+- [ ] Evaluate CRDTs only against a demonstrated conflict requirement. Current
+      behavior is max-progress within a read-through, with explicit reset/reread
+      semantics, rather than generic last-write-wins.
 - [ ] Reading analytics engine — remaining scope: completion ETA, peak
       hours, burnout detection.
       - [x] Velocity trend — done 2026-08-31.
@@ -455,7 +465,7 @@ one still open (F11 shipped 2026-08-11).
 - [x] DB-latest reconciliation on chapter load (userscript checks the server's latest snapshot for the current chapter before trusting a cached localStorage scroll position, overwriting it if the server is ahead) — 2026-08-17
 - [ ] Live reading indicator (Socket.IO is already in place)
 
-## Product features — Tier 4: power-user (full specs in `future_ideas.md` §9–17)
+## Product features — Tier 4: power-user (full specs in [ideas/future-specs.md](./ideas/future-specs.md) §9–17)
 
 - [ ] Dead novel detection & auto-triage
 - [ ] Unified search across notes, bookmarks, novels, tags
@@ -575,8 +585,8 @@ at, not read from." Two states:
 
 - **Reading state** — a progress sync is actively coming in: cover, title,
   chapter, percent (Spotify Now Playing-style).
-- **Idle state** — not blank; shows library/scan status from the existing
-  `getBotStatus()` shape (Google Nest Hub Ambient Mode-style).
+- **Idle state** — use library health and last-refresh data. `getBotStatus()`
+  was removed with the bot; a new scan-status model needs its own endpoint.
 
 Technical foundation already exists: `src/websocket/handlers.ts` puts every
 authenticated socket into a `user:${userId}` room, and
@@ -709,15 +719,14 @@ fall through:
       "command palette has no discoverability hint" item below. No backend,
       no new dependency. A real onboarding flow is a separate, bigger item
       if this turns out not to be enough.
-- [ ] **No bulk actions on My List.** Changing status on 10 novels means 10
-      separate dropdown interactions, and there's no bulk undo either.
-      Overlaps with Explorer-grid-hover candidate C (multi-select for bulk
-      actions, see above) — if C is ever picked up, this is solved by the
-      same build.
-- [ ] **No "clear all filters" on My List.** 10 simultaneous filter controls
-      (6 status tabs + 4 "smart" filters) are shown before any interaction —
-      at the edge of the ≤4-per-decision-point guidance — with no single
-      reset action.
+- [x] **My List bulk status controls exist locally.** Existing user changes
+      provide selection and batch status actions. The audit adds bounded
+      requests and disables duplicate submissions; the backend bulk route now
+      shares completion/history logic with single updates. Bulk undo remains
+      a separate product decision.
+- [x] **Clear-all-filters exists locally.** Preserve the user's implementation
+      resetting status, search, smart filter, tag and pagination. Deployment
+      of these working-tree changes has not been verified.
 - [ ] **No jump-to-chapter on large chapter grids.** Novels with 1500+
       chapters only get fixed 300-chapter pagination.
 - [x] **Command palette has no discoverability hint.** Done 2026-09-09,
@@ -751,30 +760,11 @@ fall through:
 
 ## Misc
 
-- [ ] **Close the stale-sync race in `ProgressSync.ts` properly (AbortController
-      or generation counter), not just its worst symptom.** 2026-08-18 fix
-      (`a8d43f7`) stops a late-arriving `behind_chapter` rejection from
-      showing the peek banner on a chapter the reader has since navigated
-      past — root cause: the completion sync in `main.ts`'s `onAnyScroll`
-      fires immediately and un-debounced, and `cancelPendingSync()` (called
-      on every SPA nav) only clears the debounce timer, never an
-      already-in-flight request. The shipped fix (`isRejectionStale`) only
-      gates the banner. Code review on that fix flagged two things it
-      doesn't cover: (1) a stale-but-*successful* late response for the old
-      chapter still unconditionally triggers `ctx.updateBadgeStatus`
-      ('📡 Synced' / '🔁 Re-read started') — cosmetic badge flicker, not a
-      misleading persistent banner, so lower priority; (2) `isRejectionStale`
-      only compares chapter numbers, not novel identity — if the reader
-      switches to a *different* novel within the same sub-second race window
-      and it happens to be on the same chapter number, the check reports
-      "not stale" and the banner could misfire attributed to the new novel.
-      Both are narrow/low-frequency. The structurally clean fix is threading
-      an `AbortSignal` through `api/client.ts`'s fetch call and wiring actual
-      cancellation into `initForChapter`/SPA-nav detection (distinguishing
-      `AbortError` from real network failures in the existing 4xx-vs-offline
-      catch branch) — closes both gaps in one shot, but is meaningfully more
-      invasive than the shipped fix. Not blocking; pick up if the badge
-      flicker or cross-novel case is ever actually observed.
+- [x] **Close the stale-sync race with a navigation generation counter.**
+      Implemented locally 2026-09-11. Progress and compare responses check the
+      generation and pathname before modifying the new page's UI or scroll state.
+      Real network failures retain the original payload for offline replay;
+      replay preserves concurrent enqueues and retains 401/403/429 for retry.
 
 - [x] **Stats-chart hover copy needs a better information model.** — Done
       2026-09-04; see the "Reading Time by Hour bento upgrades" item above,

@@ -36,16 +36,27 @@ ALTER TABLE IF EXISTS public.users                ENABLE ROW LEVEL SECURITY;
 -- authenticated. Neither the frontend nor the userscript loads supabase-js, and
 -- the server uses the service key for Storage only, which lives in the
 -- `storage` schema and is unaffected by these revokes.
-REVOKE ALL ON ALL TABLES    IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
-REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM anon, authenticated;
-
--- Stop future tables from inheriting the blanket grants again.
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES    FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM anon, authenticated;
+-- Fresh-install compatibility: these roles only exist on Supabase.
+-- Already-applied installations retain the same grants and are not replayed.
+DO $$
+DECLARE target_role TEXT;
+BEGIN
+  FOR target_role IN SELECT rolname FROM pg_roles WHERE rolname IN ('anon', 'authenticated') LOOP
+    EXECUTE format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', target_role);
+    EXECUTE format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', target_role);
+    EXECUTE format('REVOKE ALL ON ALL FUNCTIONS IN SCHEMA public FROM %I', target_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM %I', target_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', target_role);
+    EXECUTE format('ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON FUNCTIONS FROM %I', target_role);
+  END LOOP;
+END $$;
 
 -- A mutable search_path lets a caller resolve unqualified names to their own
 -- objects. This trigger only calls now(), which lives in pg_catalog and is
 -- always implicitly searched, so an empty search_path is safe.
-ALTER FUNCTION public.update_updated_at_column() SET search_path = '';
+DO $$
+BEGIN
+  IF to_regprocedure('public.update_updated_at_column()') IS NOT NULL THEN
+    ALTER FUNCTION public.update_updated_at_column() SET search_path = '';
+  END IF;
+END $$;

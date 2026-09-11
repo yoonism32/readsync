@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "./pages/pages.css";
+@import "./effects.css";
+@import "./page-signatures.css";
 
 @theme {
   /* ── Palette: abyssal black · crimson · teal ─────────── */
@@ -375,9 +378,9 @@ p {
 
 @media (prefers-reduced-motion: reduce) {
 
-  *,
-  *::before,
-  *::after {
+  :root:not([data-effects="full"]) *,
+  :root:not([data-effects="full"]) *::before,
+  :root:not([data-effects="full"]) *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }

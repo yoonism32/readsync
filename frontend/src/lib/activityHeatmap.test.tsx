@@ -31,11 +31,7 @@ describe('buildCells', () => {
     expect(padCount).toBeLessThan(7);
     expect(cells.slice(0, padCount).every(c => c.date === null)).toBe(true);
     expect(real.length).toBe(DAYS);
-    // Pre-existing behavior (unchanged by this redesign): a DST transition
-    // inside the window can make `toISOString()` collapse two local days
-    // onto the same UTC date string, so uniqueness is DAYS or DAYS-1, not
-    // guaranteed to be exactly DAYS.
-    expect(new Set(real.map(c => c.date)).size).toBeGreaterThanOrEqual(DAYS - 1);
+    expect(new Set(real.map(c => c.date)).size).toBe(DAYS);
   });
 
   it('pulls chapter counts from byDate (keyed by the same date strings buildCells emits) and defaults missing days to zero', () => {

@@ -52,7 +52,7 @@ export function ChapterMap({ novel }: Props) {
   const total = Math.max(
     novel.latest_chapter_num ?? 0,
     current,
-    data.chapters.length ? data.chapters[data.chapters.length - 1] : 0
+    data.chapters?.length ? data.chapters[data.chapters.length - 1] : 0
   );
   if (total === 0) return null;
 
@@ -75,7 +75,7 @@ export function ChapterMap({ novel }: Props) {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
         <h2 style={{ fontSize: 'var(--text-md, var(--text-sm))', fontWeight: 600 }}>Chapters</h2>
         <span className="text-muted tabular" style={{ fontSize: 'var(--text-xs)' }}>
-          {data.chapters.length} of {total} read
+          {data.chapters?.length ?? 0} of {total} read
           {data.read_through > 1 && ` · read-through #${data.read_through}`}
         </span>
       </div>
