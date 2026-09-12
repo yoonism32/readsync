@@ -399,12 +399,12 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
                   WHEN d.id ILIKE 'chrome-%' THEN 'chrome'
                   WHEN d.id ILIKE 'safari-%' THEN 'safari'
                   ELSE d.id
-                END AS device_id,
+                END AS device_group_id,
                 CASE
                   WHEN d.id ILIKE 'chrome-%' THEN 'Chrome'
                   WHEN d.id ILIKE 'safari-%' THEN 'Safari'
                   ELSE d.device_label
-                END AS device_label,
+                END AS device_group_label,
                 COUNT(rs.id) AS sessions,
                 COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds
          FROM devices d
@@ -413,9 +413,9 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
           AND rs.end_time IS NOT NULL
           ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
          WHERE d.user_id = $1
-         GROUP BY device_id, device_label
+         GROUP BY device_group_id, device_group_label
          HAVING COUNT(rs.id) > 0
-         ORDER BY seconds DESC, device_label`,
+         ORDER BY seconds DESC, device_group_label`,
           [user_id],
         ),
         // Top novels per hour, by time. rank() keeps this one round-trip
@@ -502,8 +502,8 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
     );
 
     const by_device = byDevice.rows.map((r) => ({
-      device_id: r.device_id as string,
-      device_label: r.device_label as string,
+      device_id: r.device_group_id as string,
+      device_label: r.device_group_label as string,
       sessions: Number(r.sessions),
       seconds: Number(r.seconds),
     }));
