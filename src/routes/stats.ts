@@ -388,19 +388,34 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
          GROUP BY weekday`,
           [user_id],
         ),
+        // Device rows accumulate one per browser reinstall/userscript update
+        // (each mints a fresh id), so the raw table has many dead duplicates
+        // per real device — merge by platform prefix rather than by row, and
+        // drop groups with no real activity rather than padding the card
+        // with zero-session noise.
         pool.query(
-          `SELECT d.id AS device_id, d.device_label,
+          `SELECT
+                CASE
+                  WHEN d.id ILIKE 'chrome-%' THEN 'chrome'
+                  WHEN d.id ILIKE 'safari-%' THEN 'safari'
+                  ELSE d.id
+                END AS device_id,
+                CASE
+                  WHEN d.id ILIKE 'chrome-%' THEN 'Chrome'
+                  WHEN d.id ILIKE 'safari-%' THEN 'Safari'
+                  ELSE d.device_label
+                END AS device_label,
                 COUNT(rs.id) AS sessions,
                 COALESCE(SUM(rs.time_spent_seconds), 0) AS seconds
          FROM devices d
          LEFT JOIN reading_sessions rs
            ON rs.device_id = d.id
-          AND rs.user_id = d.user_id
           AND rs.end_time IS NOT NULL
           ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
          WHERE d.user_id = $1
-         GROUP BY d.id, d.device_label
-         ORDER BY seconds DESC, d.device_label`,
+         GROUP BY device_id, device_label
+         HAVING COUNT(rs.id) > 0
+         ORDER BY seconds DESC, device_label`,
           [user_id],
         ),
         // Top novels per hour, by time. rank() keeps this one round-trip
@@ -786,7 +801,16 @@ router.get(
                  MAX(created_at) AS last_read,
                  MAX(percent) AS max_progress,
                  COUNT(DISTINCT device_id) AS devices_used
-          FROM progress_snapshots WHERE user_id = $1 AND novel_id = $2
+          FROM progress_snapshots
+          WHERE user_id = $1 AND novel_id = $2
+            AND read_through_num = COALESCE((
+              SELECT current_read_through FROM user_novel_meta
+              WHERE user_id = $1 AND novel_id = $2
+            ), 1)
+            AND created_at >= COALESCE((
+              SELECT progress_reset_at FROM user_novel_meta
+              WHERE user_id = $1 AND novel_id = $2
+            ), '-infinity'::timestamptz)
         `,
             [user_id, novelId],
           ),
@@ -795,7 +819,12 @@ router.get(
           SELECT COUNT(*) AS total_sessions,
                  COALESCE(SUM(time_spent_seconds), 0) AS total_time_seconds,
                  ROUND(AVG(time_spent_seconds), 0) AS avg_session_seconds
-          FROM reading_sessions WHERE user_id = $1 AND novel_id = $2 AND end_time IS NOT NULL
+          FROM reading_sessions
+          WHERE user_id = $1 AND novel_id = $2 AND end_time IS NOT NULL
+            AND start_time >= COALESCE((
+              SELECT progress_reset_at FROM user_novel_meta
+              WHERE user_id = $1 AND novel_id = $2
+            ), '-infinity'::timestamptz)
         `,
             [user_id, novelId],
           ),
@@ -815,6 +844,14 @@ router.get(
           SELECT chapter_num, MIN(created_at) AS first_read
           FROM progress_snapshots
           WHERE user_id = $1 AND novel_id = $2 AND chapter_num IS NOT NULL
+            AND read_through_num = COALESCE((
+              SELECT current_read_through FROM user_novel_meta
+              WHERE user_id = $1 AND novel_id = $2
+            ), 1)
+            AND created_at >= COALESCE((
+              SELECT progress_reset_at FROM user_novel_meta
+              WHERE user_id = $1 AND novel_id = $2
+            ), '-infinity'::timestamptz)
           GROUP BY chapter_num
           ORDER BY first_read
         `,

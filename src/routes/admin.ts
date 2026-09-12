@@ -212,6 +212,11 @@ export function createAdminRouter(io: SocketServer): Router {
             scraped_chapter: scrapedNum,
             rejected_regression: rejectedRegression,
             confirmed_correction: isConfirmedCorrection,
+            // TEMP DIAGNOSTIC for the 2026-09-12 OOM crash loop — remove
+            // once the cause is confirmed. Every crash so far shows a burst
+            // of these calls right before dying; this shows whether rss
+            // climbs call-over-call within that burst.
+            rssMB: Math.round(process.memoryUsage().rss / 1024 / 1024),
           },
           isConfirmedCorrection
             ? 'Auto-update received — chapter count corrected downward (confirmed twice)'

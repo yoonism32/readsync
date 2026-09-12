@@ -27,7 +27,7 @@ import {
   parseChapterFromUrl,
 } from '../services/NovelService.js';
 import { decideProgressUpdate } from '../services/ProgressPolicy.js';
-import { isReaderUrl } from '../services/ReaderUrl.js';
+import { isReaderChapterUrl } from '../services/ReaderUrl.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 /**
@@ -68,7 +68,7 @@ export function createProgressRouter(io: SocketServer): Router {
       body('device_label')
         .isString()
         .isLength({ min: 1, max: MAX_DEVICE_LABEL_LENGTH }),
-      body('novel_url').custom(isReaderUrl),
+      body('novel_url').custom(isReaderChapterUrl),
       body('percent').isFloat({ min: MIN_PERCENT, max: MAX_PERCENT }),
       body('seconds_on_page').optional().isInt({ min: 0 }),
       body('current_chapter_num').optional().isInt({ min: 1, max: 100000 }),

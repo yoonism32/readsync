@@ -98,6 +98,22 @@ describe('extractChapterFromUrl', () => {
   it('returns null when the last segment has no leading/any number', () => {
     expect(extractChapterFromUrl('https://x.com/novel/slug')).toBeNull();
   });
+
+  it('does not extract a number from a NovelArrow novel slug', () => {
+    expect(
+      extractChapterFromUrl(
+        'https://novelarrow.com/novel/everyones-class-one-effort-10000x-bonus-reward',
+      ),
+    ).toBeNull();
+  });
+
+  it('does not extract a number from an incomplete NovelArrow chapter route', () => {
+    expect(
+      extractChapterFromUrl(
+        'https://novelarrow.com/chapter/everyones-class-one-effort-10000x-bonus-reward',
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('buildChapterPath', () => {

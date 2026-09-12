@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { useEffects } from './hooks/useEffects.js';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
-import useSWR from 'swr';
+import useSWR, { SWRConfig } from 'swr';
 import { auth } from './api/client.js';
 import { Layout } from './components/Layout.js';
 import { ErrorBoundary } from './components/ErrorBoundary.js';
@@ -60,6 +60,11 @@ export default function App() {
   const effects = useEffects();
   useEffect(() => { document.documentElement.dataset.effects = effects; }, [effects]);
   return (
+    // Global SWR error-retry defaults: the built-in retry (interval ~5s,
+    // unbounded count) hammers an already-struggling server indefinitely
+    // during a real outage — every hook that doesn't set its own
+    // shouldRetryOnError/errorRetryCount inherits this backoff instead.
+    <SWRConfig value={{ errorRetryInterval: 15_000, errorRetryCount: 5 }}>
     <BrowserRouter basename="/app">
       <Toaster
         position="bottom-right"
@@ -108,5 +113,6 @@ export default function App() {
         />
       </Routes>
     </BrowserRouter>
+    </SWRConfig>
   );
 }

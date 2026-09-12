@@ -18,6 +18,29 @@ async function main(): Promise<void> {
 
   startBackupScheduler();
 
+  // TEMP DIAGNOSTIC for the 2026-09-12 OOM crash loop — remove once the
+  // cause is confirmed. Logs memory alongside DB pool and socket state so a
+  // climb (leak) vs. a step change lined up with a request burst (traffic)
+  // is visible directly in Render's log tail, without needing the paid
+  // Metrics graph.
+  const diagnosticInterval = setInterval(() => {
+    const mem = process.memoryUsage();
+    logger.info(
+      {
+        rssMB: Math.round(mem.rss / 1024 / 1024),
+        heapUsedMB: Math.round(mem.heapUsed / 1024 / 1024),
+        heapTotalMB: Math.round(mem.heapTotal / 1024 / 1024),
+        externalMB: Math.round(mem.external / 1024 / 1024),
+        poolTotal: pool.totalCount,
+        poolIdle: pool.idleCount,
+        poolWaiting: pool.waitingCount,
+        socketClients: io.engine.clientsCount,
+      },
+      'diagnostic: memory/pool/socket snapshot',
+    );
+  }, 15_000);
+  diagnosticInterval.unref();
+
   const shutdown = (signal: string): void => {
     logger.info({ signal }, 'Graceful shutdown started');
     httpServer.close(() => {

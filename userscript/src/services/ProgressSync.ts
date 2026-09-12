@@ -152,6 +152,13 @@ export function cancelPendingSync(): void {
 
 export function sendFinal(percent: number, ctx: SyncContext): void {
   try {
+    // The unload handlers run on novel landing pages too. Keep their contract
+    // identical to normal scroll sync so a number in a title slug cannot be
+    // written as a chapter-progress snapshot.
+    if (!isChapterPage()) {
+      log('sendFinal aborted - not a chapter page', { pathname: location.pathname });
+      return;
+    }
     const chapterInfo = parseChapterEnhanced(location.pathname);
     if (!chapterInfo) { log('sendFinal aborted - no chapter'); return; }
     const latestChapterInfo = extractLatestChapterInfo(chapterInfo.num);

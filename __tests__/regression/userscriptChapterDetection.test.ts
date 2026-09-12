@@ -105,6 +105,20 @@ describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
     stubDocument('Some Site');
     expect(parseChapterEnhanced('/novel/shadow-slave')).toBeNull();
   });
+
+  it('never treats a number embedded in a NovelArrow novel slug as progress', () => {
+    stubDocument('Everyone\'s Class: One Effort, 10,000x Bonus Reward! | NovelArrow');
+    expect(
+      parseChapterEnhanced('/novel/everyones-class-one-effort-10000x-bonus-reward'),
+    ).toBeNull();
+  });
+
+  it('does not parse an incomplete NovelArrow chapter route as a chapter', () => {
+    stubDocument('Everyone\'s Class: One Effort, 10,000x Bonus Reward! | NovelArrow');
+    expect(
+      parseChapterEnhanced('/chapter/everyones-class-one-effort-10000x-bonus-reward'),
+    ).toBeNull();
+  });
 });
 
 /**

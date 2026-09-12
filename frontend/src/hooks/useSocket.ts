@@ -12,7 +12,17 @@ const notify = () => listeners.forEach(listener => listener());
 
 function ensureSocket(): Socket | null {
   if (socket) return socket;
-  socket = io({ withCredentials: true, autoConnect: false });
+  socket = io({
+    withCredentials: true,
+    autoConnect: false,
+    // Defaults retry every ~1-5s forever. During a real outage that hammers
+    // an already-struggling server with reconnect traffic indefinitely (and
+    // reads as bot-like traffic at the edge) — cap attempts and back off
+    // much further apart instead.
+    reconnectionDelay: 5000,
+    reconnectionDelayMax: 60000,
+    reconnectionAttempts: 20,
+  });
   socket.connect();
   notify();
   return socket;

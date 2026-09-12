@@ -47,6 +47,20 @@ export function extractChapterNum(text: string): number | null {
 }
 
 export function extractChapterFromUrl(href: string): number | null {
+  // A chapter number must belong to a chapter route. In particular, never
+  // scrape arbitrary digits from a novel slug: `/novel/...-10000x-...` is a
+  // novel page, not chapter 10000. This helper is used by latest-chapter
+  // scans, so accepting that number lets an ordinary page link outrank the
+  // real latest chapter.
+  let pathname: string;
+  try {
+    const base = typeof location === 'undefined' ? 'https://readsync.invalid' : location.origin;
+    pathname = new URL(href, base).pathname;
+  } catch {
+    return null;
+  }
+  if (!isChapterPath(pathname)) return null;
+
   // Try standard chapter format first. NovelArrow's real chapter number is
   // sometimes tagged "auto-<N>" (occasionally doubled: "auto-282-auto-282"),
   // followed by digits from the ORIGINAL source title (e.g.
@@ -54,30 +68,21 @@ export function extractChapterFromUrl(href: string): number | null {
   // title itself started with "Chapter 145:" — confirmed against
   // og:description "Chapter 282: Chapter 145: ..."). The auto-id, not the
   // trailing number, is ground truth — capture it first when present.
-  const chapterMatch = href.match(/chapter-?(?:auto-(\d+)|(\d+))/i);
+  const chapterMatch = pathname.match(/chapter-?(?:auto-(\d+)|(\d+))/i);
   if (chapterMatch) return parseInt(chapterMatch[1] ?? chapterMatch[2], 10);
 
-  try {
-    const url = new URL(href, location.origin);
-    const lastSegment = url.pathname.split('/').pop() ?? '';
+  const lastSegment = pathname.split('/').pop() ?? '';
 
-    const numberAtStartMatch = lastSegment.match(/^(\d+)/);
-    if (numberAtStartMatch) {
-      const num = parseInt(numberAtStartMatch[1], 10);
-      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
-    }
+  const numberAtStartMatch = lastSegment.match(/^(\d+)/);
+  if (numberAtStartMatch) {
+    const num = parseInt(numberAtStartMatch[1], 10);
+    if (num > 0 && num < MAX_CHAPTER_NUM) return num;
+  }
 
-    const anyNumberMatch = lastSegment.match(/(\d+)/);
-    if (anyNumberMatch) {
-      const num = parseInt(anyNumberMatch[1], 10);
-      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
-    }
-  } catch {
-    const simpleMatch = href.match(/\/(\d+)[^/]*\/?$/);
-    if (simpleMatch) {
-      const num = parseInt(simpleMatch[1], 10);
-      if (num > 0 && num < MAX_CHAPTER_NUM) return num;
-    }
+  const anyNumberMatch = lastSegment.match(/(\d+)/);
+  if (anyNumberMatch) {
+    const num = parseInt(anyNumberMatch[1], 10);
+    if (num > 0 && num < MAX_CHAPTER_NUM) return num;
   }
   return null;
 }
@@ -481,6 +486,15 @@ function getCurrentChapterFromContent(): ChapterInfo | null {
 }
 
 export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
+  // This is a progress parser, not a generic page-title parser. Refuse novel
+  // landing pages before any content or loose URL fallback can inspect their
+  // slugs. Apart from preventing false progress, this gives every caller the
+  // same contract as syncProgress: only chapter pages produce chapter info.
+  if (!isChapterPath(pathname)) {
+    log('parseChapter skipped on non-chapter page', { pathname });
+    return null;
+  }
+
   // NovelArrow (/chapter/<slug>/chapter-N-title-slug): the URL is ground
   // truth. The SPA reader's DOM (sidebar widgets, stale title after
   // client-side navigation) can carry a neighbouring chapter number, so

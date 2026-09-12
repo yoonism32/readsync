@@ -58,19 +58,21 @@ router.get(
 
         const novelsQuery = `
         WITH latest_activity AS (
-          SELECT DISTINCT ON (novel_id) novel_id, created_at as last_activity
-          FROM (
-            SELECT novel_id, created_at FROM progress_snapshots WHERE user_id = $1
-            UNION ALL
-            SELECT novel_id, created_at FROM user_novel_meta WHERE user_id = $1
-          ) activity
-          ORDER BY novel_id, created_at DESC
+          -- A manual correction establishes the current bookmark but is not a
+          -- reading event. Likewise, metadata edits (status, favourite, notes)
+          -- must not make a novel look newly read. Keep those records in the
+          -- library through the joins below, while last_activity reflects only
+          -- a real reader-device snapshot.
+          SELECT novel_id, MAX(created_at) AS last_activity
+          FROM progress_snapshots
+          WHERE user_id = $1 AND device_id NOT LIKE 'manual:%'
+          GROUP BY novel_id
         )
         SELECT
           n.id, n.title, n.primary_url, n.author, n.genre,
           n.latest_chapter_num, n.latest_chapter_title, n.chapters_updated_at,
           n.site_latest_chapter_time_raw, n.site_latest_chapter_time,
-          la.last_activity,
+          COALESCE(m.last_read_at, la.last_activity) AS last_activity,
           COALESCE(m.status, 'reading') AS status,
           COALESCE(m.favorite, FALSE) AS favorite,
           COALESCE(m.rating, 0) AS rating,
@@ -82,7 +84,8 @@ router.get(
           -- The latest_activity CTE above never was, so gating these two made
           -- a removed device show a live "last read" date next to ch. 0.
           (SELECT row_to_json(g) FROM (
-            SELECT p.chapter_num, p.chapter_token, p.percent, p.device_id, d.device_label, p.url, p.created_at as ts
+            SELECT p.chapter_num, p.chapter_token, p.percent, p.device_id, d.device_label, p.url,
+              CASE WHEN p.device_id LIKE 'manual:%' THEN COALESCE(m.last_read_at, la.last_activity) ELSE p.created_at END AS ts
             FROM progress_snapshots p JOIN devices d ON p.device_id = d.id
             WHERE p.user_id = $1 AND p.novel_id = n.id
               AND p.read_through_num = COALESCE(m.current_read_through, 1)
@@ -96,7 +99,8 @@ router.get(
           (SELECT json_object_agg(device_id, device_state) FROM (
             SELECT d.id AS device_id,
               json_build_object('chapter_num', p.chapter_num, 'chapter_token', p.chapter_token,
-                'percent', p.percent, 'device_label', d.device_label, 'url', p.url, 'ts', p.created_at) as device_state
+                'percent', p.percent, 'device_label', d.device_label, 'url', p.url,
+                'ts', CASE WHEN d.id LIKE 'manual:%' THEN COALESCE(m.last_read_at, la.last_activity) ELSE p.created_at END) as device_state
             FROM devices d
             CROSS JOIN LATERAL (
               SELECT chapter_num, chapter_token, percent, url, created_at
@@ -109,10 +113,10 @@ router.get(
             WHERE d.user_id = $1
           ) pd) as latest_per_device_json
         FROM novels n
-        JOIN latest_activity la ON n.id = la.novel_id
         LEFT JOIN user_novel_meta m ON m.user_id = $1 AND m.novel_id = n.id
-        WHERE 1=1 ${whereClause}
-        ORDER BY la.last_activity DESC, n.id
+        LEFT JOIN latest_activity la ON n.id = la.novel_id
+        WHERE (m.user_id IS NOT NULL OR la.novel_id IS NOT NULL) ${whereClause}
+        ORDER BY COALESCE(m.last_read_at, la.last_activity) DESC NULLS LAST, n.id
         LIMIT $${++paramIndex} OFFSET $${++paramIndex}
       `;
 
@@ -205,18 +209,23 @@ router.get(
       const userId = (req as AuthenticatedRequest).user.id;
       const novelId = req.params.novelId;
 
-      const meta = await pool.query<{ rt: number }>(
-        `SELECT COALESCE(current_read_through, 1) AS rt
+      const meta = await pool.query<{
+        rt: number;
+        progress_reset_at: Date | null;
+      }>(
+        `SELECT COALESCE(current_read_through, 1) AS rt, progress_reset_at
          FROM user_novel_meta WHERE user_id = $1 AND novel_id = $2`,
         [userId, novelId],
       );
       const readThrough = meta.rows[0]?.rt ?? 1;
+      const progressResetAt = meta.rows[0]?.progress_reset_at ?? null;
 
       const result = await pool.query<{ chapter_num: number }>(
         `SELECT DISTINCT chapter_num FROM progress_snapshots
          WHERE user_id = $1 AND novel_id = $2 AND read_through_num = $3
+           AND created_at >= COALESCE($4::timestamptz, '-infinity'::timestamptz)
          ORDER BY chapter_num`,
-        [userId, novelId, readThrough],
+        [userId, novelId, readThrough, progressResetAt],
       );
 
       res.json({
