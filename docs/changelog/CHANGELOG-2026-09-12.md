@@ -156,9 +156,10 @@ List title-width experiment were preserved. The page-specific changes are:
 
 ## Fixed
 
-- Fixed Stats reporting that incorrectly implied there was no device data when
+|- Fixed Stats reporting that incorrectly implied there was no device data when
   devices existed in the database but had no completed sessions in the selected
   window.
+
 - Fixed activity heatmap duplicate date keys around daylight-saving transitions.
 - Fixed the Stats layout stretching a 375px viewport to 660px.
 - Fixed duration rounding that could display values such as `1h 60m`.
