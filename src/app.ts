@@ -150,7 +150,10 @@ export function createApp(): {
   app.use(express.urlencoded({ extended: true }));
   // Must follow the parsers: restores the Express 4 `{}` default the routes assume.
   app.use(normalizeBody);
-  app.use('/api/v1/import', requireAuthAPI, express.json({ limit: '100mb' }));
+  // 100mb let one request buffer nearly a quarter of this instance's 512MB
+  // ceiling. A real export of this library is a few MB — 20mb leaves headroom
+  // without handing a single request the ability to nearly OOM the process.
+  app.use('/api/v1/import', requireAuthAPI, express.json({ limit: '20mb' }));
   io.engine.use(sessionMiddleware);
   io.on('connection', (socket) => {
     const request = socket.request as express.Request;

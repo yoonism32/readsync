@@ -9,15 +9,24 @@ export const NODE_ENV = process.env.NODE_ENV ?? 'development';
 export const IS_PRODUCTION = NODE_ENV === 'production';
 
 // ── Database pool ────────────────────────────────────────────────────────────
-// DATABASE_URL goes through Supabase's session-mode pooler (port 5432),
-// which caps this project at 15 concurrent clients total — and several of
-// those 15 are permanently held by Supabase-internal processes (pg_cron,
-// postgres_exporter, PostgREST, Storage), not available to this app. The
-// previous default of 20 let this app alone request more connections than
-// the pooler could ever grant it. Crashed a production deploy on
-// 2026-08-11 (EMAXCONNSESSION) once local dev connection churn tipped an
-// already-oversubscribed pool over the edge. 10 leaves headroom.
-export const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX ?? '10', 10);
+// DATABASE_URL went through Supabase's session-mode pooler (port 5432) until
+// 2026-08-17, which capped this project at 15 concurrent clients total — and
+// several of those 15 were permanently held by Supabase-internal processes
+// (pg_cron, postgres_exporter, PostgREST, Storage), not available to this
+// app. PG_POOL_MAX=20 crashed a production deploy on 2026-08-11
+// (EMAXCONNSESSION) once local dev connection churn tipped an already-
+// oversubscribed pool over the edge; 10 was the immediate same-day fix.
+// The real fix landed 2026-08-17: DATABASE_URL now points at the
+// transaction-mode pooler (port 6543), which hands out a physical
+// connection per-transaction instead of per-client-lifetime and doesn't
+// carry the same low hard cap — this app's usage (withTransaction() +
+// one-shot pool.query() calls, no session-scoped features) was audited
+// clean for the switch. 10 was deliberately left unraised so it only ever
+// gained headroom under the new pooler, never lost it. Raised to 15 here
+// as that headroom's first use, prompted by a 2026-09-12 OOM crash loop
+// where a Refresh-All burst likely queued more concurrent requests than
+// 10 connections could serve at once.
+export const PG_POOL_MAX = parseInt(process.env.PG_POOL_MAX ?? '15', 10);
 export const PG_IDLE_TIMEOUT_MS = parseInt(
   process.env.PG_IDLE_TIMEOUT ?? '30000',
   10,
