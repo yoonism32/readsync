@@ -754,11 +754,15 @@ router.post(
         success: true,
         imported,
         warnings:
-          req.body.data.version === 2
-            ? []
-            : [
-                'Legacy exports contain only the history originally exported; missing data cannot be recovered.',
-              ],
+          req.body.data.scope === 'library-backup'
+            ? [
+                'This backup restores your library and reading positions, but excludes detailed reading history, sessions and notifications.',
+              ]
+            : req.body.data.version === 2
+              ? []
+              : [
+                  'Legacy exports contain only the history originally exported; missing data cannot be recovered.',
+                ],
       });
     } catch (error) {
       const code = (error as { code?: string }).code;

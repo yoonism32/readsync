@@ -18,9 +18,16 @@ configuration card.
 `GET /api/v1/export` returns version 2 with `novels`, `meta`, `devices`, `progress`,
 `bookmarks`, `notes`, `categories`, `sessions`, `settings` and `notifications`.
 `POST /api/v1/import` accepts `{ "data": <export> }` under a dashboard session,
-with a 100 MiB body limit and 500,000-record limit per collection. Restore merges
+with a 20 MiB body limit and 500,000-record limit per collection. Restore merges
 metadata/settings and inserts missing records atomically; unrelated records remain.
 Legacy exports remain readable but cannot recover history their exporter omitted.
+
+Internal daily backups use version 2 with `scope: "library-backup"`. They retain
+library metadata, bookmarks, notes, categories, preferences and devices, plus the
+latest and furthest position per novel/device in the current read-through after
+any progress reset. Sessions and notifications are empty; detailed snapshot history
+and internal backup/refresh timestamps are excluded. The last 30 backups are kept.
+These compact files use the same import endpoint; the full-data export is unchanged.
 
 ## auth.ts — login, session, and legacy page redirects
 

@@ -32,6 +32,13 @@ router.post('/api/v1/backups/run', validateApiKey, async (req, res) => {
     const file = await runBackup(user_id);
     res.json({ success: true, backup: file });
   } catch (error) {
+    // Not a database error — handleDbError would log/alert it as one. An
+    // oversized export is an expected, already-diagnosed condition for a
+    // specific account, not an incident worth paging on.
+    if ((error as { code?: string }).code === 'BACKUP_TOO_LARGE') {
+      res.status(413).json({ error: (error as Error).message });
+      return;
+    }
     handleDbError(res, error, 'Run backup');
   }
 });

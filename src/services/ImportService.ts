@@ -16,7 +16,7 @@ const specs = [
   [
     'meta',
     'user_novel_meta',
-    'user_id novel_id status favorite rating notes started_at completed_at updated_at current_read_through read_history created_at progress_reset_at',
+    'user_id novel_id status favorite rating notes started_at completed_at updated_at current_read_through read_history created_at progress_reset_at last_read_at',
   ],
   [
     'progress',

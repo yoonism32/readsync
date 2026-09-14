@@ -61,8 +61,8 @@ export function Settings() {
       await backupsApi.run();
       await mutateBackups();
       toast.success('Backup complete');
-    } catch {
-      toast.error('Backup failed');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Backup failed');
     } finally {
       setBackingUp(false);
     }
@@ -98,7 +98,9 @@ export function Settings() {
       const parsed = JSON.parse(text);
       await novelsApi.import(parsed);
       await refreshCache(key => typeof key === 'string' && key !== 'auth-status');
-      toast.success('Import complete');
+      toast.success(parsed.scope === 'library-backup'
+        ? 'Library and positions imported. Detailed history is excluded from this backup.'
+        : 'Import complete');
     } catch {
       toast.error('Import failed — check the file is a ReadSync export');
     } finally {
@@ -299,8 +301,9 @@ export function Settings() {
           </button>
         </div>
         <p className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>
-          A daily snapshot of your full library (novels, progress, bookmarks, notes,
-          tags) is stored automatically; the last 30 are kept.
+          A daily backup of your library, reading positions, bookmarks, notes,
+          tags and preferences is stored automatically; the last 30 are kept.
+          Detailed reading history, sessions and notifications are excluded.
         </p>
         <p className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 8 }}>
           {backupError ? 'Backup status unavailable.' : !backupStatus ? 'Loading backup status…' : backupStatus.last_backup_at

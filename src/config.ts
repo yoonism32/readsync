@@ -39,6 +39,9 @@ export const PG_STATEMENT_TIMEOUT_MS = 30_000;
 
 // ── Body limits ──────────────────────────────────────────────────────────────
 export const JSON_BODY_LIMIT = '10mb';
+// Leave room below the 20MB import request limit (including its data wrapper)
+// and the backup bucket's 50MB cap so accepted backups can be imported.
+export const BACKUP_MAX_BYTES = 18 * 1024 * 1024;
 
 // ── Pagination ───────────────────────────────────────────────────────────────
 export const DEFAULT_PAGE_LIMIT = 200;
