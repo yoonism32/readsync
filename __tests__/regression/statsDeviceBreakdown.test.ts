@@ -17,8 +17,8 @@ describe('GET /api/v1/stats/breakdown — registered devices', () => {
       if (sql.includes('FROM devices d')) {
         return Promise.resolve({
           rows: [
-            { device_id: 'chrome-id', device_label: 'Chrome', sessions: '0', seconds: '0' },
-            { device_id: 'safari-id', device_label: 'Safari', sessions: '0', seconds: '0' },
+            { device_group_id: 'chrome-id', device_group_label: 'Chrome', sessions: '0', seconds: '0' },
+            { device_group_id: 'safari-id', device_group_label: 'Safari', sessions: '0', seconds: '0' },
           ],
         });
       }
@@ -32,7 +32,7 @@ describe('GET /api/v1/stats/breakdown — registered devices', () => {
     });
     app.use(statsRouter);
 
-    const response = await request(app).get('/api/v1/stats/breakdown');
+    const response = await request(app).get('/api/v1/stats/breakdown?window=week');
 
     expect(response.status).toBe(200);
     expect(response.body.by_device).toEqual([
@@ -45,5 +45,6 @@ describe('GET /api/v1/stats/breakdown — registered devices', () => {
       .find(sql => sql.includes('FROM devices d'));
     expect(deviceSql).toContain('LEFT JOIN reading_sessions');
     expect(deviceSql).toContain('WHERE d.user_id = $1');
+    expect(deviceSql).not.toContain('date_trunc(\'week\', now())');
   });
 });

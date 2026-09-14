@@ -7,6 +7,7 @@ that used to be documented there as "off" was removed outright 2026-09-08.
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — how the system actually works today
 - [API_REFERENCE.md](./API_REFERENCE.md) — every route, its auth, its validation status
 - [DATABASE.md](./DATABASE.md) — schema and the story behind each migration
+- [BACKUPS.md](./BACKUPS.md) — full database downloads to your disk with Docker, verification and restore guidance
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — env vars, Render/Docker, local dev
 - [TESTING.md](./TESTING.md) — what's covered, what isn't, how to run it
 - [ROADMAP.md](./ROADMAP.md) — open and accepted-but-unbuilt work

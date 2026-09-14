@@ -384,7 +384,7 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
                 COUNT(*) AS sessions,
                 COALESCE(SUM(time_spent_seconds), 0) AS seconds
          FROM reading_sessions
-         WHERE user_id = $1 AND end_time IS NOT NULL ${sessionWindow}
+         WHERE user_id = $1 AND end_time IS NOT NULL
          GROUP BY weekday`,
           [user_id],
         ),
@@ -411,7 +411,6 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
          LEFT JOIN reading_sessions rs
            ON rs.device_id = d.id
           AND rs.end_time IS NOT NULL
-          ${sessionWindow ? sessionWindow.replace('start_time', 'rs.start_time') : ''}
          WHERE d.user_id = $1
          GROUP BY device_group_id, device_group_label
          HAVING COUNT(rs.id) > 0
