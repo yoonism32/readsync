@@ -384,7 +384,7 @@ router.get('/api/v1/stats/breakdown', validateApiKey, async (req, res) => {
                 COUNT(*) AS sessions,
                 COALESCE(SUM(time_spent_seconds), 0) AS seconds
          FROM reading_sessions
-         WHERE user_id = $1 AND end_time IS NOT NULL
+         WHERE user_id = $1 AND end_time IS NOT NULL ${sessionWindow}
          GROUP BY weekday`,
           [user_id],
         ),
