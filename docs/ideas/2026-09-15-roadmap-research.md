@@ -1,7 +1,7 @@
 # ReadSync: roadmap research and next-feature guide
 
 **Prepared:** 15 September 2026  
-**Code reviewed:** `main` at `ad9f805`  
+**Code reviewed:** `main` at `ad9f805`; rechecked against `7aaeb2e` (no findings affected)  
 **Market research:** 14 September 2026; consolidated with three completed codebase reviews on 15 September  
 **Audience:** the sole reader and builder of ReadSync  
 **Status:** recommendations and proposed scopes, not implementation commitments
@@ -61,6 +61,8 @@ The reviews covered the current frontend and userscript flows, backend routes an
 - **Roadmap audit:** accepted, declined, stale, overlapping, and genuinely new proposals.
 
 The completed reviews used a clean working tree at `ad9f805`. They did not access or change production. Local implementation does not establish deployment status.
+
+Commits since then (`56feb0e`, `cccb972`, `7aaeb2e`) changed only the My List table layout (fixed Title width, table-measured page width, centred Progress header) and gave the CI verify workflow its userscript build secrets. None of them affects the filters, data, routes, userscript sync or recovery behaviour described here, so the findings below still stand.
 
 ### External evidence
 
