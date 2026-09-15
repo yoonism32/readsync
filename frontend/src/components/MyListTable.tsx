@@ -40,7 +40,7 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
           title={toggle.title}
           aria-label={toggle.title}
           style={{
-            position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)',
+            position: 'absolute', right: -18, top: '50%', transform: 'translateY(-50%)',
             background: 'none', border: 'none', padding: 0, lineHeight: 1,
             fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer',
           }}

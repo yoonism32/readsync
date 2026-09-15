@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigationType, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { fetchNovels, coverUrl, formatTimestamp } from '../api/client.js';
 import { ProgressBar } from '../components/ProgressBar.js';
+import { StatusBadge } from '../components/StatusBadge.js';
 import { useNow } from '../hooks/useNow.js';
 import { Spinner } from '../components/Spinner.js';
 import { LoadError } from '../components/PageFeedback.js';
@@ -21,8 +22,10 @@ import {
 } from '../lib/explorerFilters.js';
 import type { ExplorerFilters } from '../lib/explorerFilters.js';
 import type { Novel } from '../types/index.js';
+import { parseExplorerView, serializeExplorerView } from '../lib/explorerView.js';
+import type { ExplorerView } from '../lib/explorerView.js';
 
-type ViewMode = 'grid' | 'list';
+type ViewMode = ExplorerView['view'];
 
 const fieldStyle: React.CSSProperties = {
   width: '100%',
@@ -47,11 +50,26 @@ const labelStyle: React.CSSProperties = {
 
 export function Explorer() {
   useNow(); // One clock for the results, not one interval per list row.
-  const [query, setQuery] = useState('');
-  const [filters, setFilters] = useState<ExplorerFilters>(DEFAULT_FILTERS);
-  const [sortId, setSortId] = useState(DEFAULT_SORT_ID);
-  const [view, setView] = useState<ViewMode>('grid');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { query, filters, sortId, view } = useMemo(() => parseExplorerView(searchParams), [searchParams]);
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  const typing = useRef<string | undefined>(undefined);
   const [panelOpen, setPanelOpen] = useState(false);
+
+  useEffect(() => {
+    if (navigationType === 'POP') typing.current = undefined;
+  }, [location.key, navigationType]);
+
+  const endTyping = () => { typing.current = undefined; };
+  const updateView = (change: (current: ExplorerView) => ExplorerView, textField?: string) => {
+    const next = serializeExplorerView(change(parseExplorerView(searchParams)), searchParams);
+    if (next.toString() === searchParams.toString()) return;
+    // One history entry per focused edit, with normal history for discrete choices.
+    const replace = textField !== undefined && typing.current === textField;
+    typing.current = textField;
+    setSearchParams(next, { replace });
+  };
 
   // Live updates come from the socket in Layout.tsx (chapters:updated /
   // progress:updated → mutate('/novels')); this 30-minute interval is only a
@@ -60,7 +78,8 @@ export function Explorer() {
     refreshInterval: 30 * 60_000,
   });
   const novels = useMemo(() => data ?? [], [data]);
-  const genres = useMemo(() => collectGenres(novels), [novels]);
+  const genres = useMemo(() => [...new Set([...collectGenres(novels), ...Object.keys(filters.genres)])]
+    .sort((a, b) => a.localeCompare(b)), [novels, filters.genres]);
   const activeCount = activeFilterCount(filters);
 
   const results = useMemo(() => {
@@ -77,18 +96,19 @@ export function Explorer() {
     return sortNovels(applyExplorerFilters(searched, filters), sortId);
   }, [novels, query, filters, sortId]);
 
-  const set = <K extends keyof ExplorerFilters>(key: K, value: ExplorerFilters[K]) =>
-    setFilters(f => ({ ...f, [key]: value }));
+  const set = <K extends keyof ExplorerFilters>(key: K, value: ExplorerFilters[K], textField?: string) =>
+    updateView(current => ({ ...current, filters: { ...current.filters, [key]: value } }), textField);
 
   // Cycles unset → include → exclude → unset, dropping the key entirely once
   // it returns to unset so the filter object stays a record of real choices.
   const cycleGenre = (genre: string) =>
-    setFilters(f => {
+    updateView(current => {
+      const f = current.filters;
       const next = nextTriState(f.genres[genre] ?? 'off');
       const genres = { ...f.genres };
       if (next === 'off') delete genres[genre];
       else genres[genre] = next;
-      return { ...f, genres };
+      return { ...current, filters: { ...f, genres } };
     });
 
   const toggleStatus = (status: ExplorerFilters['statuses'][number]) =>
@@ -121,7 +141,8 @@ export function Explorer() {
             placeholder="Search titles, authors, or genres…"
             autoComplete="off"
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => updateView(current => ({ ...current, query: e.target.value }), 'query')}
+            onBlur={endTyping}
             className="input"
             style={{ ...fieldStyle, borderRadius: 'var(--radius-lg)', padding: '11px 14px 11px 36px', fontSize: 'var(--text-base)' }}
           />
@@ -251,14 +272,14 @@ export function Explorer() {
               <label style={labelStyle} htmlFor="f-author">Author</label>
               <input id="f-author" type="text" placeholder="Search author…" autoComplete="off"
                 value={filters.author} style={fieldStyle}
-                onChange={e => set('author', e.target.value)} />
+                onChange={e => set('author', e.target.value, 'author')} onBlur={endTyping} />
             </div>
 
             <div>
               <label style={labelStyle} htmlFor="f-minch">Minimum chapters</label>
               <input id="f-minch" type="number" min={0} placeholder="Any" inputMode="numeric"
                 value={filters.minChapters} style={fieldStyle}
-                onChange={e => set('minChapters', e.target.value)} />
+                onChange={e => set('minChapters', e.target.value, 'minChapters')} onBlur={endTyping} />
             </div>
 
             <div>
@@ -299,7 +320,7 @@ export function Explorer() {
                         name="sort"
                         label={o.label}
                         checked={sortId === o.id}
-                        onSelect={() => { setSortId(o.id); close(); }}
+                        onSelect={() => { updateView(current => ({ ...current, sortId: o.id })); close(); }}
                       />
                     ))}
                   </div>
@@ -318,7 +339,7 @@ export function Explorer() {
             <span style={{ flex: 1 }} />
 
             <button type="button" className="btn-ghost"
-              onClick={() => { setFilters(DEFAULT_FILTERS); setSortId(DEFAULT_SORT_ID); }}
+              onClick={() => updateView(current => ({ ...current, filters: DEFAULT_FILTERS, sortId: DEFAULT_SORT_ID }))}
               disabled={activeCount === 0 && sortId === DEFAULT_SORT_ID}>
               Reset filters
             </button>
@@ -336,8 +357,8 @@ export function Explorer() {
         </span>
         <span style={{ flex: 1 }} />
         <div style={{ display: 'inline-flex', gap: 2, padding: 3, borderRadius: 'var(--radius-md)', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--color-border)' }}>
-          <ViewButton mode="grid" active={view === 'grid'} onClick={() => setView('grid')} />
-          <ViewButton mode="list" active={view === 'list'} onClick={() => setView('list')} />
+          <ViewButton mode="grid" active={view === 'grid'} onClick={() => updateView(current => ({ ...current, view: 'grid' }))} />
+          <ViewButton mode="list" active={view === 'list'} onClick={() => updateView(current => ({ ...current, view: 'list' }))} />
         </div>
       </div>
 
@@ -346,14 +367,14 @@ export function Explorer() {
       ) : error && !data ? null : results.length === 0 ? (
         <div className="page-empty">
           <p>{query || activeCount > 0 ? 'Nothing matches those filters.' : 'No novels found.'}</p>
-          {(query || activeCount > 0) && <button type="button" className="btn-ghost" onClick={() => { setQuery(''); setFilters(DEFAULT_FILTERS); }}>Clear search and filters</button>}
+          {(query || activeCount > 0) && <button type="button" className="btn-ghost" onClick={() => updateView(current => ({ ...current, query: '', filters: DEFAULT_FILTERS }))}>Clear search and filters</button>}
         </div>
       ) : view === 'grid' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 14 }}>
           {results.map((n, i) => <GridCard key={n.novel_id} novel={n} index={i} />)}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 320px), 1fr))', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 480px), 1fr))', gap: 10 }}>
           {results.map((n, i) => <ListRow key={n.novel_id} novel={n} index={i} />)}
         </div>
       )}
@@ -496,9 +517,14 @@ function ListRow({ novel, index }: { novel: Novel; index: number }) {
           <div className="line-clamp-2" style={{ fontWeight: 600, fontSize: 'var(--text-sm)', color: 'var(--color-text)', marginBottom: 5 }}>
             {novel.title}
           </div>
-          <ProgressBar percent={novel.latest_percent ?? 0} showLabel size="sm" />
-          <div className="text-faint tabular" style={{ fontSize: 'var(--text-xs)', marginTop: 5, display: 'flex', gap: 8 }}>
+          {novel.latest_percent != null ? (
+            <ProgressBar percent={novel.latest_percent} showLabel size="sm" />
+          ) : (
+            <span className="text-faint" style={{ fontSize: 'var(--text-xs)' }}>Not started</span>
+          )}
+          <div className="text-faint tabular" style={{ fontSize: 'var(--text-xs)', marginTop: 5, display: 'flex', gap: 8, alignItems: 'center' }}>
             <span>Ch. {novel.latest_chapter ?? 0}{novel.latest_chapter_num ? ` / ${novel.latest_chapter_num}` : ''}</span>
+            <StatusBadge status={novel.status} />
             <span style={{ flex: 1 }} />
             {novel.latest_read_at && <span>{formatTimestamp(novel.latest_read_at)}</span>}
           </div>

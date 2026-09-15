@@ -325,12 +325,15 @@ export function Layout({ children }: Props) {
       {/* MyList's table grows with its widest title (real <table>, one shared
           column width for every row) — give it more room than the 1440
           default so that growth doesn't immediately force the table's own
-          horizontal scrollbar. */}
+          horizontal scrollbar. Explorer's list-view cards are wider than
+          the 1440 default too, so it gets the same kind of exception —
+          bounded and centered, not full-bleed, so the search bar/toolbar
+          above the grid still lines up with it. */}
       <main
         id="main-content"
         style={{
           flex: 1,
-          maxWidth: location.pathname === '/mylist' ? 1900 : 1440,
+          maxWidth: location.pathname === '/mylist' ? 1900 : location.pathname === '/explorer' ? 2000 : 1440,
           width: '100%',
           margin: '0 auto',
           padding: '28px 28px 56px',
