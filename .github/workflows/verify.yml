@@ -20,4 +20,8 @@ jobs:
       - run: npm ci --prefix frontend --legacy-peer-deps
       - run: npm ci --prefix userscript --legacy-peer-deps
 
-      - run: npm run verify
+      - name: Verify application and userscript builds
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          USERSCRIPT_UPDATE_TOKEN: ${{ secrets.USERSCRIPT_UPDATE_TOKEN }}
+        run: npm run verify
