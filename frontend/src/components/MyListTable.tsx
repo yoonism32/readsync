@@ -17,11 +17,6 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
   /** Optional sort-mode switch rendered next to the label, hidden until the
    *  header is hovered/focused (see .progress-mode-toggle in index.css). */
   toggle?: { active: boolean; symbol: string; title: string; onClick: () => void };
-  /** Pin fixed-content columns to their real width so table auto-layout
-   *  doesn't spread a wider container's extra space across every column —
-   *  Title is computed and passed in the same way (see MyList.tsx). The
-   *  table itself has no width:100%, so there's no leftover space for the
-   *  auto-layout algorithm to redistribute into any column. */
   width?: number;
 }) {
   return (
@@ -29,13 +24,14 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
       onClick={sortable ? onClick : undefined}
       className={toggle ? 'th-progress' : undefined}
       style={{
-        padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap', width,
+        padding: toggle ? '10px 32px' : '10px 12px', textAlign: align, whiteSpace: 'nowrap', width,
+        position: toggle ? 'relative' : undefined,
         fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
         color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
         cursor: sortable ? 'pointer' : 'default', userSelect: 'none',
       }}
     >
-      {label}{active && (asc ? ' ▲' : ' ▼')}
+      <span>{label}{active && (asc ? ' ▲' : ' ▼')}</span>
       {toggle && (
         <button
           type="button"
@@ -44,8 +40,9 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
           title={toggle.title}
           aria-label={toggle.title}
           style={{
-            marginLeft: 6, background: 'none', border: 'none', padding: 0,
-            fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer', verticalAlign: 'middle',
+            position: 'absolute', right: -5, top: '50%', transform: 'translateY(-50%)',
+            background: 'none', border: 'none', padding: 0, lineHeight: 1,
+            fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer',
           }}
         >
           {toggle.symbol}
@@ -59,8 +56,6 @@ export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth, selected, 
   novel: Novel;
   onSetStatus: (id: string, s: NovelStatus) => void;
   onToggleFav: (n: Novel) => void;
-  /** Mirrors the Title column's autofit width (see Th's onAutofit) so the
-   *  body cells don't hold the column open at their 220px default minimum. */
   titleWidth?: number;
   /** Bulk-selection checkbox. Omitted entirely (no cell rendered) when the
    *  caller doesn't pass onToggleSelect, so callers that don't need bulk
@@ -109,21 +104,8 @@ export function Row({ novel: n, onSetStatus, onToggleFav, titleWidth, selected, 
       </td>
 
       {/* Title */}
-      {/* Star + read-through pill + behind-badge must always sit on the title's
-          line — never wrap below it. The actual bug was the title text itself
-          line-wrapping inside its own flex item (no white-space rule on the
-          Link), which pushed the flex row over height and dropped the badges
-          to a new line. `white-space: nowrap` on the Link stops that; no
-          truncation needed — this is a real <table>, so the Title column's
-          width is shared across every row and the whole table (wrapped in an
-          overflow-x:auto container, see MyList.tsx) scrolls as one unit when
-          a long title needs more room, instead of any single row growing on
-          its own. */}
       <td style={{ ...td, textAlign: 'left', whiteSpace: 'normal', minWidth: titleWidth ?? 220, width: titleWidth }}>
-        {/* inline-flex, not flex: it must shrink-wrap to its own content so
-            scrollWidth (used by the Title column's autofit, see MyList.tsx)
-            reflects the text's real width instead of the stretched cell. */}
-        <span data-col="title" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, maxWidth: '100%' }}>
           <Link
             to={`/novel/${encodeURIComponent(n.novel_id)}`}
             className="link-accent"
