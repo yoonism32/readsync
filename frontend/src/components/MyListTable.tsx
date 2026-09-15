@@ -24,14 +24,14 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
       onClick={sortable ? onClick : undefined}
       className={toggle ? 'th-progress' : undefined}
       style={{
-        padding: toggle ? '10px 32px' : '10px 12px', textAlign: align, whiteSpace: 'nowrap', width,
+        padding: '10px 12px', textAlign: align, whiteSpace: 'nowrap', width,
         position: toggle ? 'relative' : undefined,
         fontSize: 'var(--text-xs)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em',
         color: active ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
         cursor: sortable ? 'pointer' : 'default', userSelect: 'none',
       }}
     >
-      <span>{label}{active && (asc ? ' ▲' : ' ▼')}</span>
+      <span style={{ display: 'block', textAlign: align }}>{label}{active && (asc ? ' ▲' : ' ▼')}</span>
       {toggle && (
         <button
           type="button"
