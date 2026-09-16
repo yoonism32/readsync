@@ -111,6 +111,50 @@ export interface StatsSummary {
   active_devices: number;
 }
 
+export interface ReplayVisit {
+  novel_id: string;
+  title: string;
+  read_through: number;
+  from_chapter: number | null;
+  to_chapter: number | null;
+  observed_chapters: number;
+  first_observed_at: string;
+  last_observed_at: string;
+}
+
+export interface ReplayDay {
+  date: string;
+  estimated_session_seconds: number;
+  titles: ReplayVisit[];
+}
+
+export interface ReplayTitle {
+  novel_id: string;
+  title: string;
+  recorded_days: number;
+  observed_chapters: number;
+  first_observed_at: string;
+  last_observed_at: string;
+}
+
+export interface ReplayResponse {
+  month: string;
+  timezone: string;
+  period: { local_start: string; local_end_exclusive: string };
+  coverage: { first_recorded_at: string | null; last_recorded_at: string | null };
+  summary: {
+    recorded_reading_days: number;
+    titles_visited: number;
+    estimated_session_seconds: number;
+  };
+  days: ReplayDay[];
+  titles: ReplayTitle[];
+  milestones: {
+    started: Array<{ novel_id: string; title: string; date: string }>;
+    completed: Array<{ novel_id: string; title: string; date: string }>;
+  };
+}
+
 export interface HourNovel {
   novel_id: string;
   title: string;

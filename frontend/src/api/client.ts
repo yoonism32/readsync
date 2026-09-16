@@ -202,7 +202,7 @@ export const devices = {
 
 // ── Stats ─────────────────────────────────────────────────
 
-import type { StatsBreakdown, StatsSummary } from '../types/index.js';
+import type { ReplayResponse, StatsBreakdown, StatsSummary } from '../types/index.js';
 
 export const stats = {
   summary: () => request<StatsSummary>('/stats/summary'),
@@ -211,6 +211,8 @@ export const stats = {
   novel: (novelId: string) =>
     request(`/stats/novels/${encodeURIComponent(novelId)}`),
   breakdown: () => request<StatsBreakdown>('/stats/breakdown'),
+  replay: (month: string, timezone: string) =>
+    request<ReplayResponse>('/stats/replay', { qs: { month, timezone } }),
 };
 
 // ── Bookmarks ─────────────────────────────────────────────

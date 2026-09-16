@@ -1,10 +1,12 @@
 # ReadSync execution roadmap
 
-**Prepared:** 15 September 2026  
+**Prepared:** 15 September 2026; updated 16 September 2026
 **Source of truth:** [Roadmap research and next-feature guide](./ideas/2026-09-15-roadmap-research.md)  
-**Planning baseline:** `main` at `7aaeb2e`  
-**Status:** execution in progress; Phase 0, roadmap authoring, P1a and P1b (re-scoped) are complete
-locally; later phases remain unbuilt. No item in this document is a production-deployment claim.
+**Planning baseline:** `main` at `d92f764`
+**Status:** execution in progress; Phase 0, roadmap authoring and Phase 1 are complete locally.
+Phase 2 is implemented and passes the local automated suite, with live PostgreSQL DST-boundary
+execution, visual print inspection and first-real-month usefulness still open. Later phases remain
+unbuilt. No item in this document is a production-deployment claim.
 
 This roadmap converts the research into sequenced work for a personal, single-user tool.
 It preserves the research classifications, cautions and historical decisions. The default
@@ -14,8 +16,8 @@ may make.
 
 ## Operating rules
 
-- Keep at most three concrete items in **Next**. Phase 0 is now complete; the current Next
-  contains Phase 1 and Phase 2, and completion does not force a replacement item.
+- Keep at most three concrete items in **Next**. Phase 0 and Phase 1 are complete; Phase 2 is the
+  only current Next item, and completion does not force a replacement item.
 - Pair Phase 1's everyday improvement with Phase 2's enjoyable signature feature.
 - Finish and verify each usable slice before adding settings, integrations or variants.
 - Leave Phase 3, all Phase 4 alternatives, experiments and older possibilities in **Later**.
@@ -33,7 +35,7 @@ may make.
 | --- | --- | --- | --- | --- | --- |
 | 0 | Bounded foundation check | Complete, bounded local audit | Known recovery coverage and honest metric vocabulary | None | Evidence recorded; external unknowns remain explicit |
 | 1 | Saved views + Explorer quick actions | Complete; P1a and re-scoped P1b done | Return to an Explorer view and resume from browsing | Roadmap shaped | P1a and P1b acceptance checks pass |
-| 2 | Monthly Reading Replay | Backlog, gated | One polished month-level reading story | P0 evidence complete; P1 usable | Replay checks pass and first real month is useful |
+| 2 | Monthly Reading Replay | Implemented locally; exit evidence open | One polished month-level reading story | P0 evidence complete; P1 usable | Replay checks pass and first real month is useful |
 | 3 | Per-novel binge thresholds | Later | Personal observed-backlog readiness | P1/P2 real-use pause | Threshold shelf helps choose what to resume |
 | 4 | Select one alternative | Later, unselected | Address the strongest observed friction or enjoyment | Owner selects from evidence | Selected proposal's checks pass |
 
@@ -138,7 +140,7 @@ active sessions may appear late; offline entries are coalesced and dated on uplo
 record visits, not verified completions; metadata can be stale; compact backups omit detailed
 history; and history queries must remain bounded and aggregated in PostgreSQL.
 
-## Next 1 of 2 — Phase 1: saved views + Explorer quick actions
+## Completed — Phase 1: saved views + Explorer quick actions
 
 **Classification:** saved-view persistence is **new** above existing filters; Explorer progress,
 status and Continue actions are a previously documented **extension**. Nothing here approves
@@ -147,8 +149,8 @@ shelf recommendations or a recommendation engine.
 ### P1a — URL-preserved Explorer views, first vertical slice
 
 **Status: complete for the local vertical slice (15 September 2026).** The URL contract,
-Explorer integration behaviour and automated acceptance checks are implemented. P1b remains
-backlog, so the parent Phase 1 item stays Running.
+Explorer integration behaviour and automated acceptance checks are implemented. P1b was later
+re-scoped by explicit owner decision and completed, so the parent Phase 1 item is complete.
 
 Concrete deliverables:
 
@@ -260,7 +262,7 @@ devices. Save definitions rather than frozen result lists.
 Use existing library data and cache updates. Do not add polling. Unknown/stale source metadata
 stays unknown/stale. URL state contains filters, never private novel data or frozen results.
 
-## Next 2 of 2 — Phase 2: Monthly Reading Replay
+## Next 1 of 1 — Phase 2: Monthly Reading Replay
 
 **Classification:** **rescope** of accepted/deferred Reading Wrapped; consolidation with accepted
 reading personality and the open Time Machine idea. It is one destination, with no December
@@ -269,6 +271,12 @@ dependency and no inferred personality labels in the first release.
 **Entry gate:** Phase 0 has recorded metric/recovery boundaries and Phase 1 has a usable vertical
 slice. Lack of verified lifetime recovery limits promises; it does not prevent an honestly scoped
 single-month replay.
+
+**Status: implemented locally (16 September 2026); final exit evidence remains open.** The bounded
+API, page, navigation, responsive/print rules and focused tests are present. The complete automated
+suite passes. A disposable PostgreSQL target was not available for a real DST-transition fixture,
+the print layout has not had a visual paper/PDF inspection, and the first real month has not yet
+been judged useful. These are recorded limits rather than silent passes.
 
 ### Smallest useful release
 
@@ -280,26 +288,54 @@ single-month replay.
 6. Supply honest empty and partially recorded states.
 7. Provide a narrow-screen and print-friendly layout using existing visual language and covers.
 
-### Exact proposed surfaces
+### Exact implemented surfaces
 
-- Add `frontend/src/pages/Replay.tsx` and a focused `Replay.test.tsx`.
-- Modify [`frontend/src/App.tsx`](../frontend/src/App.tsx) for UI route `/app/replay`.
-- Modify [`frontend/src/components/Layout.tsx`](../frontend/src/components/Layout.tsx) only if the
-  page earns a permanent navigation entry.
-- Modify [`frontend/src/api/client.ts`](../frontend/src/api/client.ts) for the bounded response.
-- Modify [`src/routes/stats.ts`](../src/routes/stats.ts) to aggregate in PostgreSQL.
-- Reuse [`frontend/src/components/ActivityHeatmap.tsx`](../frontend/src/components/ActivityHeatmap.tsx),
-  [`frontend/src/components/ReadingTimeline.tsx`](../frontend/src/components/ReadingTimeline.tsx),
-  [`frontend/src/pages/History.tsx`](../frontend/src/pages/History.tsx) and existing cover handling
-  where they fit without copying full-history data into the browser.
-- Add one backend regression test for month boundaries/bounded response and one focused page test.
+- Added [`frontend/src/pages/Replay.tsx`](../frontend/src/pages/Replay.tsx) and
+  [`frontend/src/pages/Replay.test.tsx`](../frontend/src/pages/Replay.test.tsx).
+- Modified [`frontend/src/App.tsx`](../frontend/src/App.tsx) for UI route `/app/replay` and
+  [`frontend/src/components/Layout.tsx`](../frontend/src/components/Layout.tsx) for the permanent
+  Replay navigation entry.
+- Modified [`frontend/src/api/client.ts`](../frontend/src/api/client.ts) and
+  [`frontend/src/types/index.ts`](../frontend/src/types/index.ts) for the bounded response.
+- Modified [`frontend/src/components/Icon.tsx`](../frontend/src/components/Icon.tsx) for the
+  existing icon wrapper and [`frontend/src/page-signatures.css`](../frontend/src/page-signatures.css)
+  for narrow-screen and print presentation.
+- Modified [`src/routes/stats.ts`](../src/routes/stats.ts) to aggregate month-bounded snapshots,
+  mutable milestones and session overlap in PostgreSQL.
+- Added [`__tests__/regression/statsReplay.test.ts`](../__tests__/regression/statsReplay.test.ts)
+  for validation, half-open bounds, numeric normalization, honest ranges, session clipping and an
+  empty leap-February response.
+- Existing cover URL handling was reused. `ActivityHeatmap`, `ReadingTimeline` and `History` were
+  inspected but not reused: they self-fetch different time windows and encode semantics that would
+  be misleading for this single bounded response.
 
-Proposed routes:
+Implemented routes:
 
 - UI: `/app/replay?month=YYYY-MM`.
 - HTTP: `GET /api/v1/stats/replay?month=YYYY-MM&timezone=Europe/London`.
-- The proposed API accepts one validated calendar month and IANA timezone and returns a bounded
+- The API accepts one validated calendar month and IANA timezone and returns a bounded
   summary. It does not return lifetime snapshots or run on socket progress events.
+
+### Local evidence recorded on 16 September 2026
+
+- The API validates `YYYY-MM` and IANA timezone input, rejects year zero, derives timezone-aware
+  half-open month/day bounds in PostgreSQL and keeps snapshot/coverage work inside that month.
+- Sessions crossing local midnight are divided proportionally by their overlap with each local
+  day. Time remains labelled estimated because the stored session value can include elapsed page
+  time.
+- The page supports a URL-preserved native month selector, cover montage, recorded facts,
+  observed chapter ranges, current saved milestones, day-by-day activity, honest empty/error
+  states, narrow layout and print CSS.
+- Milestone-only months remain visible. Recorded chapter-position coverage is described separately
+  because its range comes from snapshots, not sessions or mutable milestone dates.
+- Backend review found no release need for a new composite index in this single-user app: the
+  existing `progress_snapshots(created_at)` index bounds the month. Revisit only if multi-user
+  operation or an actual query plan demonstrates a problem.
+- Full `npm run verify` passed: 49 backend files passed and 2 database-dependent files skipped
+  (326 tests passed, 9 skipped); 18 frontend files and 113 tests passed; backend type/check,
+  frontend lint/build and userscript build passed.
+- Focused review findings for milestone-only months, month-bounded coverage wording and sessions
+  crossing midnight were fixed before the full verification run.
 
 ### Acceptance checks, from the research
 
@@ -627,21 +663,23 @@ action is implied.
 | P1a-01 URL-preserved views | `root` | Complete; local verification passed | Primary Codex integrator / current session / current effort | `main` · shared `.` | Explorer URL state, bounded parser and focused tests; sole code writer | Focused tests + frontend lint/build + root diff review | 10 focused checks; 17 files/106 tests full frontend suite; lint/build pass · 2026-09-15 | None for local slice |
 | P1a-02 Design/test audit | `url_acceptance_audit` | Complete; read-only handoff | Codex read-only sub-agent / `gpt-5.6-sol` / high | `main` · shared `.` | URL semantics and acceptance-test advice; no writes | Handoff covers invalid params, history and reset risks | Audit handoff received; root integrated · 2026-09-15 | None |
 | P1b-01 Explorer actions | `root` | Complete; re-scoped locally | Primary Codex integrator / current session / current effort | `main` · shared `.` | Explorer list-view status/progress display; Continue declined | P1b checks pass; lint/tests/build green | 17 files/109 tests, lint, build pass · 2026-09-15 | None |
-| P2-01 Monthly Replay | `root` | Backlog, gated | Primary Codex integrator / current session / current effort | `main` · shared `.` | One bounded page/API after P0 | P2 checks + bounded query + honest wording | P0 evidence and P1 usable | `root` |
+| P2-01 Monthly Replay | `root` | Implemented locally; exit evidence open | Primary Codex integrator / current session / current effort | `main` · shared `.` | One bounded page/API after P0 | P2 checks + bounded query + honest wording | 326 backend + 113 frontend tests; lint/type/build pass · 2026-09-16 | `root`: live DB DST fixture, visual print check; owner: real-month usefulness |
 | LATER-REVIEW | Later reviewers | Backlog | Unassigned until selected | None | Phase 3/4 only after promotion | Acceptance shaped before assignment | This roadmap | `root`/owner choice |
 
 ### Orchestration pass result
 
-- **Board change:** the bounded Phase 0 audit and the execution roadmap are complete; P1a and
-  re-scoped P1b are complete locally; Phase 1 is done; Phase 2 is Backlog and gated; all other
-  concrete features are Later.
-- **Completed evidence:** full frontend suite (17 files, 109 tests), frontend lint and frontend
-  build all pass locally. Covers P1a's URL hydration, remount/bookmark equivalence, Back/Forward,
-  grouped typing, atomic reset/clear, invalid values, unknown genres, detail return and SWR cache
-  updates, plus P1b's list-view status badge and honest missing-progress fallback.
-- **Pending work:** none for Phase 1. P1b's Continue link was declined by explicit owner decision
-  (Explorer stays browse/filter-only; My List owns resume actions) rather than deferred.
-- **Blockers:** none for Phase 1. Production/full-history unknowns constrain P2 durability
-  claims but do not reopen the bounded audit. Phase 4 needs the owner's later choice based on
-  actual friction or enjoyment. No merge or production deployment is claimed.
+- **Board change:** the bounded Phase 0 audit, execution roadmap and re-scoped Phase 1 are complete
+  locally. Phase 2 is implemented locally with three explicit exit observations still open. All
+  other concrete features remain Later.
+- **Completed evidence:** full verification now covers P1 and P2: 326 backend tests and 113
+  frontend tests pass, with backend type/check, frontend lint/build and userscript build green.
+  P2 adds bounded month/timezone validation, overlap-based estimated sessions, milestone-only and
+  empty/error UI cases, observed wording, navigation and narrow/print styling.
+- **Pending work:** execute the replay SQL against a disposable PostgreSQL DST-transition fixture,
+  visually inspect paper/PDF output, and use one real month. Phase 1 has no pending work; P1b's
+  Continue link remains explicitly declined because My List owns resume actions.
+- **Blockers:** the unavailable isolated database blocks only live SQL/DST proof, not the local
+  implementation. Production/full-history unknowns still constrain durability claims. Phase 4
+  needs the owner's later choice based on actual friction or enjoyment. No merge, commit, push or
+  production deployment is claimed.
 - **Reusable skill candidate:** none. Promote no project-specific workflow after one use.

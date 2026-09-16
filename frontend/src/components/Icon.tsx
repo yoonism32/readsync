@@ -24,6 +24,7 @@ import {
   BarChart3,
   CircleHelp,
   Bot,
+  Sparkles,
   type LucideProps,
 } from 'lucide-react';
 
@@ -52,6 +53,7 @@ export {
   BarChart3 as BarChartIcon,
   CircleHelp as HelpCircleIcon,
   Bot as BotIcon,
+  Sparkles as SparklesIcon,
 };
 
 export function StarIcon({

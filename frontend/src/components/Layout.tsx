@@ -12,6 +12,7 @@ import { CommandPalette } from './CommandPalette.js';
 import {
   BookOpenIcon, DashboardIcon, SearchIcon, GearIcon,
   WrenchIcon, ShieldIcon, LogOutIcon, ClockIcon, BarChartIcon,
+  SparklesIcon,
 } from './Icon.js';
 
 interface Props {
@@ -25,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/mylist', label: 'My List', Icon: BookOpenIcon },
   { to: '/explorer', label: 'Explorer', Icon: SearchIcon },
   { to: '/history', label: 'History', Icon: ClockIcon },
+  { to: '/replay', label: 'Replay', Icon: SparklesIcon },
   { to: '/stats', label: 'Stats', Icon: BarChartIcon },
   { to: '/manage', label: 'Manage', Icon: WrenchIcon },
   { to: '/settings', label: 'Settings', Icon: GearIcon },
@@ -201,6 +203,7 @@ export function Layout({ children }: Props) {
 
       {/* Top bar */}
       <header
+        className="app-header"
         style={{
           position: 'sticky',
           top: 0,

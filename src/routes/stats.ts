@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   DEFAULT_ANALYTICS_DAYS,
+  HTTP_BAD_REQUEST,
   HTTP_NOT_FOUND,
   MS_PER_DAY,
 } from '../config.js';
@@ -13,6 +14,256 @@ import { computeVelocityTrend } from '../services/StatsVelocity.js';
 import type { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
+
+const REPLAY_BOUNDS = `
+  WITH local_bounds AS (
+    SELECT ($2 || '-01')::date AS month_start,
+           (($2 || '-01')::date + interval '1 month')::date AS month_end
+  ),
+  bounds AS (
+    SELECT month_start, month_end,
+           month_start::timestamp AT TIME ZONE $3 AS utc_start,
+           month_end::timestamp AT TIME ZONE $3 AS utc_end
+    FROM local_bounds
+  )`;
+
+function isValidReplayTimeZone(value: string): boolean {
+  if (!value || value.length > 100) return false;
+  try {
+    new Intl.DateTimeFormat('en-GB', { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function nextMonthStart(month: string): string {
+  const [year, number] = month.split('-').map(Number);
+  const nextYear = number === 12 ? year + 1 : year;
+  const nextMonth = number === 12 ? 1 : number + 1;
+  return `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+}
+
+router.get('/api/v1/stats/replay', validateApiKey, async (req, res) => {
+  const { month = '', timezone = '' } = req.query as Record<string, string>;
+  const year = Number(month.slice(0, 4));
+  if (
+    !/^\d{4}-(0[1-9]|1[0-2])$/.test(month) ||
+    year < 1 ||
+    year >= 9999 ||
+    !isValidReplayTimeZone(timezone)
+  ) {
+    return res
+      .status(HTTP_BAD_REQUEST)
+      .json({ error: 'Invalid month or timezone' });
+  }
+
+  const user_id = (req as AuthenticatedRequest).user.id;
+  const params = [user_id, month, timezone];
+
+  try {
+    const [dayVisits, titleSummary, sessionDays, milestoneRows, coverageRows] =
+      await Promise.all([
+        pool.query(
+          `${REPLAY_BOUNDS}
+          SELECT to_char(p.created_at AT TIME ZONE $3, 'YYYY-MM-DD') AS date,
+                 p.novel_id, n.title,
+                 COALESCE(p.read_through_num, 1) AS read_through,
+                 MIN(p.chapter_num) FILTER (WHERE p.chapter_num IS NOT NULL) AS from_chapter,
+                 MAX(p.chapter_num) FILTER (WHERE p.chapter_num IS NOT NULL) AS to_chapter,
+                 COUNT(DISTINCT p.chapter_num) FILTER (WHERE p.chapter_num IS NOT NULL) AS observed_chapters,
+                 MIN(p.created_at) AS first_observed_at,
+                 MAX(p.created_at) AS last_observed_at
+          FROM progress_snapshots p
+          JOIN novels n ON n.id = p.novel_id
+          CROSS JOIN bounds b
+          WHERE p.user_id = $1
+            AND p.created_at >= b.utc_start
+            AND p.created_at < b.utc_end
+          GROUP BY date, p.novel_id, n.title, COALESCE(p.read_through_num, 1)
+          ORDER BY date, first_observed_at`,
+          params,
+        ),
+        pool.query(
+          `${REPLAY_BOUNDS}
+          SELECT p.novel_id, n.title,
+                 COUNT(DISTINCT (p.created_at AT TIME ZONE $3)::date) AS recorded_days,
+                 COUNT(DISTINCT (COALESCE(p.read_through_num, 1), p.chapter_num))
+                   FILTER (WHERE p.chapter_num IS NOT NULL) AS observed_chapters,
+                 MIN(p.created_at) AS first_observed_at,
+                 MAX(p.created_at) AS last_observed_at
+          FROM progress_snapshots p
+          JOIN novels n ON n.id = p.novel_id
+          CROSS JOIN bounds b
+          WHERE p.user_id = $1
+            AND p.created_at >= b.utc_start
+            AND p.created_at < b.utc_end
+          GROUP BY p.novel_id, n.title
+          ORDER BY recorded_days DESC, last_observed_at DESC, n.title`,
+          params,
+        ),
+        pool.query(
+          `${REPLAY_BOUNDS}
+          , day_bounds AS (
+            SELECT day::date AS local_day,
+                   day::date::timestamp AT TIME ZONE $3 AS utc_start,
+                   (day::date + 1)::timestamp AT TIME ZONE $3 AS utc_end
+            FROM bounds b
+            CROSS JOIN LATERAL generate_series(
+              b.month_start,
+              b.month_end - 1,
+              interval '1 day'
+            ) AS day
+          )
+          SELECT to_char(d.local_day, 'YYYY-MM-DD') AS date,
+                 ROUND(SUM(
+                   CASE
+                     WHEN EXTRACT(EPOCH FROM (s.end_time - s.start_time)) > 0
+                     THEN s.time_spent_seconds
+                       * EXTRACT(EPOCH FROM (
+                           LEAST(s.end_time, d.utc_end) - GREATEST(s.start_time, d.utc_start)
+                         ))
+                       / EXTRACT(EPOCH FROM (s.end_time - s.start_time))
+                     ELSE 0
+                   END
+                 ))::bigint AS estimated_session_seconds
+          FROM day_bounds d
+          JOIN reading_sessions s
+            ON s.start_time < d.utc_end
+           AND s.end_time > d.utc_start
+          WHERE s.user_id = $1
+            AND s.end_time IS NOT NULL
+          GROUP BY d.local_day
+          ORDER BY d.local_day`,
+          params,
+        ),
+        pool.query(
+          `${REPLAY_BOUNDS}
+          SELECT m.novel_id, n.title,
+                 CASE WHEN m.started_at >= b.utc_start AND m.started_at < b.utc_end
+                      THEN to_char(m.started_at AT TIME ZONE $3, 'YYYY-MM-DD') END AS started_on,
+                 CASE WHEN m.completed_at >= b.utc_start AND m.completed_at < b.utc_end
+                      THEN to_char(m.completed_at AT TIME ZONE $3, 'YYYY-MM-DD') END AS completed_on
+          FROM user_novel_meta m
+          JOIN novels n ON n.id = m.novel_id
+          CROSS JOIN bounds b
+          WHERE m.user_id = $1
+            AND ((m.started_at >= b.utc_start AND m.started_at < b.utc_end)
+              OR (m.completed_at >= b.utc_start AND m.completed_at < b.utc_end))
+          ORDER BY COALESCE(m.completed_at, m.started_at), n.title`,
+          params,
+        ),
+        pool.query(
+          `${REPLAY_BOUNDS}
+          SELECT MIN(p.created_at) AS first_recorded_at,
+                 MAX(p.created_at) AS last_recorded_at
+          FROM progress_snapshots p
+          CROSS JOIN bounds b
+          WHERE p.user_id = $1
+            AND p.created_at >= b.utc_start
+            AND p.created_at < b.utc_end`,
+          params,
+        ),
+      ]);
+
+    type ReplayDay = {
+      date: string;
+      estimated_session_seconds: number;
+      titles: Array<Record<string, unknown>>;
+    };
+    const days = new Map<string, ReplayDay>();
+    for (const row of dayVisits.rows) {
+      const day: ReplayDay = days.get(row.date) ?? {
+        date: row.date,
+        estimated_session_seconds: 0,
+        titles: [],
+      };
+      day.titles.push({
+        novel_id: row.novel_id,
+        title: row.title,
+        read_through: Number(row.read_through),
+        from_chapter:
+          row.from_chapter == null ? null : Number(row.from_chapter),
+        to_chapter: row.to_chapter == null ? null : Number(row.to_chapter),
+        observed_chapters: Number(row.observed_chapters),
+        first_observed_at: row.first_observed_at,
+        last_observed_at: row.last_observed_at,
+      });
+      days.set(row.date, day);
+    }
+    for (const row of sessionDays.rows) {
+      const day: ReplayDay = days.get(row.date) ?? {
+        date: row.date,
+        estimated_session_seconds: 0,
+        titles: [],
+      };
+      day.estimated_session_seconds = Number(row.estimated_session_seconds);
+      days.set(row.date, day);
+    }
+
+    const orderedDays = [...days.values()].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    const titles = titleSummary.rows.map((row) => ({
+      novel_id: row.novel_id,
+      title: row.title,
+      recorded_days: Number(row.recorded_days),
+      observed_chapters: Number(row.observed_chapters),
+      first_observed_at: row.first_observed_at,
+      last_observed_at: row.last_observed_at,
+    }));
+    const milestones = milestoneRows.rows.reduce(
+      (result, row) => {
+        if (row.started_on) {
+          result.started.push({
+            novel_id: row.novel_id,
+            title: row.title,
+            date: row.started_on,
+          });
+        }
+        if (row.completed_on) {
+          result.completed.push({
+            novel_id: row.novel_id,
+            title: row.title,
+            date: row.completed_on,
+          });
+        }
+        return result;
+      },
+      {
+        started: [] as Array<Record<string, unknown>>,
+        completed: [] as Array<Record<string, unknown>>,
+      },
+    );
+    const coverage = coverageRows.rows[0] ?? {};
+
+    res.json({
+      month,
+      timezone,
+      period: {
+        local_start: `${month}-01`,
+        local_end_exclusive: nextMonthStart(month),
+      },
+      coverage: {
+        first_recorded_at: coverage.first_recorded_at ?? null,
+        last_recorded_at: coverage.last_recorded_at ?? null,
+      },
+      summary: {
+        recorded_reading_days: orderedDays.length,
+        titles_visited: titles.length,
+        estimated_session_seconds: orderedDays.reduce(
+          (total, day) => total + day.estimated_session_seconds,
+          0,
+        ),
+      },
+      days: orderedDays,
+      titles,
+      milestones,
+    });
+  } catch (error) {
+    handleDbError(res, error, 'Get monthly reading replay');
+  }
+});
 
 router.get('/api/v1/stats/summary', validateApiKey, async (req, res) => {
   const user_id = (req as AuthenticatedRequest).user.id;
