@@ -5,10 +5,17 @@
 // extractChapterFromUrl, parseChapterEnhanced, normalizeNovelId,
 // deriveNovelBaseUrl, extractLatestChapterInfo's signals),
 // userscript/src/services/PageMetadata.ts (genre/author/cover/synopsis/
-// update-time), userscript/src/main.ts (findScrollEl), and the server-side
-// gate in src/services/ReaderUrl.ts (isReaderUrl / isReaderChapterUrl) —
+// update-time), userscript/src/main.ts (findScrollEl), the built userscript's
+// @match rules, and the server-side URL handling in src/services/ReaderUrl.ts
+// and src/services/NovelService.ts —
 // and reports FOUND/MISSING/PASS/FAIL/ERROR for each, independently, with a
-// pointer to which production file+function to touch if it's broken.
+// pointer to which production file+function to touch if it's broken. Also
+// runs a "candidate-signals" pass (untapped meta keys, misspelled variants,
+// broader synopsis selectors, and a cross-check that named-chapter signals
+// agree with each other) and a "content-safety" pass on chapter pages
+// (paywall/gate keyword scan, rough word count, next-chapter nav link) —
+// neither is read by production today, but both catch things worth knowing
+// before adopting a new site.
 //
 // Read-only. Makes zero network requests by default (opt in with
 // `window.__READSYNC_DIAG_ALLOW_FETCH__ = true` beforehand to also fetch the
@@ -59,9 +66,8 @@
   const KNOWN_READER_HOSTS = [
     // src/services/ReaderUrl.ts READER_HOSTS
     'novelbin.com', 'novelbin.me', 'novelbin.net', 'novelbin.org',
-    // handled separately in userscript code, not in READER_HOSTS, but is a
-    // live @match target — see userscript/vite.config.ts
-    'novelarrow.com',
+    'novelarrow.com', // now 302s to novelping.com; still accepted
+    'novelping.com',
   ];
 
   record('identity', 'host', KNOWN_READER_HOSTS.includes(host) ? 'PASS' : 'FAIL', host,
@@ -70,6 +76,17 @@
     'normalizeNovelId\'s route regex (userscript/src/services/ChapterDetector.ts) if the ' +
     'path segment name (/b/, /novel/, /chapter/) also changed.');
   record('identity', 'pathname', 'FOUND', pathname, '');
+
+  // userscript/vite.config.ts buildUserscriptHeader. Keep this explicit so a
+  // candidate host cannot look healthy in the DOM checks while the released
+  // userscript would never run there in the first place.
+  const userscriptWouldInject =
+    (host === 'novelarrow.com' && (/^\/novel\/[^/]+\/?$/i.test(pathname) || /^\/chapter\/[^/]+\/[^/]+\/?$/i.test(pathname))) ||
+    (/^novelbin\.(?:com|me|net|org)$/i.test(host) && /^\/b\/[^/]+(?:\/.*)?$/i.test(pathname)) ||
+    (host === 'novelping.com' && /^\/(?:novel|book)\/[^/]+(?:\/.*)?$/i.test(pathname));
+  record('identity', 'built userscript @match would inject here', userscriptWouldInject ? 'PASS' : 'FAIL', userscriptWouldInject,
+    'userscript/vite.config.ts:buildUserscriptHeader — add a @match rule for this host and ' +
+    'route shape. Parser compatibility is irrelevant until the browser actually injects ReadSync.');
 
   /* ============================================================
    * 2. URL classification — is this a chapter page or novel page?
@@ -95,7 +112,7 @@
    * ============================================================ */
 
   function normalizeNovelId(url) {
-    const m = url.match(/\/(?:b|novel|chapter)\/([^/]+)/);
+    const m = url.match(/\/(?:b|novel|chapter|book)\/([^/]+)/);
     return m ? `novelbin:${m[1].toLowerCase()}` : null;
   }
   probe('classification', 'normalizeNovelId(href)', () => normalizeNovelId(href),
@@ -131,8 +148,10 @@
     // Which branch of parseChapterEnhanced would fire, mirrored for both formats:
     const arrowMatch = pathname.match(/\/chapter\/[^/]+\/chapter-?(?:auto-(\d+)|(\d+))(?:-[^/]*)?\/?$/i);
     const standardMatch = pathname.match(/\/b\/[^/]+\/((c*)chapter)-?(\d+)(?:-[^/]*)?\/?$/i);
+    const pingMatch = pathname.match(/^\/(?:novel|book)\/[^/]+\/chapter-?(?:auto-(\d+)|(\d+))(?:-[^/]*)?\/?$/i);
     let branch = 'none-of-the-known-url-formats';
     if (arrowMatch) branch = `url-novelarrow (num=${arrowMatch[1] ?? arrowMatch[2]})`;
+    else if (pingMatch) branch = `url-novelping (num=${pingMatch[1] ?? pingMatch[2]})`;
     else if (standardMatch) branch = `url-standard/novelbin (num=${standardMatch[3]})`;
     record('chapter-page', 'parseChapterEnhanced URL branch', branch === 'none-of-the-known-url-formats' ? 'MISSING' : 'FOUND', branch,
       'ChapterDetector.ts:parseChapterEnhanced — neither known URL shape matched. On real ' +
@@ -155,6 +174,20 @@
     probe('chapter-page', 'content: document.title', () => tryContentPatterns(document.title),
       'ChapterDetector.ts:getCurrentChapterFromContent, strategy "title" — the <title> no ' +
       'longer contains a recognizable "Chapter N" phrase.');
+
+    // Stored history follows the URL index. If a site's title number differs
+    // (NovelPing supreme-magus-novel: URL chapter-1000 vs "Chapter 991"),
+    // content-first parsing would save the wrong chapter.
+    {
+      const urlNum = extractChapterFromUrl(href);
+      const titleNum = tryContentPatterns(document.title);
+      if (urlNum != null && titleNum != null) {
+        record('chapter-page', 'URL chapter index equals title chapter number', urlNum === titleNum ? 'PASS' : 'FAIL',
+          `url=${urlNum} title=${titleNum}`,
+          'The URL index and the page-title number differ on this chapter. parseChapterEnhanced must stay ' +
+          'URL-first for this host (see the url-novelping branch); a content-first parse would store the title number.');
+      }
+    }
 
     const chapterSelectors = ['[class*="title"]', '.chapter-title', '.title', '.chapter-header', '.chapter-name', '[class*="chapter"]'];
     let selectorHit = null;
@@ -225,6 +258,7 @@
     const h = u.hostname.replace(/^www\./, '');
     const p = u.pathname;
     if (h === 'novelarrow.com') return /^\/chapter\/[^/]+\/chapter-?(?:auto-\d+|\d+)(?:[-/]|$)/i.test(p);
+    if (h === 'novelping.com') return /^\/(?:novel|book)\/[^/]+\/chapter-?(?:auto-\d+|\d+)(?:[-/]|$)/i.test(p);
     return /^\/b\/[^/]+\/(?:c*chapter-?\d+|\d+)(?:[-/]|$)/i.test(p);
   }
   record('server-would-accept', 'isReaderUrl(href)', isReaderUrl(href) ? 'PASS' : 'FAIL', isReaderUrl(href),
@@ -234,6 +268,42 @@
     record('server-would-accept', 'isReaderChapterUrl(href)', isReaderChapterUrl(href) ? 'PASS' : 'FAIL', isReaderChapterUrl(href),
       'src/services/ReaderUrl.ts:isReaderChapterUrl — the API will silently drop a progress ' +
       'snapshot whose URL fails this, even if the userscript itself parsed a chapter number fine.');
+  }
+
+  // src/services/NovelService.ts repeats the slug/title/base/chapter parsing
+  // after ReaderUrl accepts a progress or bookmark request. These are a
+  // separate migration boundary from the userscript mirrors above.
+  const SERVER_NOVEL_SLUG_PATTERN = /\/(?:b|novel|chapter|book)\/([^/]+)/;
+  function serverNormalizeNovelId(url) {
+    const m = url.match(SERVER_NOVEL_SLUG_PATTERN);
+    return m ? `novelbin:${m[1].toLowerCase()}` : null;
+  }
+  function serverExtractNovelTitle(url) {
+    const m = url.match(SERVER_NOVEL_SLUG_PATTERN);
+    return m ? m[1].replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Unknown Novel';
+  }
+  function serverDeriveNovelMainUrl(url) {
+    const arrowChapter = url.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
+    if (arrowChapter) return `${arrowChapter[1]}/novel/${arrowChapter[2]}`;
+    return url.replace(/\/c*chapter-?(?:auto-\d+|\d+).*$/, '');
+  }
+  function serverParseChapterFromUrl(url) {
+    const m = url.match(/\/(c*chapter)-(?:auto-(\d+)|(\d+))(?:-\d+)?/i);
+    return m ? parseInt(m[2] ?? m[3], 10) : null;
+  }
+
+  probe('server-would-accept', 'NovelService.normalizeNovelId(href)', () => serverNormalizeNovelId(href),
+    'src/services/NovelService.ts:NOVEL_SLUG_PATTERN — add the new route segment here too; ' +
+    'otherwise progress passes URL validation but cannot be attached to a novel.');
+  record('server-would-accept', 'NovelService.extractNovelTitle(href)',
+    serverExtractNovelTitle(href) === 'Unknown Novel' ? 'FAIL' : 'PASS', serverExtractNovelTitle(href),
+    'src/services/NovelService.ts:extractNovelTitle uses the same route regex and otherwise stores "Unknown Novel".');
+  if (looksLikeChapter) {
+    const serverBase = serverDeriveNovelMainUrl(href);
+    record('server-would-accept', 'NovelService.deriveNovelMainUrl(href)', serverBase !== href ? 'PASS' : 'FAIL', serverBase,
+      'src/services/NovelService.ts:deriveNovelMainUrl — the server could not reduce this chapter URL to its novel landing page.');
+    probe('server-would-accept', 'NovelService.parseChapterFromUrl(href)', () => serverParseChapterFromUrl(href),
+      'src/services/NovelService.ts:parseChapterFromUrl — update its chapter-token regex for this route.');
   }
 
   /* ============================================================
@@ -272,6 +342,17 @@
     return /^https:\/\/[^/]*\/.+/.test(url) ? url : null;
   }, 'PageMetadata.ts:extractCoverUrl — no usable og:image meta tag.');
 
+  const coverMeta = document.querySelector('meta[property="og:image"], meta[name="og:image"]');
+  const coverCandidate = (coverMeta && coverMeta.getAttribute('content') || '').trim();
+  let coverAccepted = false;
+  try {
+    const cover = new URL(coverCandidate);
+    coverAccepted = cover.protocol === 'https:' && !cover.username && !cover.password && !cover.port &&
+      KNOWN_READER_HOSTS.some(readerHost => cover.hostname === `images.${readerHost}`);
+  } catch { /* reported as false below */ }
+  record('server-would-accept', 'isReaderCoverUrl(og:image)', coverAccepted ? 'PASS' : 'FAIL', coverCandidate || null,
+    'src/services/ReaderUrl.ts:isReaderCoverUrl — add the candidate cover CDN shape or auto-update will discard the cover URL.');
+
   probe('metadata', 'extractUpdateTime()', () => {
     const meta = document.querySelector('meta[name="og:novel:update_time"], meta[property="og:novel:update_time"]');
     const c = meta && meta.getAttribute('content') && meta.getAttribute('content').trim();
@@ -285,6 +366,11 @@
     }
     return null;
   }, 'PageMetadata.ts:extractUpdateTime — no update-time meta or matching time-ish selector.');
+
+  probe('metadata', 'extractSynopsis() — NovelPing #novel-description-content', () => {
+    const el = document.querySelector('#novel-description-content');
+    return el ? ((el.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 60) || null) : null;
+  }, 'PageMetadata.ts:extractSynopsis — #novel-description-content is missing or empty (NovelPing layout).');
 
   probe('metadata', 'extractSynopsis() — modern NovelArrow layout', () => {
     const heading = Array.from(document.querySelectorAll('span')).find(el => (el.textContent || '').trim() === 'Synopsis');
@@ -346,6 +432,84 @@
   probe('latest-chapter-signals', 'chapter-list container', () => chapterListHit,
     'ChapterDetector.ts Strategy 3 — none of ' + chapterListSelectors.join(', ') + ' matched.');
 
+  const pathParts = pathname.split('/');
+  const currentSectionIndex = pathParts.findIndex(p => p === 'b' || p === 'novel' || p === 'chapter' || p === 'book');
+  const currentNovelSlug = currentSectionIndex >= 0 ? (pathParts[currentSectionIndex + 1] || '') : '';
+  probe('latest-chapter-signals', 'novel slug for latest-chapter fetch/cache', () => currentNovelSlug || null,
+    'ChapterDetector.ts:extractLatestChapterInfo — add the candidate route segment to the ' +
+    'b|novel|chapter section lookup and its same-novel link selector. Without this, a chapter-page ' +
+    'fetch can discover the real latest chapter but cannot cache or return it for this novel.');
+
+  /* ============================================================
+   * 7b. Candidate signals — not read by production today, but worth
+   * checking before concluding a site "lacks" a signal. Covers cases found
+   * in practice: a site shipping the same data under a misspelled meta key
+   * (novelping.com's "lastest_chapter_name"), or naming its synopsis
+   * container "description" instead of "synopsis".
+   * ============================================================ */
+
+  const typoMeta = document.querySelector('meta[name="og:novel:lastest_chapter_name"], meta[property="og:novel:lastest_chapter_name"]');
+  probe('candidate-signals', 'meta og:novel:lastest_chapter_name (typo spelling)', () => typoMeta && (typoMeta.getAttribute('content') || '').trim(),
+    'Not queried by production (which only checks the correctly-spelled "latest"). If this is ' +
+    'FOUND while the correctly-spelled key above is MISSING, the site just spells it differently ' +
+    '— add this key as a fallback in extractLatestChapterInfo rather than treating the site as ' +
+    'lacking the signal entirely.');
+  probe('candidate-signals', 'meta og:novel:lastest_chapter_url (typo spelling, direct chapter URL)', () => {
+    const m = document.querySelector('meta[name="og:novel:lastest_chapter_url"], meta[property="og:novel:lastest_chapter_url"]');
+    return m && (m.getAttribute('content') || '').trim();
+  }, 'Even more useful than the name variant if present — a direct URL to the latest chapter, no ' +
+    'number-parsing required at all.');
+  probe('candidate-signals', 'meta og:novel:novel_name (clean title, unused by PageMetadata.ts today)', () => {
+    const m = document.querySelector('meta[property="og:novel:novel_name"], meta[name="og:novel:novel_name"]');
+    return m && (m.getAttribute('content') || '').trim();
+  }, '');
+  probe('candidate-signals', 'meta og:novel:status (ongoing/completed, unused today)', () => {
+    const m = document.querySelector('meta[property="og:novel:status"], meta[name="og:novel:status"]');
+    return m && (m.getAttribute('content') || '').trim();
+  }, '');
+  probe('candidate-signals', 'meta og:novel:read_url (start-reading shortcut, unused today)', () => {
+    const m = document.querySelector('meta[property="og:novel:read_url"], meta[name="og:novel:read_url"]');
+    return m && (m.getAttribute('content') || '').trim();
+  }, '');
+  probe('candidate-signals', 'synopsis via broader [class*="description"] selector', () => {
+    const el = document.querySelector('[class*="description" i]');
+    return el ? (el.tagName + (el.className ? '.' + String(el.className).split(' ')[0] : '') + ': ' + (el.textContent || '').trim().slice(0, 80)) : null;
+  }, 'PageMetadata.ts:extractSynopsis — add [class*="description"] as another legacy fallback ' +
+    'selector alongside [class*="synopsis"].');
+
+  // Cross-check: do the named-chapter signals actually agree with each
+  // other? A real disagreement here is exactly the failure shape the
+  // 2026-08-06 incident comment in ChapterDetector.ts warns about — surface
+  // it explicitly instead of leaving it buried in separate FOUND rows.
+  {
+    const readNum = (text) => {
+      const m = text && text.match(/Chapter\s+(\d+)/i);
+      return m ? parseInt(m[1], 10) : null;
+    };
+    const correctMeta = document.querySelector('meta[name="og:novel:latest_chapter_name"], meta[property="og:novel:latest_chapter_name"]');
+    const lChapterEl = document.querySelector('.l-chapter .chapter-title');
+    const signals = {
+      'og:latest (correct spelling)': readNum(correctMeta && correctMeta.getAttribute('content')),
+      'og:lastest (typo spelling)': readNum(typoMeta && typoMeta.getAttribute('content')),
+      '.l-chapter': readNum(lChapterEl && lChapterEl.textContent),
+      // production (extractLatestChapterInfo) prefers the link's href number over its text
+      '.l-chapter href': (() => {
+        const m = ((lChapterEl && lChapterEl.getAttribute('href')) || '').match(/chapter-?(?:auto-)?(\d+)/i);
+        return m ? parseInt(m[1], 10) : null;
+      })(),
+    };
+    const present = Object.entries(signals).filter(([, v]) => v != null);
+    const distinctValues = new Set(present.map(([, v]) => v));
+    if (present.length >= 2) {
+      record('candidate-signals', 'named-chapter-signal agreement', distinctValues.size === 1 ? 'PASS' : 'FAIL',
+        JSON.stringify(Object.fromEntries(present)),
+        distinctValues.size === 1 ? '' :
+        'These named signals disagree on the actual latest chapter number. Do not assume either ' +
+        'is correct — open the higher one directly and confirm it exists and its title matches ' +
+        'before trusting it.');
+    }
+  }
+
   /* ============================================================
    * 8. Base-URL derivation (used to fetch the novel's main page for
    * chapter-count corroboration) — no network call unless opted in.
@@ -354,9 +518,9 @@
   function deriveNovelBaseUrl(currentUrl) {
     const arrowMatch = currentUrl.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)\//);
     if (arrowMatch) return `${arrowMatch[1]}/novel/${arrowMatch[2]}`;
-    let base = currentUrl.replace(/\/c*chapter-?\d+.*$/, '').replace(/\/\d+[-][^/]*$/, '');
+    let base = currentUrl.replace(/\/c*chapter-?(?:auto-\d+|\d+).*$/, '').replace(/\/\d+[-][^/]*$/, '');
     if (base === currentUrl) {
-      const baseMatch = currentUrl.match(/(https?:\/\/[^/]+\/(?:b|novel)\/[^/]+)\//);
+      const baseMatch = currentUrl.match(/(https?:\/\/[^/]+\/(?:b|novel|book)\/[^/]+)\//);
       if (baseMatch) base = baseMatch[1];
     }
     return base;
@@ -375,10 +539,77 @@
   }
 
   /* ============================================================
+   * 9. Gated/paywall heuristic + chapter-to-chapter navigation
+   * (chapter pages only). Neither check exists in production yet — these
+   * are exploratory, catching a failure mode that hasn't hit a known site
+   * but is common on aggregators: a "chapter" page that's actually a
+   * paywall/login interstitial, which would silently break scroll-based
+   * progress tracking (the reader never reaches real content to scroll).
+   * ============================================================ */
+
+  if (looksLikeChapter) {
+    const gateKeywords = /premium chapter|unlock (?:this )?chapter|subscribe to (?:read|continue)|sign in to (?:read|continue)|log in to (?:read|continue)|(?:spend|costs?|pay) \d+ coins?|advance chapters?|members? only/i;
+    const bodyText = (document.body && document.body.innerText) || '';
+    const gateHit = bodyText.match(gateKeywords);
+    record('content-safety', 'paywall/gate keyword scan', gateHit ? 'FAIL' : 'PASS', gateHit ? gateHit[0] : 'none found',
+      gateHit ? 'This chapter page contains gate-like wording (' + JSON.stringify(gateHit[0]) + '). If ' +
+      'this is a locked/premium chapter, the actual chapter text may be replaced by a paywall ' +
+      'prompt — verify the scroll container found above actually contains chapter prose, not an ' +
+      'unlock interstitial, before trusting progress-sync on gated chapters.' : '');
+
+    const wordCount = bodyText.trim().split(/\s+/).filter(Boolean).length;
+    record('content-safety', 'rough page word count (sanity, not a real chapter-length check)', wordCount > 300 ? 'PASS' : 'FAIL', wordCount,
+      wordCount > 300 ? '' : 'Suspiciously short for a chapter page — could be a gate/interstitial, an ' +
+      'ad-heavy stub, or a chapter that genuinely is this short. Eyeball the actual page.');
+
+    const navLink = Array.from(document.querySelectorAll('a[rel="next"], a'))
+      .find(a => a.getAttribute('rel') === 'next' || /^next(\s+chapter)?$/i.test((a.textContent || '').trim()));
+    probe('content-safety', 'next-chapter nav link', () => navLink && navLink.getAttribute('href'),
+      'No next-chapter link found by rel="next" or "Next"/"Next Chapter" text — if this site has ' +
+      'one under different wording, buildChapterPath-style next/prev navigation would need a new ' +
+      'selector to find it.');
+
+    // Mirrors userscript/src/services/NavLinks.ts as used by main.ts:navigate:
+    // Stage 2 takes the first ENABLED, RENDERED aria-labelled button
+    // (findAriaChapterButton) and Stage 2b the first a.js-chapter-nav link with a
+    // real href (findChapterNavAnchor). Hidden same-labelled controls (NovelPing's
+    // 0x0 audio-player buttons) are ignored, so they are reported, not failed.
+    // MISSING (not FAIL) when neither exists: normal at the end/start of a chain
+    // (the disabled end is <a href="javascript:void(0)">).
+    for (const direction of ['Next', 'Previous']) {
+      const ariaSel = `button[aria-label="${direction} chapter" i],button[title="${direction} chapter" i]`;
+      const ariaButtons = Array.from(document.querySelectorAll(ariaSel));
+      const usableButton = ariaButtons.find(b => {
+        const r = b.getBoundingClientRect();
+        return !b.hasAttribute('disabled') && r.width > 0 && r.height > 0;
+      });
+      const label = direction === 'Next' ? /^next/i : /^prev/i;
+      const navAnchor = Array.from(document.querySelectorAll('a.js-chapter-nav')).find(a =>
+        label.test((a.textContent || '').trim()) && /^(?:https?:\/\/|\/)/i.test(a.getAttribute('href') || ''));
+      const via = usableButton ? 'aria-button' : navAnchor ? `a.js-chapter-nav → ${navAnchor.getAttribute('href')}` : null;
+      record('content-safety', `navigate(${direction.toLowerCase()}) resolves to a usable control`,
+        via ? 'PASS' : 'MISSING',
+        { via, ignoredHiddenOrDisabledAriaButtons: ariaButtons.length - (usableButton ? 1 : 0) },
+        'No enabled+rendered aria button and no a.js-chapter-nav link with a real href. Expected at the ' +
+        'start/end of a chain; otherwise main.ts:navigate would fall through to the later stages.');
+    }
+
+    const proseContainer = document.querySelector('#chapter, .chapter, [itemprop="articleBody"], .chapter-content');
+    const proseWordCount = ((proseContainer && proseContainer.textContent) || '').trim().split(/\s+/).filter(Boolean).length;
+    record('content-safety', 'chapter prose container word count', proseWordCount > 300 ? 'PASS' : 'FAIL',
+      proseContainer ? {
+        element: `${proseContainer.tagName}${proseContainer.id ? '#' + proseContainer.id : ''}`,
+        words: proseWordCount,
+      } : null,
+      proseWordCount > 300 ? '' : 'No substantial chapter-specific prose container was found. The whole-page ' +
+      'word count can be inflated by navigation, comments, or modal content, so inspect the reader selector before migration.');
+  }
+
+  /* ============================================================
    * Report
    * ============================================================ */
 
-  const order = ['identity', 'classification', 'chapter-page', 'server-would-accept', 'metadata', 'latest-chapter-signals'];
+  const order = ['identity', 'classification', 'chapter-page', 'server-would-accept', 'metadata', 'latest-chapter-signals', 'candidate-signals', 'content-safety'];
   const bySection = {};
   for (const r of results) (bySection[r.section] ||= []).push(r);
 
@@ -410,4 +641,8 @@
   } else {
     console.log('Core sync pipeline has at least one broken check above — start there before worrying about metadata.');
   }
+
+  const report = { url: href, isChapterPage: looksLikeChapter, failCount, errorCount, missingCount, results };
+  window.__READSYNC_DIAG_LAST_REPORT__ = report;
+  return report;
 })();
