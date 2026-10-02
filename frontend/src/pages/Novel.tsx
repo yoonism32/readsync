@@ -19,6 +19,7 @@ import { RateNovel } from '../components/RateNovel.js';
 import { DeviceBadge } from '../components/DeviceBadge.js';
 import { StarIcon, ExternalLinkIcon, CrownIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
+import { siteLabel } from '../lib/siteLabel.js';
 import type { Novel, NovelSynopsis } from '../types/index.js';
 
 function SynopsisPanel({ novelId }: { novelId: string }) {
@@ -199,14 +200,14 @@ export function NovelPage() {
               textDecoration: 'none',
             }}
           >
-            {novel.latest_url ? 'Continue Reading →' : 'Open on NovelArrow →'}
+            {novel.latest_url ? 'Continue Reading →' : `Open on ${siteLabel(novel.primary_url)} →`}
           </a>
 
           <span style={{ flex: 1 }} />
 
           {/* Secondary actions stack down the right rather than widening into a
               second horizontal bar. Only shown when the primary button is
-              "Continue Reading" — otherwise it already opens NovelArrow. */}
+              "Continue Reading" — otherwise it already opens the source site. */}
           {novel.latest_url && novel.primary_url && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
               <a
@@ -223,7 +224,7 @@ export function NovelPage() {
                 }}
               >
                 <ExternalLinkIcon size={14} />
-                Open on NovelArrow
+                Open on {siteLabel(novel.primary_url)}
               </a>
             </div>
           )}

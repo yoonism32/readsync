@@ -96,6 +96,17 @@ describe('novel page actions', () => {
     expect(resume.getAttribute('href')).toContain('chapter-2');
   });
 
+  it('names the host the link actually opens (NovelPing)', async () => {
+    mocks.fetchNovels.mockResolvedValue([
+      novel({ primary_url: 'https://novelping.com/novel/nine-star-hegemon-body-arts' }),
+    ]);
+
+    renderNovel();
+
+    const open = await screen.findByRole('link', { name: /open on novelping/i });
+    expect(open).toHaveProperty('href', 'https://novelping.com/novel/nine-star-hegemon-body-arts');
+  });
+
   it('sets the browser title to the novel title', async () => {
     mocks.fetchNovels.mockResolvedValue([novel()]);
 

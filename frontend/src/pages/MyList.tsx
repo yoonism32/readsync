@@ -252,7 +252,7 @@ export function MyList() {
           My List
         </h1>
         <p className="text-muted" style={{ fontSize: 'var(--text-sm)', marginTop: 2 }}>
-          {counts.all ?? 0} novels tracked on NovelArrow.
+          {counts.all ?? 0} novels tracked.
         </p>
       </div>
 
