@@ -46,7 +46,7 @@ function refreshSingleNovel(novel: Novel): Promise<RefreshOutcome> {
       resolve(outcome);
     };
 
-    // The userscript posts from the novelarrow tab with target '*';
+    // The userscript posts from the opened novel tab (NovelPing) with target '*';
     // match strictly on shape + novel id rather than origin.
     const onMessage = (event: MessageEvent) => {
       const data = event.data as UpdateSignal | undefined;

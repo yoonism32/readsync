@@ -22,7 +22,7 @@ function injectUserscriptHeader(header: string): Plugin {
 
 function buildUserscriptHeader(userscriptUrl: string): string {
   return `// ==UserScript==
-// @name         ReadSync ++ NovelArrow Enhanced Navigation Helper
+// @name         ReadSync ++ NovelPing Enhanced Navigation Helper
 // @namespace    CustomNamespace
 // @version      ${pkg.version}
 // @description  A/D nav, W/S scroll, Shift+S autoscroll, Shift+H help, progress bar, hover % pill, restore banner (top-only), max-progress save, #nbp=xx.x resume links + middle-left discoverable copy button (desktop) + CROSS-DEVICE SYNC + stable device IDs + ROBUST CONTENT-BASED CHAPTER DETECTION + FLEXIBLE URL FORMAT SUPPORT + NUMBER-PREFIX URL SUPPORT + PARENT WINDOW COMMUNICATION + SPA ROUTE-CHANGE HANDLING
