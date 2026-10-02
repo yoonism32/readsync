@@ -132,6 +132,25 @@ describe('NovelPing grammar (/book/<slug> and /novel/<slug>) — additive to Nov
     expect(deriveNovelMainUrl(url)).toBe(expected);
   });
 
+  // ReaderUrl.isReaderChapterUrl accepts chapter-auto-<N> URLs (57 stored snapshots use
+  // them), so every helper downstream must understand them too. Otherwise a bookmark on
+  // one stores the CHAPTER url as the novel's primary_url, and fallback progress parsing
+  // returns null. auto-<N> is the real number; the trailing digits come from the source title.
+  it.each([
+    'https://novelping.com/novel/some-novel/chapter-auto-282-auto-282-145-title',
+    'https://novelping.com/book/some-novel/chapter-auto-42',
+  ])('deriveNovelMainUrl strips a chapter-auto URL: %s', (url) => {
+    expect(deriveNovelMainUrl(url)).toBe(url.replace(/\/chapter-auto.*$/, ''));
+  });
+
+  it.each([
+    ['https://novelping.com/novel/some-novel/chapter-auto-282-auto-282-145-title', 282],
+    ['https://novelping.com/book/some-novel/chapter-auto-42', 42],
+    ['https://novelarrow.com/chapter/some-novel/chapter-auto-7-title', 7],
+  ])('parseChapterFromUrl reads the auto number: %s -> %i', (url, num) => {
+    expect(parseChapterFromUrl(url)?.num).toBe(num);
+  });
+
   it('healDeadSiteUrl leaves NovelPing URLs untouched', () => {
     const url = 'https://novelping.com/book/shadow-slave/chapter-10-first-man-down';
     expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(url);

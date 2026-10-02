@@ -38,7 +38,7 @@ export function extractNovelTitle(url: string): string {
 export function deriveNovelMainUrl(url: string): string {
   const arrowChapter = url.match(/^(https?:\/\/[^/]+)\/chapter\/([^/]+)/);
   if (arrowChapter) return `${arrowChapter[1]}/novel/${arrowChapter[2]}`;
-  return url.replace(/\/c*chapter-?\d+.*$/, '');
+  return url.replace(/\/c*chapter-?(?:auto-\d+|\d+).*$/, '');
 }
 
 const DEAD_DOMAIN_PATTERN = /^https?:\/\/(www\.)?novelbin\.(com|me|net|org)\//i;
@@ -69,9 +69,11 @@ export function healDeadSiteUrl(
 }
 
 export function parseChapterFromUrl(url: string): ChapterInfo | null {
-  const m = url.match(/\/(c*chapter)-(\d+)(?:-\d+)?/i);
+  // "chapter-auto-<N>" carries the real number; digits after it come from the
+  // original source title (see userscript extractChapterFromUrl).
+  const m = url.match(/\/(c*chapter)-(?:auto-(\d+)|(\d+))(?:-\d+)?/i);
   if (!m) return null;
-  return { token: m[1], num: parseInt(m[2], DECIMAL_RADIX) };
+  return { token: m[1], num: parseInt(m[2] ?? m[3], DECIMAL_RADIX) };
 }
 
 export function detectDeviceType(
