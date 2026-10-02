@@ -31,23 +31,29 @@ export function Th({ label, sortable, active, asc, onClick, align = 'center', to
         cursor: sortable ? 'pointer' : 'default', userSelect: 'none',
       }}
     >
-      <span style={{ display: 'block', textAlign: align }}>{label}{active && (asc ? ' ▲' : ' ▼')}</span>
-      {toggle && (
-        <button
-          type="button"
-          className={`progress-mode-toggle${toggle.active ? ' active' : ''}`}
-          onClick={e => { e.stopPropagation(); toggle.onClick(); }}
-          title={toggle.title}
-          aria-label={toggle.title}
-          style={{
-            position: 'absolute', right: -18, top: '50%', transform: 'translateY(-50%)',
-            background: 'none', border: 'none', padding: 0, lineHeight: 1,
-            fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer',
-          }}
-        >
-          {toggle.symbol}
-        </button>
-      )}
+      <span style={{ display: 'block', textAlign: align }}>
+        {/* The mode toggle is anchored to the label itself, not the whole header cell, so
+            it stays beside the text however tall or oddly positioned the cell gets. */}
+        <span style={toggle ? { position: 'relative', display: 'inline-block' } : undefined}>
+          {label}{active && (asc ? ' ▲' : ' ▼')}
+          {toggle && (
+            <button
+              type="button"
+              className={`progress-mode-toggle${toggle.active ? ' active' : ''}`}
+              onClick={e => { e.stopPropagation(); toggle.onClick(); }}
+              title={toggle.title}
+              aria-label={toggle.title}
+              style={{
+                position: 'absolute', left: '100%', marginLeft: 6, top: '50%', transform: 'translateY(-50%)',
+                background: 'none', border: 'none', padding: 0, lineHeight: 1,
+                fontSize: 'var(--text-xs)', fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              {toggle.symbol}
+            </button>
+          )}
+        </span>
+      </span>
     </th>
   );
 }
