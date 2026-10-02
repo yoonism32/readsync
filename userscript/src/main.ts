@@ -19,6 +19,7 @@ import {
 } from './services/UIManager.js';
 import { postAutoUpdate } from './api/client.js';
 import { uploadCoverIfNeeded } from './services/CoverUploader.js';
+import { findAriaChapterButton, findChapterNavAnchor } from './services/NavLinks.js';
 import type { NovelUpdateMessage } from './types/index.js';
 
 /* ===== Debug helper ===== */
@@ -287,11 +288,14 @@ function navigate(direction: 'next' | 'previous'): void {
   // no reload, and correct even across numbering gaps (bonus/split chapters)
   // that the number-guessing stage below can't account for.
   if (!link) {
-    link = document.querySelector(direction === 'next'
-      ? 'button[aria-label="Next chapter" i],button[title="Next chapter" i]'
-      : 'button[aria-label="Previous chapter" i],button[title="Previous chapter" i]');
-    if (link?.hasAttribute('disabled')) link = null;
+    // First enabled, rendered match: NovelPing keeps 0×0 audio-player buttons
+    // with these same labels that must not shadow the real controls/links.
+    link = findAriaChapterButton(document, direction) as HTMLButtonElement | null;
   }
+
+  // Stage 2b: NovelPing reader links (a.js-chapter-nav) — real hrefs, so the
+  // numbering/slug guesswork of the later stages is never needed there.
+  if (!link) link = findChapterNavAnchor(document, direction) as HTMLAnchorElement | null;
 
   // Stage 3: NovelArrow — hydrated links to adjacent chapters of this novel,
   // as a fallback for when Stage 2's button isn't present/found. Chapter URLs
@@ -334,8 +338,10 @@ function navigate(direction: 'next' | 'previous'): void {
     const info = parseChapterEnhanced(location.pathname);
     if (info) {
       const n = info.num + (direction === 'next' ? 1 : -1);
-      if (n >= 1) {
-        const newPath = buildChapterPath(location.pathname, info.token, n);
+      const newPath = n >= 1 ? buildChapterPath(location.pathname, info.token, n) : location.pathname;
+      // buildChapterPath only rewrites NovelBin /b/ paths; on any other route it
+      // returns the path unchanged, and "navigating" there would just reload.
+      if (newPath !== location.pathname) {
         console.log(`🧭 Fallback build ${direction}: ${newPath}`);
         location.href = newPath;
         return;
@@ -344,7 +350,9 @@ function navigate(direction: 'next' | 'previous'): void {
   }
 
   // Stage 7: Navigate — follow the href when there is one, otherwise click
-  // the element (NovelArrow's SPA buttons navigate via their React handler)
+  // the element (NovelArrow's SPA buttons navigate via their React handler).
+  // A disabled end-of-chain link (<a href="javascript:void(0)">) is neither.
+  if (link && /^javascript:/i.test((link as HTMLAnchorElement).href ?? '')) link = null;
   const href = (link as HTMLAnchorElement | null)?.href;
   if (href) {
     console.log(`🧭 Using ${direction} link:`, href);

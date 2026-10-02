@@ -57,6 +57,10 @@ function buildUserscriptHeader(userscriptUrl: string): string {
 // @match        https://www.novelbin.net/b/*
 // @match        https://novelbin.org/b/*
 // @match        https://www.novelbin.org/b/*
+// @match        https://novelping.com/novel/*
+// @match        https://novelping.com/book/*
+// @connect      images.novelarrow.com
+// @connect      images.novelping.com
 // @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // ==/UserScript==

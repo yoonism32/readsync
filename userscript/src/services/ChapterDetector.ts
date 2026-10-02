@@ -4,6 +4,31 @@ import type { ChapterInfo, LatestChapterInfo } from '../types/index.js';
 const LOG_TAG = 'ReadSync';
 const log = (...args: unknown[]) => { try { console.debug(`[${LOG_TAG}]`, ...args); } catch { /* */ } };
 
+// NovelPing misspells the meta key ("lastest"); NovelArrow/NovelBin spell it "latest".
+const LATEST_CHAPTER_META_SELECTOR = [
+  'meta[name="og:novel:latest_chapter_name"]',
+  'meta[property="og:novel:latest_chapter_name"]',
+  'meta[name="og:novel:lastest_chapter_name"]',
+  'meta[property="og:novel:lastest_chapter_name"]',
+].join(', ');
+
+// Path of a link's href. Chapter numbers must come from the path only: NovelPing's
+// logged-out "Login" link is /login-email?next=%2Fbook%2F<slug>%2Fchapter-N-..., and
+// matching the whole href made it a "chapter link" titled "Login".
+const hrefPath = (href: string): string => {
+  try {
+    return new URL(href, 'https://readsync.invalid').pathname;
+  } catch {
+    return href;
+  }
+};
+
+// Same-novel chapter links: NovelBin /b/, NovelArrow /chapter/, NovelPing /book/ and /novel/.
+const sameNovelLinkSelector = (slug: string): string =>
+  [`/b/${slug}/`, `/chapter/${slug}/`, `/book/${slug}/`, `/novel/${slug}/`]
+    .map((prefix) => `a[href*="${prefix}"]`)
+    .join(', ');
+
 /* ===== URL normalization ===== */
 
 export function normalizePath(path: string): string {
@@ -17,10 +42,11 @@ export function normalizeUrl(href: string): string {
 }
 
 export function normalizeNovelId(url: string): string | null {
-  // NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...
-  // Slugs are identical across both sites, so both normalize to the same
-  // legacy "novelbin:" ID to preserve existing reading history.
-  const match = url.match(/\/(?:b|novel|chapter)\/([^/]+)/);
+  // NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...;
+  // NovelPing serves /novel/<slug> and /book/<slug>. Slugs are identical across
+  // all of them, so every grammar normalizes to the same legacy "novelbin:" ID
+  // to preserve existing reading history.
+  const match = url.match(/\/(?:b|novel|chapter|book)\/([^/]+)/);
   return match ? `novelbin:${match[1].toLowerCase()}` : null;
 }
 
@@ -131,7 +157,7 @@ export function deriveNovelBaseUrl(currentUrl: string): string {
     .replace(/\/\d+[-][^/]*$/, '');
 
   if (base === currentUrl) {
-    const baseMatch = currentUrl.match(/(https?:\/\/[^/]+\/(?:b|novel)\/[^/]+)\//);
+    const baseMatch = currentUrl.match(/(https?:\/\/[^/]+\/(?:b|novel|book)\/[^/]+)\//);
     if (baseMatch) base = baseMatch[1];
   }
 
@@ -192,9 +218,7 @@ export function extractLatestChapterInfo(
     // Strategy 0: og:novel:latest_chapter_name meta — server-rendered on
     // NovelArrow novel pages (name= attr) and NovelBin (property= attr).
     // Content looks like "Chapter 3118 Dying City".
-    const latestMeta = document.querySelector<HTMLMetaElement>(
-      'meta[name="og:novel:latest_chapter_name"], meta[property="og:novel:latest_chapter_name"]',
-    );
+    const latestMeta = document.querySelector<HTMLMetaElement>(LATEST_CHAPTER_META_SELECTOR);
     if (latestMeta) {
       const content = latestMeta.getAttribute('content')?.trim() ?? '';
       const num = extractChapterNum(content);
@@ -230,8 +254,9 @@ export function extractLatestChapterInfo(
     }
 
     const pathParts = location.pathname.split('/');
-    // Slug follows the /b/ (NovelBin), /novel/ or /chapter/ (NovelArrow) segment
-    const sectionIndex = pathParts.findIndex(p => p === 'b' || p === 'novel' || p === 'chapter');
+    // Slug follows the /b/ (NovelBin), /novel/ or /chapter/ (NovelArrow), or
+    // /book/ or /novel/ (NovelPing) segment
+    const sectionIndex = pathParts.findIndex(p => p === 'b' || p === 'novel' || p === 'chapter' || p === 'book');
     const novelSlug = sectionIndex >= 0 ? (pathParts[sectionIndex + 1] ?? '') : '';
 
     let maxChapter = 0;
@@ -239,7 +264,7 @@ export function extractLatestChapterInfo(
 
     // Strategy 1: Links with "chapter" in href
     document.querySelectorAll<HTMLAnchorElement>('a[href*="chapter"]').forEach(link => {
-      const hrefMatch = link.href.match(/chapter-?(?:auto-(\d+)|(\d+))/i);
+      const hrefMatch = hrefPath(link.href).match(/chapter-?(?:auto-(\d+)|(\d+))/i);
       if (hrefMatch) {
         const num = parseInt(hrefMatch[1] ?? hrefMatch[2], 10);
         if (num > maxChapter) {
@@ -252,7 +277,7 @@ export function extractLatestChapterInfo(
 
     // Strategy 2: Links to same novel (catches number-prefix format)
     if (novelSlug) {
-      document.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"], a[href*="/chapter/${novelSlug}/"]`).forEach(link => {
+      document.querySelectorAll<HTMLAnchorElement>(sameNovelLinkSelector(novelSlug)).forEach(link => {
         const num = extractChapterFromUrl(link.href);
         if (num && num > maxChapter) {
           maxChapter = num;
@@ -329,16 +354,14 @@ export function extractLatestChapterInfo(
           let mainPageMax = maxChapter;
 
           // Meta tag is the most reliable source on the fetched novel page
-          const fetchedMeta = mainPageDoc.querySelector<HTMLMetaElement>(
-            'meta[name="og:novel:latest_chapter_name"], meta[property="og:novel:latest_chapter_name"]',
-          );
+          const fetchedMeta = mainPageDoc.querySelector<HTMLMetaElement>(LATEST_CHAPTER_META_SELECTOR);
           if (fetchedMeta) {
             const metaNum = extractChapterNum(fetchedMeta.getAttribute('content') ?? '');
             if (metaNum && metaNum > mainPageMax) mainPageMax = metaNum;
           }
 
           mainPageDoc.querySelectorAll<HTMLAnchorElement>('a[href*="chapter"]').forEach(link => {
-            const match = link.href.match(/chapter-?(\d+)/i);
+            const match = hrefPath(link.href).match(/chapter-?(\d+)/i);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > mainPageMax) mainPageMax = num;
@@ -346,7 +369,7 @@ export function extractLatestChapterInfo(
           });
 
           if (novelSlug) {
-            mainPageDoc.querySelectorAll<HTMLAnchorElement>(`a[href*="/b/${novelSlug}/"], a[href*="/chapter/${novelSlug}/"]`).forEach(link => {
+            mainPageDoc.querySelectorAll<HTMLAnchorElement>(sameNovelLinkSelector(novelSlug)).forEach(link => {
               const num = extractChapterFromUrl(link.href);
               if (num && num > mainPageMax) mainPageMax = num;
             });
@@ -507,6 +530,16 @@ export function parseChapterEnhanced(pathname: string): ChapterInfo | null {
       source: 'url-novelarrow',
     };
     log('Using chapter from URL (NovelArrow format):', res);
+    return res;
+  }
+
+  // NovelPing (/novel|book/<slug>/chapter-N[-title]): the URL index is what
+  // stored history follows. The title number can differ mid-novel (URL
+  // chapter-1000 carries the title "Chapter 991"), so content must not win.
+  const pingMatch = pathname.match(/^\/(?:novel|book)\/[^/]+\/chapter-?(?:auto-(\d+)|(\d+))(?:-[^/]*)?\/?$/i);
+  if (pingMatch) {
+    const res: ChapterInfo = { token: 'chapter', num: parseInt(pingMatch[1] ?? pingMatch[2], 10), source: 'url-novelping' };
+    log('Using chapter from URL (NovelPing format):', res);
     return res;
   }
 

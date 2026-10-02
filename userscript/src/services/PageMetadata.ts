@@ -116,6 +116,10 @@ export async function extractSynopsis(): Promise<string | null> {
       return readSynopsisContainer(modernContainer);
     }
 
+    // NovelPing: server-rendered description block.
+    const pingDescription = document.querySelector('#novel-description-content');
+    if (pingDescription) return readSynopsisContainer(pingDescription);
+
     // Legacy NovelArrow/NovelBin fallbacks.
     const dtEls = Array.from(document.querySelectorAll('dt'));
     const synopsisDt = dtEls.find(dt => /^synopsis:?$/i.test(dt.textContent?.trim() ?? ''));
