@@ -2,7 +2,8 @@
 
 Cross-device reading progress sync for web novels. A userscript (Tampermonkey,
 Violentmonkey, or any other GM-compatible manager) tracks your scroll position
-on NovelArrow/NovelBin chapter pages and syncs it to the server as you read;
+on NovelPing chapter pages (legacy NovelArrow/NovelBin links are still recognised)
+and syncs it to the server as you read;
 the dashboard picks up new progress live over Socket.IO (`chapters:updated`
 and `progress:updated` events patch/refetch the SWR cache), with a 30-minute
 SWR poll as a fallback if the socket connection drops.
