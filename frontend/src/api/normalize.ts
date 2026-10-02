@@ -6,6 +6,7 @@
 // The legacy vanilla dashboard consumes that shape directly, so the
 // server response must not change; the React app flattens it here.
 
+import { toNovelPingUrl } from '../lib/siteLabel.js';
 import type { DeviceProgress, Novel, NovelStatus, ReadThroughEntry } from '../types/index.js';
 
 export interface RawLatestProgress {
@@ -81,7 +82,7 @@ export function normalizeNovel(raw: RawNovel): Novel {
   return {
     novel_id: raw.novel_id,
     title: raw.title,
-    primary_url: raw.primary_url,
+    primary_url: toNovelPingUrl(raw.primary_url),
     author: raw.author,
     genre: raw.genre,
     status: raw.status,

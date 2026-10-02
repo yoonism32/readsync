@@ -72,6 +72,16 @@ describe('normalizeNovel', () => {
     expect(n.latest_read_at).toBe('2026-08-02T10:00:00Z');
   });
 
+  it('shows the NovelPing URL for a stored NovelArrow primary_url (NovelArrow now redirects there)', () => {
+    // Until migration 020 rewrites the column, the API still returns the old host;
+    // the "Open on ..." button, My List links and Refresh All all read this field.
+    expect(normalizeNovel(baseRaw).primary_url).toBe('https://novelping.com/novel/martial-peak');
+    expect(
+      normalizeNovel({ ...baseRaw, primary_url: 'https://novelping.com/novel/martial-peak' }).primary_url,
+    ).toBe('https://novelping.com/novel/martial-peak');
+    expect(normalizeNovel({ ...baseRaw, primary_url: null }).primary_url).toBeNull();
+  });
+
   it('maps latest_per_device into devices_reading with device_id and created_at', () => {
     const n = normalizeNovel(baseRaw);
     expect(n.devices_reading).toHaveLength(2);
