@@ -57,23 +57,84 @@ describe('parseChapterFromUrl — chapter number from both grammars', () => {
   });
 });
 
-describe('healDeadSiteUrl — dead novelbin URLs fall back to the novelarrow novel page', () => {
+describe('healDeadSiteUrl — dead hosts heal to NovelPing', () => {
   it.each([
-    ['https://novelbin.com/b/shadow-slave/chapter-100', 'https://novelarrow.com/novel/shadow-slave'],
-    ['https://www.novelbin.me/b/shadow-slave/chapter-5', 'https://novelarrow.com/novel/shadow-slave'],
-    ['https://novelbin.net/b/shadow-slave', 'https://novelarrow.com/novel/shadow-slave'],
+    ['https://novelbin.com/b/shadow-slave/chapter-100', 'https://novelping.com/novel/shadow-slave'],
+    ['https://www.novelbin.me/b/shadow-slave/chapter-5', 'https://novelping.com/novel/shadow-slave'],
+    ['https://novelbin.net/b/shadow-slave', 'https://novelping.com/novel/shadow-slave'],
   ])('%s -> %s', (url, expected) => {
     expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(expected);
   });
 
-  it('leaves novelarrow URLs untouched (deep links preserved)', () => {
-    const url = 'https://novelarrow.com/chapter/shadow-slave/chapter-10-first-man-down';
-    expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(url);
+  // novelarrow.com 302s to novelping.com with exactly this mapping (title slug
+  // preserved); 22 real stored URLs were verified live on 2026-10-02.
+  it.each([
+    [
+      'https://novelarrow.com/chapter/shadow-slave/chapter-10-first-man-down',
+      'https://novelping.com/novel/shadow-slave/chapter-10-first-man-down',
+    ],
+    [
+      'https://novelarrow.com/chapter/x/chapter-auto-282-auto-282-145-title',
+      'https://novelping.com/novel/x/chapter-auto-282-auto-282-145-title',
+    ],
+    ['https://novelarrow.com/novel/shadow-slave', 'https://novelping.com/novel/shadow-slave'],
+    ['https://www.novelarrow.com/novel/shadow-slave', 'https://novelping.com/novel/shadow-slave'],
+  ])('novelarrow deep link %s -> %s', (url, expected) => {
+    expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(expected);
+  });
+
+  it('keeps the #nbp resume fragment and query on a healed deep link', () => {
+    expect(
+      healDeadSiteUrl('https://novelarrow.com/chapter/shadow-slave/chapter-10-x?a=1#nbp=42.5', 'novelbin:shadow-slave'),
+    ).toBe('https://novelping.com/novel/shadow-slave/chapter-10-x?a=1#nbp=42.5');
   });
 
   it('passes through null/undefined as null', () => {
     expect(healDeadSiteUrl(null, 'novelbin:x')).toBeNull();
     expect(healDeadSiteUrl(undefined, 'novelbin:x')).toBeNull();
+  });
+});
+
+describe('NovelPing grammar (/book/<slug> and /novel/<slug>) — additive to NovelArrow/NovelBin', () => {
+  it.each([
+    ['https://novelping.com/book/shadow-slave', 'novelbin:shadow-slave'],
+    ['https://novelping.com/book/supreme-magus-novel/chapter-2', 'novelbin:supreme-magus-novel'],
+    ['https://novelping.com/novel/supreme-magus-novel/chapter-2', 'novelbin:supreme-magus-novel'],
+    ['https://novelping.com/book/Unsheathed', 'novelbin:unsheathed'],
+  ])('normalizeNovelId %s -> %s', (url, id) => {
+    expect(normalizeNovelId(url)).toBe(id);
+  });
+
+  it('does not treat a slug that merely contains "book" as a route segment', () => {
+    expect(normalizeNovelId('https://novelping.com/')).toBeNull();
+    expect(normalizeNovelId('https://novelping.com/handbook-of-x')).toBeNull();
+  });
+
+  it('extractNovelTitle works on /book/', () => {
+    expect(extractNovelTitle('https://novelping.com/book/nine-star-hegemon-body-arts/chapter-1')).toBe(
+      'Nine Star Hegemon Body Arts',
+    );
+  });
+
+  it.each([
+    ['https://novelping.com/book/nine-star-hegemon-body-arts/chapter-7268-leaving', 7268],
+    ['https://novelping.com/novel/supreme-magus-novel/chapter-1000', 1000],
+    ['https://novelping.com/book/i-can-devour-monsters-sss-talents/chapter-1-the-second-failure', 1],
+  ])('parseChapterFromUrl %s -> %i', (url, num) => {
+    expect(parseChapterFromUrl(url)?.num).toBe(num);
+  });
+
+  it.each([
+    ['https://novelping.com/book/some-novel/chapter-7268-leaving', 'https://novelping.com/book/some-novel'],
+    ['https://novelping.com/novel/some-novel/chapter-2', 'https://novelping.com/novel/some-novel'],
+    ['https://novelping.com/book/some-novel', 'https://novelping.com/book/some-novel'],
+  ])('deriveNovelMainUrl %s -> %s', (url, expected) => {
+    expect(deriveNovelMainUrl(url)).toBe(expected);
+  });
+
+  it('healDeadSiteUrl leaves NovelPing URLs untouched', () => {
+    const url = 'https://novelping.com/book/shadow-slave/chapter-10-first-man-down';
+    expect(healDeadSiteUrl(url, 'novelbin:shadow-slave')).toBe(url);
   });
 });
 

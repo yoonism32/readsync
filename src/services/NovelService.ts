@@ -13,10 +13,11 @@ import type {
   ProgressState,
 } from '../types/index.js';
 
-// NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...
-// Slugs are identical across both sites, so both normalize to the same legacy
-// "novelbin:" ID to preserve existing reading history.
-const NOVEL_SLUG_PATTERN = /\/(?:b|novel|chapter)\/([^/]+)/;
+// NovelBin used /b/<slug>; NovelArrow uses /novel/<slug> and /chapter/<slug>/...;
+// NovelPing serves /novel/<slug> and /book/<slug>. Slugs are identical across
+// all of them, so every grammar normalizes to the same legacy "novelbin:" ID to
+// preserve existing reading history.
+const NOVEL_SLUG_PATTERN = /\/(?:b|novel|chapter|book)\/([^/]+)/;
 
 export function normalizeNovelId(url: string): string | null {
   const match = url.match(NOVEL_SLUG_PATTERN);
@@ -41,23 +42,30 @@ export function deriveNovelMainUrl(url: string): string {
 }
 
 const DEAD_DOMAIN_PATTERN = /^https?:\/\/(www\.)?novelbin\.(com|me|net|org)\//i;
+const NOVELARROW_URL_PATTERN =
+  /^https?:\/\/(?:www\.)?novelarrow\.com\/(?:chapter|novel)\/([^/?#]+)(.*)$/i;
 
 /**
- * Historic progress/bookmark URLs may point at dead novelbin domains.
- * NovelArrow chapter URLs require a title slug we can't reconstruct from a
- * chapter number, so the best stable target is the novel's NovelArrow page
- * (derivable from the ID, since slugs are identical across both sites).
- * Progress URLs self-heal to real deep links as chapters are read on the
- * new site.
+ * Historic progress/bookmark URLs point at hosts we no longer open.
+ *
+ * novelarrow.com now 302s to novelping.com with a lossless mapping
+ * (/chapter/<slug>/<rest> -> /novel/<slug>/<rest>, /novel/<slug> unchanged; title
+ * slug, query and #nbp fragment preserved), so stored deep links are rewritten
+ * at read time to skip the redirect. Dead novelbin domains can't be mapped to a
+ * chapter URL, so they fall back to the novel's NovelPing page (derivable from
+ * the ID, since slugs are identical across sites). Nothing is rewritten in the
+ * database; progress URLs self-heal to real deep links as chapters are read.
  */
 export function healDeadSiteUrl(
   url: string | null | undefined,
   novelId: string,
 ): string | null {
   if (!url) return null;
+  const arrow = url.match(NOVELARROW_URL_PATTERN);
+  if (arrow) return `https://novelping.com/novel/${arrow[1]}${arrow[2]}`;
   if (!DEAD_DOMAIN_PATTERN.test(url)) return url;
   const slug = novelId.replace(/^novelbin:/, '');
-  return `https://novelarrow.com/novel/${slug}`;
+  return `https://novelping.com/novel/${slug}`;
 }
 
 export function parseChapterFromUrl(url: string): ChapterInfo | null {

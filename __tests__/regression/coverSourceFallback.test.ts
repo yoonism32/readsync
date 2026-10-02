@@ -25,20 +25,20 @@ import {
 describe('sourceCoverUrl', () => {
   it('strips the novelbin: prefix the ids still carry', () => {
     expect(sourceCoverUrl('novelbin:nine-star-hegemon-body-arts')).toBe(
-      'https://images.novelarrow.com/novel/nine-star-hegemon-body-arts.jpg',
+      'https://images.novelping.com/novel/nine-star-hegemon-body-arts.jpg',
     );
   });
 
   it('leaves an unprefixed id alone', () => {
     expect(sourceCoverUrl('shadow-slave')).toBe(
-      'https://images.novelarrow.com/novel/shadow-slave.jpg',
+      'https://images.novelping.com/novel/shadow-slave.jpg',
     );
   });
 
   it('only strips the prefix at the start', () => {
     // A slug that merely contains the word must not be mangled.
     expect(sourceCoverUrl('novelbin:a-novelbin:story')).toBe(
-      'https://images.novelarrow.com/novel/a-novelbin:story.jpg',
+      'https://images.novelping.com/novel/a-novelbin:story.jpg',
     );
   });
 });

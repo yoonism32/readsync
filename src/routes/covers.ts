@@ -61,7 +61,7 @@ export function normalizeSlug(novelId: string): string {
 
 /** Where the cover lives on the source site. */
 export function sourceCoverUrl(novelId: string): string {
-  return `https://images.novelarrow.com/novel/${normalizeSlug(novelId)}.jpg`;
+  return `https://images.novelping.com/novel/${normalizeSlug(novelId)}.jpg`;
 }
 
 /**
@@ -116,7 +116,7 @@ async function fetchCoverWithRetry(
         headers: {
           'User-Agent':
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          Referer: 'https://novelarrow.com/',
+          Referer: 'https://novelping.com/',
         },
       });
 

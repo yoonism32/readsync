@@ -4,6 +4,9 @@ export const READER_HOSTS = [
   'novelbin.me',
   'novelbin.net',
   'novelbin.org',
+  // novelarrow.com now 302s here; kept alongside it until NovelArrow is phased
+  // out (docs/NOVELPING_MIGRATION.md).
+  'novelping.com',
 ];
 
 export function isReaderUrl(value: unknown): boolean {
@@ -38,6 +41,15 @@ export function isReaderChapterUrl(value: unknown): boolean {
 
   if (host === 'novelarrow.com') {
     return /^\/chapter\/[^/]+\/chapter-?(?:auto-\d+|\d+)(?:[-/]|$)/i.test(path);
+  }
+
+  if (host === 'novelping.com') {
+    // Serves both /novel/<slug>/chapter-N[-title] and /book/<slug>/chapter-N[-title];
+    // /chapter/<slug>/... is a 404 there, so it is deliberately not accepted.
+    // (NovelArrow's "chapter-auto-<N>-..." numbering carried over and is served.)
+    return /^\/(?:novel|book)\/[^/]+\/chapter-?(?:auto-\d+|\d+)(?:[-/]|$)/i.test(
+      path,
+    );
   }
 
   return /^\/b\/[^/]+\/(?:c*chapter-?\d+|\d+)(?:[-/]|$)/i.test(path);
