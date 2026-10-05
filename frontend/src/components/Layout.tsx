@@ -292,7 +292,7 @@ export function Layout({ children }: Props) {
             ref={navRef}
             aria-label="Main navigation"
             style={{
-              display: 'flex', gap: 2, flex: 1, overflowX: 'auto', scrollbarWidth: 'none',
+              display: 'flex', gap: 2, flex: '0 1 auto', overflowX: 'auto', scrollbarWidth: 'none',
               maskImage: navOverflowing ? 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)' : 'none',
               WebkitMaskImage: navOverflowing ? 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)' : 'none',
             }}
@@ -350,7 +350,7 @@ export function Layout({ children }: Props) {
             className="header-search"
             onClick={() => window.dispatchEvent(new Event('readsync:open-palette'))}
             style={{
-              display: 'flex', alignItems: 'center', gap: 8, height: 40, padding: '0 12px', width: 240,
+              display: 'flex', alignItems: 'center', gap: 8, height: 40, padding: '0 12px', width: 240, marginLeft: 'auto',
               flexShrink: 0, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
               background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)',
               font: 'inherit', fontSize: 'var(--text-sm)', cursor: 'pointer', minWidth: 0,
