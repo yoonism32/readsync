@@ -356,6 +356,24 @@ p {
   border-radius: var(--radius-md);
 }
 
+/* Heatmap loading placeholder: same grid metrics as the real chart so nothing
+   shifts on arrival; a pulse sweeps left to right across the week columns. */
+@keyframes heatmap-wave {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
+
+.heatmap-skeleton-cell {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  animation: heatmap-wave 1.6s ease-in-out infinite;
+  animation-delay: calc(var(--col) * 30ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .heatmap-skeleton-cell { animation: none; opacity: 0.6; }
+}
+
 /* ── Responsive nav labels ───────────────────────────────── */
 
 @media (max-width: 600px) {

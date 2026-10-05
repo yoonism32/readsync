@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
+import { ChevronDown } from 'lucide-react';
 import { auth, setApiKey } from '../api/client.js';
 import { applyProgressUpdate } from '../api/normalize.js';
 import type { RawLatestProgress } from '../api/normalize.js';
@@ -21,17 +22,30 @@ interface Props {
 
 type NavItem = { to: string; label: string; Icon: React.ComponentType<{ size?: number }> };
 
-const NAV: NavItem[] = [
+const PRIMARY: NavItem[] = [
   { to: '/dashboard', label: 'Dashboard', Icon: DashboardIcon },
   { to: '/mylist', label: 'My List', Icon: BookOpenIcon },
   { to: '/explorer', label: 'Explorer', Icon: SearchIcon },
   { to: '/history', label: 'History', Icon: ClockIcon },
-  { to: '/replay', label: 'Replay', Icon: SparklesIcon },
   { to: '/stats', label: 'Stats', Icon: BarChartIcon },
+];
+const MORE: NavItem[] = [
+  { to: '/replay', label: 'Replay', Icon: SparklesIcon },
   { to: '/manage', label: 'Manage', Icon: WrenchIcon },
   { to: '/settings', label: 'Settings', Icon: GearIcon },
   { to: '/admin', label: 'Admin', Icon: ShieldIcon },
 ];
+const NAV = [...PRIMARY, ...MORE]; // still used by the document.title effect
+
+const navStyle = (isActive: boolean): React.CSSProperties => ({
+  position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 7,
+  padding: '0 12px', height: 52, borderRadius: 'var(--radius-md)',
+  fontSize: 'var(--text-base)', fontWeight: 500,
+  color: isActive ? 'var(--color-accent-bright)' : 'var(--color-text-muted)',
+  background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
+  transition: 'background 0.15s, color 0.15s',
+  whiteSpace: 'nowrap', flexShrink: 0, textDecoration: 'none',
+});
 
 export function Layout({ children }: Props) {
   const location = useLocation();
@@ -51,6 +65,22 @@ export function Layout({ children }: Props) {
   // highlight pill) for no reason, e.g. "My List" being first meant its
   // pill's left edge always looked cut off behind the logo.
   const [navOverflowing, setNavOverflowing] = useState(false);
+
+  // Stores the path the menu was opened on, so navigating away closes it
+  // without a setState-in-effect.
+  const [moreOpenPath, setMoreOpenPath] = useState<string | null>(null);
+  const moreOpen = moreOpenPath === location.pathname;
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreActive = MORE.some(i => location.pathname.startsWith(i.to));
+
+  useEffect(() => {
+    if (!moreOpen) return;
+    const onDown = (e: MouseEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMoreOpenPath(null); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMoreOpenPath(null); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [moreOpen]);
 
   useEffect(() => {
     const nav = navRef.current;
@@ -267,60 +297,75 @@ export function Layout({ children }: Props) {
               WebkitMaskImage: navOverflowing ? 'linear-gradient(to right, transparent, black 16px, black calc(100% - 16px), transparent)' : 'none',
             }}
           >
-            {NAV.map(({ to, label, Icon }) => (
-              <NavLink
-                key={to}
-                to={to}
-                aria-label={label}
-                style={({ isActive }) => ({
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  padding: '0 12px',
-                  height: 52,
-                  borderRadius: 'var(--radius-md)',
-                  fontSize: 'var(--text-base)',
-                  fontWeight: 500,
-                  color: isActive ? 'var(--color-text)' : 'var(--color-text-muted)',
-                  background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  transition: 'background 0.15s, color 0.15s',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                  textDecoration: 'none',
-                })}
-              >
+            {PRIMARY.map(({ to, label, Icon }) => (
+              <NavLink key={to} to={to} aria-label={label} style={({ isActive }) => navStyle(isActive)}>
                 <Icon size={16} />
                 <span className="nav-label">{label}</span>
               </NavLink>
             ))}
           </nav>
 
-          <HelpPanel />
-          <NotificationBell />
+          {/* Outside <nav>: its overflowX would clip the dropdown. */}
+          <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={moreOpen}
+              onClick={() => setMoreOpenPath(moreOpen ? null : location.pathname)}
+              style={{ ...navStyle(moreActive), border: 'none', font: 'inherit', cursor: 'pointer', minWidth: 0 }}
+            >
+              <span className="nav-label">More</span>
+              <ChevronDown size={14} />
+            </button>
+            {moreOpen && (
+              <div
+                role="menu"
+                style={{
+                  position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 200, padding: 4,
+                  background: 'var(--color-bg-raised)', border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-lg)', boxShadow: '0 12px 32px rgba(0,0,0,0.5)',
+                  zIndex: 'var(--z-dropdown, 60)', display: 'flex', flexDirection: 'column', gap: 2,
+                }}
+              >
+                {MORE.map(({ to, label, Icon }) => (
+                  <NavLink key={to} to={to} role="menuitem" style={({ isActive }) => ({ ...navStyle(isActive), height: 40, width: '100%' })}>
+                    <Icon size={16} />{label}
+                  </NavLink>
+                ))}
+                <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 6px' }} />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => { void handleLogout(); }}
+                  style={{ ...navStyle(false), height: 40, width: '100%', border: 'none', font: 'inherit', cursor: 'pointer', minWidth: 0 }}
+                >
+                  <LogOutIcon size={16} />Sign out
+                </button>
+              </div>
+            )}
+          </div>
 
-          {/* Logout */}
           <button
-            onClick={() => { void handleLogout(); }}
-            aria-label="Log out"
-            className="muted-btn"
+            type="button"
+            className="header-search"
+            onClick={() => window.dispatchEvent(new Event('readsync:open-palette'))}
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 7,
-              height: 52,
-              padding: '0 14px',
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              fontSize: 'var(--text-base)',
-              borderRadius: 'var(--radius-md)',
-              flexShrink: 0,
-              touchAction: 'manipulation',
+              display: 'flex', alignItems: 'center', gap: 8, height: 40, padding: '0 12px', width: 240,
+              flexShrink: 0, border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)',
+              background: 'rgba(255,255,255,0.06)', color: 'var(--color-text-muted)',
+              font: 'inherit', fontSize: 'var(--text-sm)', cursor: 'pointer', minWidth: 0,
             }}
           >
-            <LogOutIcon size={16} />
-            <span className="nav-label">Sign out</span>
+            <SearchIcon size={15} />
+            <span style={{ flex: 1, textAlign: 'left' }}>Search or jump to…</span>
+            <kbd style={{
+              fontFamily: 'ui-monospace, Menlo, monospace', fontSize: 12, color: 'var(--color-text-faint)',
+              border: '1px solid var(--color-border)', borderRadius: 4, padding: '1px 5px',
+            }}>⌘K</kbd>
           </button>
+
+          <HelpPanel />
+          <NotificationBell />
         </div>
       </header>
 

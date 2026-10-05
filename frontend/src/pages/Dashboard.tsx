@@ -5,77 +5,17 @@ import useSWR from 'swr';
 import { swrFetcher, fetchNovels, formatTimestamp } from '../api/client.js';
 import { BehindBadge } from '../components/BehindBadge.js';
 import { ActivityHeatmap } from '../components/ActivityHeatmap.js';
+import { NeedsYou } from '../components/NeedsYou.js';
 import { OnThisDay } from '../components/OnThisDay.js';
 import { ProgressBar } from '../components/ProgressBar.js';
 import { StatusBadge } from '../components/StatusBadge.js';
 import { Spinner } from '../components/Spinner.js';
 import { LoadError, PageLoading } from '../components/PageFeedback.js';
-import { FlameIcon } from '../components/Icon.js';
 import { useNow } from '../hooks/useNow.js';
 import { behindCount } from '../lib/behindStatus.js';
 import { computeStreaks } from '../lib/streaks.js';
 import type { DailyActivity } from '../lib/streaks.js';
 import type { Novel, StatsSummary } from '../types/index.js';
-
-/**
- * Tier 1: a figure you act on. Reads loud when it has a value, quiet at zero.
- * `tone` picks the active-state accent — 'debt' (default) for catch-up
- * metrics, 'positive' for good-news ones — so a streak doesn't compete for
- * attention using the same alarm color as "novels behind". Fixes the
- * Impeccable audit's "both leading numbers are bad news" finding by giving
- * the row a positive card to lead with.
- */
-function AttentionStat({
-  label,
-  value,
-  sub,
-  tone = 'debt',
-}: {
-  label: string;
-  value: number | null;
-  sub?: string;
-  tone?: 'debt' | 'positive';
-}) {
-  const active = value !== null && value > 0;
-  const border = tone === 'positive' ? 'var(--color-teal-border)' : 'var(--color-accent-border)';
-  const glow = tone === 'positive' ? 'var(--color-teal-glow)' : 'var(--color-accent-glow)';
-  const bright = tone === 'positive' ? 'var(--color-teal-bright)' : 'var(--color-accent-bright)';
-  return (
-    <div
-      className="panel"
-      style={{
-        borderRadius: 'var(--radius-xl)',
-        padding: '18px 22px',
-        borderColor: active ? border : 'var(--color-border)',
-        background: active ? glow : 'var(--color-bg-card)',
-      }}
-    >
-      <div
-        className="text-muted"
-        style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}
-      >
-        {label}
-      </div>
-      <div
-        className="tabular"
-        style={{
-          fontSize: 'var(--text-3xl)',
-          lineHeight: 1.1,
-          fontWeight: 700,
-          fontFamily: 'var(--font-display)',
-          color: active ? bright : 'var(--color-text-faint)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-        }}
-      >
-        {tone === 'positive' && active && <FlameIcon size={22} />}
-        {value ?? '—'}
-      </div>
-      {sub && <div className="text-faint" style={{ fontSize: 'var(--text-xs)', marginTop: 4 }}>{sub}</div>}
-    </div>
-  );
-}
 
 /** Tier 2: a reference figure. Present, not competing for attention. */
 function MinorStat({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -153,7 +93,19 @@ export function Dashboard() {
       {novelsError && <LoadError subject="the latest library changes" onRetry={() => retryNovels()} />}
       {dailyError && <LoadError subject="reading activity" onRetry={() => retryDaily()} />}
 
-      {continueNovel?.latest_url && <ResumeReading key={continueNovel.novel_id} novel={continueNovel} />}
+      <div className="dashboard-top">
+        {continueNovel?.latest_url
+          ? <ResumeReading key={continueNovel.novel_id} novel={continueNovel} />
+          : <div />}
+        <NeedsYou
+          novels={novelsData ?? []}
+          novelsBehind={libraryStats.novelsBehind}
+          newChapters={libraryStats.newChapters}
+          syncConflicts={libraryStats.syncConflicts}
+          devices={stats?.active_devices ?? libraryStats.totalDevices}
+          streak={dailyData ? streak : null}
+        />
+      </div>
 
       <ActivityHeatmap />
 
@@ -207,31 +159,6 @@ export function Dashboard() {
           section) to avoid the layout shift a single combined spinner
           caused (CLS 0.874) when the two tiers settled at different times. */}
       <div className="dashboard-summary" style={{ marginBottom: 32 }}>
-        {/* Tier 1 — the three you act on. Each goes quiet at zero, so a
-            caught-up library reads calm instead of shouting three noughts. */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
-            gap: 12,
-            marginBottom: 14,
-          }}
-        >
-          <AttentionStat
-            label="Day streak"
-            value={dailyData ? streak.current : null}
-            sub={streak.longest > streak.current ? `best ${streak.longest}` : undefined}
-            tone="positive"
-          />
-          <AttentionStat label="Novels behind" value={libraryStats.novelsBehind} />
-          <AttentionStat label="New chapters" value={libraryStats.newChapters} />
-          <AttentionStat
-            label="Sync conflicts"
-            value={libraryStats.syncConflicts}
-            sub={libraryStats.syncConflicts > 0 ? 'Devices disagree on chapter' : undefined}
-          />
-        </div>
-
         {/* Tier 2 — reference figures. Dense, quiet, scannable. */}
         {statsLoading ? (
           <div className="panel" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '14px 18px', minHeight: 76, borderRadius: 'var(--radius-lg)' }}><Spinner /></div>

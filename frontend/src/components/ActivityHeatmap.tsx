@@ -73,9 +73,53 @@ function StreakStat({
   );
 }
 
+const SKELETON_WEEKS = 53;
+
+/** Loading placeholder: same panel and grid metrics as the real chart. */
+function HeatmapSkeleton() {
+  return (
+    <div
+      className="panel activity-heatmap"
+      role="status"
+      aria-label="Loading reading activity"
+      style={{ borderRadius: 'var(--radius-xl)', padding: 20, marginBottom: 32 }}
+    >
+      <div style={{ marginBottom: 16 }}>
+        <div className="skeleton" style={{ width: 140, height: 22, marginBottom: 6 }} />
+        <div className="skeleton" style={{ width: 200, height: 14 }} />
+      </div>
+      <div className="activity-heatmap-scroll" aria-hidden="true">
+        <div
+          className="activity-heatmap-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `${LABEL_COL}px repeat(${SKELETON_WEEKS}, ${CELL_SIZE}px)`,
+            gridTemplateRows: `${MONTH_ROW}px repeat(7, ${CELL_SIZE}px)`,
+            columnGap: `var(--heatmap-gap, ${GAP}px)`,
+            rowGap: `var(--heatmap-gap, ${GAP}px)`,
+            width: 'fit-content',
+          }}
+        >
+          {Array.from({ length: SKELETON_WEEKS * 7 }, (_, i) => (
+            <div
+              key={i}
+              className="heatmap-skeleton-cell"
+              style={{
+                gridColumn: Math.floor(i / 7) + 2,
+                gridRow: (i % 7) + 2,
+                ['--col' as string]: Math.floor(i / 7),
+              }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ActivityHeatmap() {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const { data } = useSWR<DailyRow[]>(
+  const { data, error } = useSWR<DailyRow[]>(
     `/stats/daily?days=${DAYS}`,
     swrFetcher,
     {
@@ -92,6 +136,8 @@ export function ActivityHeatmap() {
     return () => cancelAnimationFrame(frame);
   }, [data]);
 
+  // Dashboard surfaces the fetch error itself, so only show the placeholder while loading.
+  if (!data && !error) return <HeatmapSkeleton />;
   if (!data || data.length === 0) return null;
 
   const byDate = new Map(

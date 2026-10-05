@@ -60,6 +60,12 @@ export function CommandPalette() {
   }, []);
 
   useEffect(() => {
+    const openFromEvent = () => { setOpen(true); setQuery(''); setCursor(0); };
+    window.addEventListener('readsync:open-palette', openFromEvent);
+    return () => window.removeEventListener('readsync:open-palette', openFromEvent);
+  }, []);
+
+  useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
 

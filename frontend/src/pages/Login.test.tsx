@@ -94,7 +94,9 @@ describe('sign-in', () => {
     await expectSignedIn();
 
     mocks.status.mockResolvedValue({ authenticated: false });
-    await user.click(screen.getByRole('button', { name: /log out/i }));
+    // Sign out now lives in the header's More menu.
+    await user.click(screen.getByRole('button', { name: /more/i }));
+    await user.click(screen.getByRole('menuitem', { name: /sign out/i }));
     await screen.findByRole('button', { name: /sign in/i });
 
     // The session is valid again from here on.
