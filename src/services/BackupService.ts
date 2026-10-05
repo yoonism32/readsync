@@ -18,7 +18,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY ?? '';
 const BUCKET = 'readsync-backups';
 
 export const BACKUPS_TO_KEEP = 30;
-const BACKUP_MIN_AGE_HOURS = 20;
+export const BACKUP_MIN_AGE_HOURS = 20;
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const BOOT_DELAY_MS = 60 * 1000;
 
@@ -34,20 +34,35 @@ export interface BackupFileInfo {
 }
 
 export async function listBackups(userId: string): Promise<BackupFileInfo[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase.storage.from(BUCKET).list(userId, {
-    limit: 100,
-    sortBy: { column: 'name', order: 'desc' },
-  });
-  if (error) {
+  return (await getBackupInventory(userId)).files;
+}
+
+/** Preserve the distinction between no backups and an unavailable store. */
+export async function getBackupInventory(userId: string): Promise<{
+  status: 'available' | 'not_configured' | 'unavailable';
+  files: BackupFileInfo[];
+  truncated: boolean;
+}> {
+  if (!supabase)
+    return { status: 'not_configured', files: [], truncated: false };
+  try {
+    const { data, error } = await supabase.storage.from(BUCKET).list(userId, {
+      limit: 100,
+      sortBy: { column: 'name', order: 'desc' },
+    });
+    if (error) {
+      throw error;
+    }
+    const files = (data ?? []).map((f) => ({
+      name: f.name,
+      created_at: f.created_at ?? '',
+      size: (f.metadata as { size?: number } | null)?.size ?? 0,
+    }));
+    return { status: 'available', files, truncated: files.length === 100 };
+  } catch (error) {
     logger.warn({ error, userId }, 'Backup list failed');
-    return [];
+    return { status: 'unavailable', files: [], truncated: false };
   }
-  return (data ?? []).map((f) => ({
-    name: f.name,
-    created_at: f.created_at ?? '',
-    size: (f.metadata as { size?: number } | null)?.size ?? 0,
-  }));
 }
 
 async function touchLastBackupAttempt(

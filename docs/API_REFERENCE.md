@@ -184,3 +184,45 @@ behaviorally; the dead plumbing is just gone now.
 | Method | Path | Auth | Notes |
 |---|---|---|---|
 | GET | `/u/:token/readsync.user.js` | Path token (`USERSCRIPT_UPDATE_TOKEN`) | Serves `dist-userscript/readsync.user.js`; `Cache-Control: no-cache` so GM-API managers (Tampermonkey, Violentmonkey) can poll `@updateURL`/`@downloadURL` outside any session. No session auth is possible here, so the path itself carries a timing-safe-compared secret token instead — the built file embeds a live API key, and the token keeps the URL from being guessable; `404` on a wrong/missing token or if the userscript hasn't been built |
+
+## Personal status report
+
+`GET /api/v1/status` returns an on-demand JSON overview of the authenticated
+account. Use an existing signed-in browser session or an `Authorization: Bearer`
+API key header. Anonymous requests receive HTTP 401. Responses use
+`Cache-Control: private, no-store`. No public report page is added.
+
+| Field | Contents |
+| --- | --- |
+| `generated_at` | UTC time at which the report was assembled |
+| `report_status` | `complete`, or `partial` when backup storage cannot be checked |
+| `service` | Database query success and server uptime in seconds |
+| `library` | Account's non-removed novels, counts by reading status, known unread chapters |
+| `reading` | Up to eight recently read novels with IDs, titles, current read-through, bookmark chapter/percent, last-read date, and unread counts; last recorded reader sync, active device count, and completed-session duration |
+| `refresh` | Last recorded refresh, reminder interval, next due time, and latest library metadata update |
+| `storage` | Account's saved snapshot/session/bookmark/note counts and listed backup files' byte size |
+| `backups` | Storage availability, last recorded success/attempt, and next backup eligibility time |
+
+The recent-reading positions follow the dashboard's current read-through and
+progress-reset cutoff. Manual bookmark corrections do not create reading
+activity; an explicit last-read override is respected. Removed novels are
+excluded from the library/recent-reading sections, but their retained records
+still count toward saved data. Null positions and unread counts mean unknown.
+
+Refresh due times are **reminders**, not automatic jobs (`automatic: false`).
+The last refresh timestamp does not prove that every novel refreshed
+successfully; per-novel refresh outcomes currently live only in the browser.
+Backup eligibility is not an exact run time: the existing scheduler checks every
+six hours while the server runs. With no prior attempt, a configured backup is
+eligible at the next scheduler check. `last_attempt_at` is the last *recorded*
+attempt, not an audit of every network failure.
+
+`backup_bytes` covers backup files only, not PostgreSQL disk usage or cover images.
+It is null when storage is unavailable or unconfigured, and zero for a reachable
+empty backup inventory. The inventory is bounded to 100 files;
+`backup_inventory_truncated: true` means the count/bytes may be partial.
+
+This report does not replace `/health` for frequent Kuma checks: it queries
+personal records and backup storage. A partial report still returns HTTP 200;
+clients can inspect `report_status` and `backups.storage_status`. A database
+query failure returns HTTP 500 using the existing API error handler.

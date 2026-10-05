@@ -38,6 +38,7 @@ import { createProgressRouter } from './routes/progress.js';
 import sessionsRouter from './routes/sessions.js';
 import settingsRouter from './routes/settings.js';
 import statsRouter from './routes/stats.js';
+import statusRouter from './routes/status.js';
 import userscriptRouter from './routes/userscript.js';
 import { READER_HOSTS } from './services/ReaderUrl.js';
 import { authenticateSocket } from './websocket/auth.js';
@@ -214,6 +215,7 @@ export function createApp(): {
   app.use(historyRouter);
   app.use(backupsRouter);
   app.use(statsRouter);
+  app.use(statusRouter);
   app.use(settingsRouter);
   app.use(coversRouter);
   app.use(createAdminRouter(io));
