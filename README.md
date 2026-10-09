@@ -1,43 +1,34 @@
 # ReadSync
 
-Cross-device reading progress sync for web novels. A userscript (Tampermonkey,
-Violentmonkey, or any other GM-compatible manager) tracks your scroll position
-on NovelPing chapter pages (legacy NovelArrow/NovelBin links are still recognised)
-and syncs it to the server as you read;
-the dashboard picks up new progress live over Socket.IO (`chapters:updated`
-and `progress:updated` events patch/refetch the SWR cache), with a 30-minute
-SWR poll as a fallback if the socket connection drops.
+Cross-device reading progress sync for web novels. A userscript
+(Tampermonkey/Violentmonkey) tracks your position on chapter pages and syncs
+it to a small server; a React dashboard updates live over Socket.IO.
 
 ## Stack
 
-- **Backend** — Node.js, Express 5, TypeScript (`src/`), Postgres (Supabase-hosted)
-- **Frontend** — React 19 SPA served at `/app` (`frontend/`), kept in sync via
-  Socket.IO — see [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
-- **Browser client** — userscript, built for Tampermonkey/Violentmonkey (`userscript/`)
+- **Backend** — Node.js, Express 5, TypeScript (`src/`), Postgres
+- **Frontend** — React 19 SPA served at `/app` (`frontend/`)
+- **Browser client** — userscript (`userscript/`)
 
-Full architecture, data flow, and auth model: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) for data flow and auth.
 
 ## Quick start
 
 ```bash
-npm run setup   # npm install + start the dev server (tsx watch src/server.ts)
+npm run setup   # install + start the dev server
 ```
 
-You'll also need a Postgres database (`DATABASE_URL`) and an admin password
-hash — see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md) for the full env var
-list and how to generate the password hash.
-
-To build everything (backend + frontend + userscript) for production:
+Requires a Postgres database. Copy `.env.example` to `.env` and fill in
+your own values.
 
 ```bash
-npm run build:all
+npm run build:all   # backend + frontend + userscript
+npm test
 ```
 
 ## Documentation
 
-Everything else lives in [`docs/`](./docs/README.md) — architecture, the
-full API reference, database/migration history, deployment runbook, test
-coverage map, and the open roadmap.
+[`docs/`](./docs/README.md) — architecture, API reference, database, testing.
 
 ## License
 
