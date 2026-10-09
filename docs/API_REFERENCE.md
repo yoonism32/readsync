@@ -6,8 +6,14 @@ is the middleware actually applied on that route today — see
 "Validated" means the route has an `express-validator` chain; where it
 doesn't, input is checked ad hoc inside the handler (or not at all).
 
-Requests to `/api/v1/*` authenticate with a dashboard session or an
-`Authorization: Bearer <key>` header; `requireAuthAPI` routes require a session.
+Authentication update (2026-09-11): all `/api/v1/*` requests first authenticate
+a bound dashboard session or `Authorization: Bearer <key>`. `validateApiKey`
+now accepts either, and `requireAuthAPI` additionally requires a dashboard session.
+Keys in query strings or request bodies are rejected. Socket.IO uses the session.
+The optional key-issuance endpoint returns a replacement once; only its hash is
+stored, and replacing an issued key revokes it. The current userscript build uses
+the owner-configured `API_KEY` environment value instead, and the SPA has no key
+configuration card.
 
 `GET /api/v1/export` returns version 2 with `novels`, `meta`, `devices`, `progress`,
 `bookmarks`, `notes`, `categories`, `sessions`, `settings` and `notifications`.
@@ -33,7 +39,7 @@ These compact files use the same import endpoint; the full-data export is unchan
 | GET | `/api/auth/status` | — | Used by the SPA to check login state |
 | GET | `/api/v1/auth/whoami` | `validateApiKey` | |
 | GET | `/` | — | Redirects to `/app/` (the SPA) |
-| GET | `/login`, `/legacy/dashboard`, `/legacy-dashboard`, `/legacy/manage`, `/manage`, `/legacy/settings`, `/settings`, `/legacy/mylist`, `/mylist`, `/novels`, `/legacy/novel/:novelId`, `/novel/:novelId`, `/novels/:novelId`, `/legacy/admin`, `/admin`, `/legacy/explorer`, `/explorer` | — | 301 redirect straight to their `/app/*` SPA equivalent (`/login` → `/app/login`, etc). No HTML served here anymore. |
+| GET | `/login`, `/legacy/dashboard`, `/legacy-dashboard`, `/legacy/manage`, `/manage`, `/legacy/settings`, `/settings`, `/legacy/mylist`, `/mylist`, `/novels`, `/legacy/novel/:novelId`, `/novel/:novelId`, `/novels/:novelId`, `/legacy/admin`, `/admin`, `/legacy/explorer`, `/explorer` | — | Legacy pages sunset 2026-09-08: 301 redirect straight to their `/app/*` SPA equivalent (`/login` → `/app/login`, etc). No HTML served here anymore. |
 | GET | `/legacy/practice`, `/practice.html` | `requireAuth` | Retired legacy API explorer; returns 410 |
 | GET | `/practice` | — | 301 redirect to `/legacy/practice` |
 
@@ -163,14 +169,21 @@ These compact files use the same import endpoint; the full-data export is unchan
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/api/v1/admin/novels/stale` | `validateApiKey` | Read-only report |
-| POST | `/api/v1/admin/novels/auto-update` | `validateApiKey` | Called by the userscript's "Update All" flow |
+| GET | `/api/v1/admin/novels/stale` | `validateApiKey` | Read-only report, unrelated to the bot |
+| POST | `/api/v1/admin/novels/auto-update` | `validateApiKey` | Called by the userscript's "Update All" flow, not the bot |
+
+Every bot-gated route (`/api/v1/admin/novels/:novelId/update`, `/bot/status`,
+`/bot/trigger`, `/novels/single-run`, `/bot/progress`, `/admin/force-refresh-all`)
+was removed 2026-09-08 along with `bot/` itself — see
+[ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed). They always `503`'d
+in production anyway (`setBotModule()` had no caller), so nothing changes
+behaviorally; the dead plumbing is just gone now.
 
 ## userscript.ts (factory: `createUserscriptRouter(path?)`)
 
 | Method | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/u/:token/readsync.user.js` | Secret path token | Serves the built userscript for GM-manager auto-update; `404` on a wrong token |
+| GET | `/u/:token/readsync.user.js` | Path token (`USERSCRIPT_UPDATE_TOKEN`) | Serves `dist-userscript/readsync.user.js`; `Cache-Control: no-cache` so GM-API managers (Tampermonkey, Violentmonkey) can poll `@updateURL`/`@downloadURL` outside any session. No session auth is possible here, so the path itself carries a timing-safe-compared secret token instead that keeps the URL from being guessable; `404` on a wrong/missing token or if the userscript hasn't been built |
 
 ## Personal status report
 
@@ -189,3 +202,27 @@ API key header. Anonymous requests receive HTTP 401. Responses use
 | `refresh` | Last recorded refresh, reminder interval, next due time, and latest library metadata update |
 | `storage` | Account's saved snapshot/session/bookmark/note counts and listed backup files' byte size |
 | `backups` | Storage availability, last recorded success/attempt, and next backup eligibility time |
+
+The recent-reading positions follow the dashboard's current read-through and
+progress-reset cutoff. Manual bookmark corrections do not create reading
+activity; an explicit last-read override is respected. Removed novels are
+excluded from the library/recent-reading sections, but their retained records
+still count toward saved data. Null positions and unread counts mean unknown.
+
+Refresh due times are **reminders**, not automatic jobs (`automatic: false`).
+The last refresh timestamp does not prove that every novel refreshed
+successfully; per-novel refresh outcomes currently live only in the browser.
+Backup eligibility is not an exact run time: the existing scheduler checks every
+six hours while the server runs. With no prior attempt, a configured backup is
+eligible at the next scheduler check. `last_attempt_at` is the last *recorded*
+attempt, not an audit of every network failure.
+
+`backup_bytes` covers backup files only, not PostgreSQL disk usage or cover images.
+It is null when storage is unavailable or unconfigured, and zero for a reachable
+empty backup inventory. The inventory is bounded to 100 files;
+`backup_inventory_truncated: true` means the count/bytes may be partial.
+
+This report does not replace `/health` for frequent Kuma checks: it queries
+personal records and backup storage. A partial report still returns HTTP 200;
+clients can inspect `report_status` and `backups.storage_status`. A database
+query failure returns HTTP 500 using the existing API error handler.

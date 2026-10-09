@@ -1,6 +1,20 @@
 # ReadSync docs
 
-- [ARCHITECTURE.md](./ARCHITECTURE.md) — stack, data flow, auth
-- [API_REFERENCE.md](./API_REFERENCE.md) — routes and their auth
-- [DATABASE.md](./DATABASE.md) — schema and migrations
-- [TESTING.md](./TESTING.md) — how to run tests
+Start with [ARCHITECTURE.md](./ARCHITECTURE.md) — current stack, data flow,
+auth model, and rate limiting (intentionally off). The chapter-update bot
+that used to be documented there as "off" was removed outright 2026-09-08.
+
+- [ARCHITECTURE.md](./ARCHITECTURE.md) — how the system actually works today
+- [API_REFERENCE.md](./API_REFERENCE.md) — every route, its auth, its validation status
+- [DATABASE.md](./DATABASE.md) — schema and the story behind each migration
+- [BACKUPS.md](./BACKUPS.md) — full database downloads to your disk with Docker, verification and restore guidance
+- [DEPLOYMENT.md](./DEPLOYMENT.md) — env vars, Render/Docker, local dev
+- [TESTING.md](./TESTING.md) — what's covered, what isn't, how to run it
+- [ROADMAP.md](./ROADMAP.md) — open and accepted-but-unbuilt work
+
+Historical record (not current-state docs — see the files above for that):
+
+- [changelog/2025-12.md](./changelog/2025-12.md)
+- [changelog/2026-08-level-up.md](./changelog/2026-08-level-up.md) — the full source this reorganization was trimmed from
+- [changelog/2026-08-proposal-gateway.md](./changelog/2026-08-proposal-gateway.md)
+- [ideas/future-specs.md](./ideas/future-specs.md) — full specs for the open Tier 4 backlog items

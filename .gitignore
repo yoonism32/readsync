@@ -64,16 +64,3 @@ scripts/formatting/
 
 # Lighthouse reports
 reports/
-# Internal notes — kept locally, not published
-CLAUDE.md
-AGENTS.md
-DESIGN.md
-.impeccable/
-docs/SECURITY-*.md
-docs/BACKUPS.md
-docs/DEPLOYMENT.md
-docs/ROADMAP*.md
-docs/NOVELPING_MIGRATION.md
-docs/IMPECCABLE-*.md
-docs/ideas/
-docs/changelog/
