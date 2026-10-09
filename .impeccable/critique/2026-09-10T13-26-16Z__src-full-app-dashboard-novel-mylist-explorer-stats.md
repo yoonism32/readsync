@@ -5,7 +5,7 @@ max_score: 40
 na_heuristics: 
 p0_count: 0
 p1_count: 1
-target_identity: "file:/home/yoonis32/Code/readsync/frontend/src (full app: dashboard, novel, mylist, explorer, stats)"
+target_identity: "file:frontend/src (full app: dashboard, novel, mylist, explorer, stats)"
 timestamp: 2026-09-10T13-26-16Z
 slug: src-full-app-dashboard-novel-mylist-explorer-stats
 ---

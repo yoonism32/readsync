@@ -1,6 +1,6 @@
 /**
  * Regression for the 2026-09-12 false progress snapshot on
- * `everyones-class-one-effort-10000x-bonus-reward`.
+ * `sample-class-one-effort-10000x-bonus`.
  *
  * Unload handlers run on main novel pages as well as reader pages. Before the
  * guard in sendFinal(), a loose URL fallback extracted `10000` from that slug
@@ -32,7 +32,7 @@ afterEach(() => {
 describe('sendFinal — main novel pages', () => {
   it('does not send an unload snapshot for a number in a novel slug', () => {
     globalRef.location = {
-      pathname: '/novel/everyones-class-one-effort-10000x-bonus-reward',
+      pathname: '/novel/sample-class-one-effort-10000x-bonus',
     } as Location;
 
     sendFinal(0, {

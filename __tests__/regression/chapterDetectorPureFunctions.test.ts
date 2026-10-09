@@ -102,7 +102,7 @@ describe('extractChapterFromUrl', () => {
   it('does not extract a number from a NovelArrow novel slug', () => {
     expect(
       extractChapterFromUrl(
-        'https://novelarrow.com/novel/everyones-class-one-effort-10000x-bonus-reward',
+        'https://novelarrow.com/novel/sample-class-one-effort-10000x-bonus',
       ),
     ).toBeNull();
   });
@@ -110,7 +110,7 @@ describe('extractChapterFromUrl', () => {
   it('does not extract a number from an incomplete NovelArrow chapter route', () => {
     expect(
       extractChapterFromUrl(
-        'https://novelarrow.com/chapter/everyones-class-one-effort-10000x-bonus-reward',
+        'https://novelarrow.com/chapter/sample-class-one-effort-10000x-bonus',
       ),
     ).toBeNull();
   });

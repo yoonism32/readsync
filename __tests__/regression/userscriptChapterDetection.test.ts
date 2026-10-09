@@ -62,7 +62,7 @@ describe('parseChapterEnhanced — NovelArrow routes are URL-first', () => {
    * Bug: some NovelArrow slugs tag the real chapter number as "auto-<N>",
    * occasionally doubled — e.g.
    * "chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2"
-   * for "my-medical-skills-give-me-experience-points". "auto-282" IS the
+   * for "sample-skills-give-me-points". "auto-282" IS the
    * real chapter number (confirmed against the page's own
    * og:description: "Chapter 282: Chapter 145: Soaring..."); the trailing
    * "145" is just digits from the original source title. The old regex
@@ -72,7 +72,7 @@ describe('parseChapterEnhanced — NovelArrow routes are URL-first', () => {
    */
   it('finds the real chapter number tagged "auto-<N>", not a trailing title number', () => {
     const info = parseChapterEnhanced(
-      '/chapter/my-medical-skills-give-me-experience-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
+      '/chapter/sample-skills-give-me-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
     );
     expect(info?.num).toBe(282);
     expect(info?.source).toBe('url-novelarrow');
@@ -109,14 +109,14 @@ describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
   it('never treats a number embedded in a NovelArrow novel slug as progress', () => {
     stubDocument('Everyone\'s Class: One Effort, 10,000x Bonus Reward! | NovelArrow');
     expect(
-      parseChapterEnhanced('/novel/everyones-class-one-effort-10000x-bonus-reward'),
+      parseChapterEnhanced('/novel/sample-class-one-effort-10000x-bonus'),
     ).toBeNull();
   });
 
   it('does not parse an incomplete NovelArrow chapter route as a chapter', () => {
     stubDocument('Everyone\'s Class: One Effort, 10,000x Bonus Reward! | NovelArrow');
     expect(
-      parseChapterEnhanced('/chapter/everyones-class-one-effort-10000x-bonus-reward'),
+      parseChapterEnhanced('/chapter/sample-class-one-effort-10000x-bonus'),
     ).toBeNull();
   });
 });
@@ -125,7 +125,7 @@ describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
  * Bug: the numeric-prefix heuristic (`/^\d+/` on the last path segment) exists
  * to catch NovelBin chapter URLs like /b/slug/31-the-beginning. It was applied
  * to the whole path, so a novel whose *slug* starts with digits —
- * "100x-rebate-sharing-system-retired-incubus-wants-to-marry-have-kids" — was
+ * "100x-sample-reward-system-long-title-example" — was
  * classified as a chapter page. Two consequences on its novel page: auto-update
  * bailed at the chapter guard (no refresh, ever), and progress sync ran and
  * recorded scroll position as reading progress.
@@ -133,28 +133,28 @@ describe('parseChapterEnhanced — non-NovelArrow fallbacks preserved', () => {
 describe('isChapterPath — a chapter lives below the slug', () => {
   it('does not treat a digit-leading novel slug as a chapter', () => {
     expect(
-      isChapterPath('/novel/100x-rebate-sharing-system-retired-incubus-wants-to-marry-have-kids'),
+      isChapterPath('/novel/100x-sample-reward-system-long-title-example'),
     ).toBe(false);
   });
 
   it('handles a trailing slash on such a slug', () => {
-    expect(isChapterPath('/novel/100x-rebate-sharing-system/')).toBe(false);
+    expect(isChapterPath('/novel/100x-sample-reward-system/')).toBe(false);
   });
 
   it('treats an ordinary novel page as a novel page', () => {
-    expect(isChapterPath('/novel/immortality-through-array-formations')).toBe(false);
+    expect(isChapterPath('/novel/sample-array-formations')).toBe(false);
     expect(isChapterPath('/b/shadow-slave')).toBe(false);
   });
 
   it('still recognises NovelArrow chapter routes', () => {
     expect(isChapterPath('/chapter/shadow-slave/chapter-215-the-end')).toBe(true);
-    expect(isChapterPath('/chapter/100x-rebate-sharing-system/chapter-5')).toBe(true);
+    expect(isChapterPath('/chapter/100x-sample-reward-system/chapter-5')).toBe(true);
   });
 
   it('recognises NovelArrow routes with an "auto-<id>-" prefixed chapter number', () => {
     expect(
       isChapterPath(
-        '/chapter/my-medical-skills-give-me-experience-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
+        '/chapter/sample-skills-give-me-points/chapter-auto-282-auto-282-145-soaring-to-the-skies-epilepsy-case-consultation2',
       ),
     ).toBe(true);
   });

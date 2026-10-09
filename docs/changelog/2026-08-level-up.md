@@ -115,7 +115,7 @@ Carried out of the August session. Roughly ordered by value.
 - [ ] **Egress at 69% of free tier** (3.47 / 5 GB, 22 days left). Re-read now that `/novels`
       moves 62% less data per call. Supabase egress counts *every* pooler result crossing to
       Render, so the query fix should show up here.
-- [ ] **`SubPlan 2` in the My List query** — the remaining 89% of its cost. Reads 589 rows per
+- [ ] **`SubPlan 2` in the My List query** — the remaining 89% of its cost. Reads every row per
       novel to return 1, because Postgres has no index skip-scan for `DISTINCT ON`. Needs a
       `LATERAL` rewrite or a denormalised "latest per device per novel" table maintained by the
       sync. **Design change, not tuning — decide before starting.**

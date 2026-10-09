@@ -29,4 +29,4 @@ UPDATE user_novel_meta SET
   started_at = '2026-08-26T20:55:34.073Z',
   created_at = '2025-11-20T13:17:57.959Z'
 WHERE user_id = 'demo-user'
-  AND novel_id = 'novelbin:my-medical-skills-give-me-experience-points';
+  AND novel_id = 'novelbin:sample-skills-give-me-points';

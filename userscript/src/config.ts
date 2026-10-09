@@ -52,7 +52,7 @@ export const COMPLETION_SYNC_MIN_DELTA_PCT = 2;
 // the reader is currently on — never near the novel's true latest release.
 // Treating that as "good enough" without confirming against the novel's
 // main page is what let a 656-chapter local read mask a true latest of 669
-// (2026-08-12 incident, eternal-life-by-daily-divination). This narrows
+// (2026-08-12 incident, sample-eternal-daily-path). This narrows
 // that failure window rather than eliminating it: any nav pattern jumping
 // further ahead than this would reproduce it.
 export const CHAPTER_PAGE_NAV_LOOKAHEAD = 5;
@@ -69,7 +69,6 @@ export const MAX_CHAPTER_NUM = 100000;
 
 /* ===== ReadSync API ===== */
 // const READSYNC_API_BASE = 'http://localhost:3000/api/v1';
-// const READSYNC_API_BASE = 'http://192.168.0.15:3000/api/v1';
 export const READSYNC_API_BASE = 'https://readsync-n7zp.onrender.com/api/v1';
 
 // Explicitly embedded from API_KEY at build time for this single-user installation.

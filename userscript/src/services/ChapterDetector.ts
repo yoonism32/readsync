@@ -122,7 +122,7 @@ export function extractChapterFromUrl(href: string): number | null {
  *
  * That depth check matters because the numeric-prefix heuristic below exists
  * for NovelBin URLs like /b/slug/31-the-beginning, and without it a novel whose
- * slug merely *starts* with digits ("100x-rebate-sharing-system…") is misread
+ * slug merely *starts* with digits ("100x-sample-reward-system…") is misread
  * as a chapter — which silently disabled auto-update on that novel and let
  * progress sync record scroll position on its main page.
  */
@@ -310,9 +310,9 @@ export function extractLatestChapterInfo(
      * NovelArrow's numbering isn't 1:1 with it (bonus/side entries like
      * "897_2" inflate the count past the true latest). Letting it win over a
      * titled meta chapter is exactly what happened to three novels in
-     * production on 2026-08-06: immortality-through-array-formations (off by
-     * 1), i-can-see-through-all-things-information (off by 2), and
-     * longevity-by-picking-up-attributes-in-the-battlefield (off by 14) —
+     * production on 2026-08-06: sample-array-formations (off by
+     * 1), sample-see-all-information (off by 2), and
+     * sample-long-life-attributes-battlefield (off by 14) —
      * all three ended up with a stored latest_chapter_num paired with a
      * title that named a *different*, lower chapter, proving the header
      * figure was never a real chapter. The damage was permanent: admin.ts's

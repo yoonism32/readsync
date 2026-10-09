@@ -1,7 +1,7 @@
 -- Speed up the My List query, which was 60 percent of all database time.
 --
 -- GET /api/v1/novels runs two correlated subqueries per novel. Each one read
--- every snapshot for that novel and read-through - 589 rows in production - then
+-- every snapshot for that novel and read-through - then
 -- sorted them to return a single row. Neither could use the existing
 -- idx_progress_read_through for ordering, because that index ends in created_at
 -- while the subqueries sort by other columns.

@@ -12,7 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { isMirroredCover } from '../../src/routes/covers.js';
 
 const MIRRORED =
-  'https://hzziccyyziljuqxuzxrl.supabase.co/storage/v1/object/public/novel-covers/all-milfs-are-mine.jpg';
+  'https://example-project-ref.supabase.co/storage/v1/object/public/novel-covers/sample-cover.jpg';
 
 describe('isMirroredCover', () => {
   it('treats our own bucket URL as mirrored', () => {
@@ -21,7 +21,7 @@ describe('isMirroredCover', () => {
 
   it('does not treat a novelarrow source URL as mirrored', () => {
     expect(
-      isMirroredCover('https://images.novelarrow.com/novel/i-can-upgrade-everything-infinitely.jpg'),
+      isMirroredCover('https://images.novelarrow.com/novel/sample-upgrade-everything.jpg'),
     ).toBe(false);
   });
 

@@ -5,7 +5,7 @@ max_score: 40
 na_heuristics: 
 p0_count: 0
 p1_count: 2
-target_identity: "file:/home/yoonis32/Code/readsync/frontend/src (full app: dashboard, novel, mylist, explorer, stats)"
+target_identity: "file:frontend/src (full app: dashboard, novel, mylist, explorer, stats)"
 timestamp: 2026-09-05T01-56-47Z
 slug: src-full-app-dashboard-novel-mylist-explorer-stats
 ---
@@ -16,7 +16,7 @@ slug: src-full-app-dashboard-novel-mylist-explorer-stats
 | # | Heuristic | Score | Key Issue |
 |---|-----------|-------|-----------|
 | 1 | Visibility of System Status | 3 | Loading spinners, toasts, "time to refresh" status all present; the one gap is the unexplained novel→dashboard bounce (see Priority Issues) giving zero feedback about why it happened |
-| 2 | Match System / Real World | 3 | Mostly plain language, but internal scraper IDs leak into user-facing URLs (`novel/novelbin%3Amy-medical-skills...`) and the novel detail page shows "by My Medical Skills Give Me Experience Points" — author field is the title |
+| 2 | Match System / Real World | 3 | Mostly plain language, but internal scraper IDs leak into user-facing URLs (`novel/novelbin%3Asample-skills...`) and the novel detail page shows "by Sample Skills Give Me Points" — author field is the title |
 | 3 | User Control and Freedom | 2 | No visible "clear all filters" on My List's 10 simultaneous filter toggles; no bulk actions to back out of a mass status change |
 | 4 | Consistency and Standards | 2 | Explorer and My List show the *same* 148 novels with completely different information (status/progress exist only in My List); Stats uses teal for hour/weekday bars but crimson for genre bars with no semantic reason for either choice |
 | 5 | Error Prevention | 3 | "Refresh All Novels" is a low-risk bulk action with no confirm needed; ErrorBoundary exists as a safety net app-wide |
@@ -81,7 +81,7 @@ This is a real, working, richly-featured personal reading tracker with a distinc
 ## Minor Observations
 
 - `ProgressBar.tsx:36` animates `width` directly (flagged by the detector) — switch to `transform: scaleX()` to avoid layout thrash on every progress update.
-- Novel detail's "by My Medical Skills Give Me Experience Points" shows the novel's own title in the author field — a data/scraping issue, not a layout one, but it undermines trust in the surrounding metadata at a glance.
+- Novel detail's "by Sample Skills Give Me Points" shows the novel's own title in the author field — a data/scraping issue, not a layout one, but it undermines trust in the surrounding metadata at a glance.
 - During this session, a direct browser navigation to a novel detail URL rendered correctly once, then the tab's URL and content silently reverted to `/dashboard` a short time later with no visible error or toast. A follow-up timed test over 10 seconds did not reproduce it. Flagging as "worth a manual double-check" rather than a confirmed defect — if real, it would break bookmarks, refresh, and shared links to a specific novel.
 - My List surfaces 10 simultaneous filter controls (6 status tabs + 4 "smart" filters) above the table before any interaction — right at the edge of the ≤4-per-decision-point guidance; consider collapsing the smart filters behind a secondary disclosure.
 

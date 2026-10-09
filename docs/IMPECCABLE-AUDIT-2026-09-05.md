@@ -13,7 +13,7 @@ sampling 5 representative routes inline instead.
 | # | Heuristic | Score | Key Issue |
 |---|-----------|-------|-----------|
 | 1 | Visibility of System Status | 3 | Spinners/toasts/"time to refresh" all present; the gap is an unexplained novel→dashboard bounce (see below) with zero feedback about why |
-| 2 | Match System / Real World | 3 | Mostly plain language, but internal scraper IDs leak into URLs (`novel/novelbin%3A...`) and the novel page shows "by My Medical Skills Give Me Experience Points" — author field is the title |
+| 2 | Match System / Real World | 3 | Mostly plain language, but internal scraper IDs leak into URLs (`novel/novelbin%3A...`) and the novel page shows "by Sample Skills Give Me Points" — author field is the title |
 | 3 | User Control and Freedom | 2 | No "clear all filters" on My List's 10 simultaneous filter toggles; no bulk undo for status changes |
 | 4 | Consistency and Standards | 2 | Explorer and My List show the *same* 148 novels with incompatible information; Stats uses teal for hour/weekday bars but crimson for genre bars with no semantic reason for either |
 | 5 | Error Prevention | 3 | Low-risk bulk actions, app-wide ErrorBoundary safety net |
@@ -128,7 +128,7 @@ distinguishable by more than hue.
 
 - `ProgressBar.tsx:36` — animate `transform: scaleX()` instead of `width` to
   avoid layout thrash.
-- Novel detail's "by My Medical Skills Give Me Experience Points" — author
+- Novel detail's "by Sample Skills Give Me Points" — author
   field holds the title (scraper data issue, not layout).
 - Once during this session, a direct link to a novel detail page rendered
   correctly, then silently reverted to `/dashboard` with no error or toast;

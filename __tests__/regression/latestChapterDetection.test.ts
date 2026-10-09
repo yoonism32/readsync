@@ -3,7 +3,7 @@
  *
  * Three production failures:
  *
- *  1. forced-to-be-my-sisters-lover-in-a-reverse-world — the meta reads
+ *  1. forced-to-be-my-sample-romance-in-a-reverse-world — the meta reads
  *     "Epilogue" and contains no digits at all, so detection fell through to the
  *     DOM. But NovelArrow only server-renders `initialChapterList`, which is
  *     chapters 1–30 *ascending* — so it reported exactly 30 against a stored 92,
@@ -15,9 +15,9 @@
  *     real, titled chapter. "<N> Chapters" is a document COUNT, not a chapter
  *     NUMBER, and NovelArrow's numbering isn't 1:1 with it (bonus/side entries
  *     like "897_2" inflate the count past the true latest). Three novels hit
- *     this: immortality-through-array-formations (header 1 over the real
- *     latest), i-can-see-through-all-things-information (2 over), and
- *     longevity-by-picking-up-attributes-in-the-battlefield (14 over). All three
+ *     this: sample-array-formations (header 1 over the real
+ *     latest), sample-see-all-information (2 over), and
+ *     sample-long-life-attributes-battlefield (14 over). All three
  *     ended up with novels.latest_chapter_num paired with a title that named a
  *     *different*, lower chapter — proof the header figure was never a real
  *     chapter. The damage was permanent: admin.ts's update guard never lets
@@ -167,11 +167,11 @@ describe('extractLatestChapterInfo — a titled meta chapter beats the bare head
     expect(info.latestChapterTitle).toBe('62: Great Witch (2)');
   });
 
-  it('reports 1527 from the meta, not 1529 from the header (i-can-see-through-all-things-information, 2026-08-06)', () => {
+  it('reports 1527 from the meta, not 1529 from the header (sample-see-all-information, 2026-08-06)', () => {
     stubPage({
       meta: 'Chapter 1527 900: Breaking Through the Heavenly Demon Origin Space by Force',
       spans: ['1529 Chapters'],
-      pathname: '/novel/i-can-see-through-all-things-information',
+      pathname: '/novel/sample-see-all-information',
     });
 
     const info = extractLatestChapterInfo();
@@ -181,11 +181,11 @@ describe('extractLatestChapterInfo — a titled meta chapter beats the bare head
     );
   });
 
-  it('reports 1086 from the meta, not 1100 from the header (longevity-by-picking-up-attributes-in-the-battlefield, 2026-08-06)', () => {
+  it('reports 1086 from the meta, not 1100 from the header (sample-long-life-attributes-battlefield, 2026-08-06)', () => {
     stubPage({
       meta: 'Chapter 1086 - 460: Uniting Against Qin Court? (2)',
       spans: ['1100 Chapters'],
-      pathname: '/novel/longevity-by-picking-up-attributes-in-the-battlefield',
+      pathname: '/novel/sample-long-life-attributes-battlefield',
     });
 
     const info = extractLatestChapterInfo();
@@ -195,15 +195,15 @@ describe('extractLatestChapterInfo — a titled meta chapter beats the bare head
 });
 
 describe('extractLatestChapterInfo — numberless meta must not fall into the first-30 trap', () => {
-  it('reports 92 from the header, not 30 from initialChapterList (sisters-lover regression)', () => {
+  it('reports 92 from the header, not 30 from initialChapterList (sample-romance regression)', () => {
     stubPage({
       meta: 'Epilogue',
       spans: ['92 Chapters'],
       // NovelArrow server-renders only chapters 1..30, ascending.
       links: Array.from({ length: 30 }, (_, i) => ({
-        href: `https://novelarrow.com/chapter/sisters-lover/chapter-${i + 1}`,
+        href: `https://novelarrow.com/chapter/sample-romance/chapter-${i + 1}`,
       })),
-      pathname: '/novel/sisters-lover',
+      pathname: '/novel/sample-romance',
     });
 
     expect(extractLatestChapterInfo().latestChapterNum).toBe(92);
@@ -246,7 +246,7 @@ describe('extractLatestChapterInfo — fallbacks preserved', () => {
 
 describe('extractLatestChapterInfo — a chapter page\'s nav links must not mask a higher true latest', () => {
   it('does not let a "Next Chapter" link (656) permanently mask the true latest (669) while reading chapter 655 of a 669-chapter novel', async () => {
-    // Production incident 2026-08-12 (eternal-life-by-daily-divination):
+    // Production incident 2026-08-12 (sample-eternal-daily-path):
     // a chapter-reading page has no og:novel meta and no "<N> Chapters"
     // header (those only render on the novel's main page) — the only local
     // signal is nav links, and "Next Chapter" points to 656. The old flat
@@ -265,10 +265,10 @@ describe('extractLatestChapterInfo — a chapter page\'s nav links must not mask
     </head></html>`;
     stubPage({
       links: [
-        { href: 'https://novelarrow.com/chapter/eternal-life-by-daily-divination/chapter-654-prev' },
-        { href: 'https://novelarrow.com/chapter/eternal-life-by-daily-divination/chapter-656-next' },
+        { href: 'https://novelarrow.com/chapter/sample-eternal-daily-path/chapter-654-prev' },
+        { href: 'https://novelarrow.com/chapter/sample-eternal-daily-path/chapter-656-next' },
       ],
-      pathname: '/chapter/eternal-life-by-daily-divination/chapter-655-current',
+      pathname: '/chapter/sample-eternal-daily-path/chapter-655-current',
     });
     globalRef.fetch = () => {
       fetchCalled = true;

@@ -119,7 +119,7 @@ describe('NovelPing grammar (/book/<slug> and /novel/<slug>) — additive to Nov
   it.each([
     ['https://novelping.com/book/nine-star-hegemon-body-arts/chapter-7268-leaving', 7268],
     ['https://novelping.com/novel/supreme-magus-novel/chapter-1000', 1000],
-    ['https://novelping.com/book/i-can-devour-monsters-sss-talents/chapter-1-the-second-failure', 1],
+    ['https://novelping.com/book/sample-devour-sss-talents/chapter-1-the-second-failure', 1],
   ])('parseChapterFromUrl %s -> %i', (url, num) => {
     expect(parseChapterFromUrl(url)?.num).toBe(num);
   });

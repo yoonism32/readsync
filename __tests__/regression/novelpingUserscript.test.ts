@@ -55,9 +55,9 @@ describe('parseChapterEnhanced — NovelPing routes are URL-first', () => {
     ['/book/supreme-magus-novel/chapter-1000', 1000],
     ['/book/nine-star-hegemon-body-arts/chapter-7268-leaving', 7268],
     ['/novel/supreme-magus-novel/chapter-2', 2],
-    ['/book/i-can-devour-monsters-sss-talents/chapter-1-the-second-failure', 1],
+    ['/book/sample-devour-sss-talents/chapter-1-the-second-failure', 1],
     // auto-<N> is the real number; the trailing 145 is from the original source title
-    ['/novel/my-medical-skills/chapter-auto-282-auto-282-145-soaring-to-the-skies', 282],
+    ['/novel/sample-skills/chapter-auto-282-auto-282-145-soaring-to-the-skies', 282],
   ])('%s -> chapter %i even when the page title names a different chapter', (pathname, num) => {
     // supreme-magus-novel: URL chapter-1000 carries the title "Chapter 991"
     g.document = { title: 'Supreme Magus – Chapter 991 Questions and Answers | NovelPing', querySelectorAll: () => [] };

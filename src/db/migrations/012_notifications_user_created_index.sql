@@ -9,13 +9,12 @@
 -- `read` filter, and `read` sitting between user_id and created_at in that
 -- index breaks the sort-order guarantee across read/unread groups, so the
 -- planner falls back to Seq Scan + top-N heapsort (confirmed via EXPLAIN
--- ANALYZE against production: cost 65.70..65.75, actual 1.516ms for a
--- single-user 548-row table).
+-- ANALYZE against production: cost 65.70..65.75, actual 1.516ms).
 --
 -- (user_id, created_at DESC) lets the same query use Index Scan Backward
 -- with no sort step. Verified via EXPLAIN ANALYZE against production:
 -- Seq Scan + Sort -> Index Scan using idx_notifications_user_created,
--- 1.516ms -> 0.238ms on the current 548-row table; the real win is
+-- 1.516ms -> 0.238ms; the real win is
 -- avoiding Seq Scan + Sort entirely as the table grows, same rationale as
 -- 010's FK indexes.
 --

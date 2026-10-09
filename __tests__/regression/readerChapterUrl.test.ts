@@ -19,9 +19,9 @@ describe('NovelPing support (additive)', () => {
     'https://novelping.com/book/nine-star-hegemon-body-arts/chapter-7268-leaving',
     'https://novelping.com/book/supreme-magus-novel/chapter-2',
     'https://novelping.com/novel/supreme-magus-novel/chapter-2',
-    'https://novelping.com/novel/i-can-devour-monsters-sss-talents/chapter-1-the-second-failure',
+    'https://novelping.com/novel/sample-devour-sss-talents/chapter-1-the-second-failure',
     // NovelArrow's "auto-<N>" numbering carries over (57 stored snapshots use it; served directly)
-    'https://novelping.com/novel/my-medical-skills/chapter-auto-282-auto-282-145-soaring-to-the-skies',
+    'https://novelping.com/novel/sample-skills/chapter-auto-282-auto-282-145-soaring-to-the-skies',
   ])('accepts NovelPing chapter URL %s', (url) => {
     expect(isReaderChapterUrl(url)).toBe(true);
   });
@@ -29,8 +29,8 @@ describe('NovelPing support (additive)', () => {
   it.each([
     'https://novelping.com/book/nine-star-hegemon-body-arts',
     'https://novelping.com/novel/nine-star-hegemon-body-arts',
-    'https://novelping.com/book/everyones-class-one-effort-10000x-bonus-reward',
-    'https://novelping.com/novel/everyones-class-one-effort-10000x-bonus-reward',
+    'https://novelping.com/book/sample-class-one-effort-10000x-bonus',
+    'https://novelping.com/novel/sample-class-one-effort-10000x-bonus',
     // /chapter/<slug>/... is a 404 on NovelPing, so it is not a valid reader URL there
     'https://novelping.com/chapter/shadow-slave/chapter-215-the-end',
   ])('rejects NovelPing non-chapter URL %s', (url) => {
@@ -51,7 +51,7 @@ describe('isReaderChapterUrl', () => {
     ).toBe(true);
     expect(
       isReaderChapterUrl(
-        'https://novelarrow.com/chapter/my-medical-skills/chapter-auto-282-auto-282-title',
+        'https://novelarrow.com/chapter/sample-skills/chapter-auto-282-auto-282-title',
       ),
     ).toBe(true);
     expect(isReaderChapterUrl('https://novelbin.com/b/shadow-slave/chapter-31')).toBe(true);
@@ -61,12 +61,12 @@ describe('isReaderChapterUrl', () => {
   it('rejects NovelArrow landing pages, even when their slugs contain digits', () => {
     expect(
       isReaderChapterUrl(
-        'https://novelarrow.com/novel/everyones-class-one-effort-10000x-bonus-reward',
+        'https://novelarrow.com/novel/sample-class-one-effort-10000x-bonus',
       ),
     ).toBe(false);
     expect(
       isReaderChapterUrl(
-        'https://novelarrow.com/chapter/everyones-class-one-effort-10000x-bonus-reward',
+        'https://novelarrow.com/chapter/sample-class-one-effort-10000x-bonus',
       ),
     ).toBe(false);
   });

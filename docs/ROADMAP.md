@@ -65,7 +65,7 @@ claims of production rollout.
       env vars (`src/config.ts`), not hardcoded, so the actual switch is a
       deployment-config change (port 5432 → 6543), not a code change.
       `.env` and the Render `DATABASE_URL` env var both flipped to the
-      transaction-pooler port (`aws-1-eu-west-2.pooler.supabase.com:6543`,
+      transaction-pooler port (`<region>.pooler.supabase.com:6543`,
       same host/user as the session pooler — Supavisor exposes both modes
       on one host, only the port differs). Connectivity verified locally
       via a direct `pg` client connection (Postgres 17.6, query succeeded)
@@ -181,7 +181,7 @@ claims of production rollout.
       number twice = trust it" self-healing correction (built for a
       different bug class, `ChapterCorrection.ts`) confirmed it and
       overwrote a correct stored value. Hit one novel in production
-      (`eternal-life-by-daily-divination`, 669 → 656); corrected via direct
+      (`sample-eternal-daily-path`, 669 → 656); corrected via direct
       SQL. First fix: the fallback now also fires when the local candidate
       isn't meaningfully ahead of the chapter being read
       (`CHAPTER_PAGE_NAV_LOOKAHEAD = 5`, `config.ts`) — closes the exact
@@ -204,7 +204,7 @@ claims of production rollout.
       snapshots for two corruption signatures — a nav-link-style stored
       title (`%next chapter%` / `%next%` / empty) and `latest_chapter_num`
       landing exactly one past a real reader's synced chapter ≥499. Zero
-      matches. `eternal-life-by-daily-divination` is the only novel that was
+      matches. `sample-eternal-daily-path` is the only novel that was
       ever hit, and it's already corrected (now `676`, a real titled
       chapter).
 - [x] **`realChapterCount` module cache** (`ChapterDetector.ts`) is never
