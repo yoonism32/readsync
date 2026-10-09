@@ -67,8 +67,7 @@ from `src/db/migrations/` on the next `runMigrations()` call.
 
 ## Schema drift: `progress_snapshots.id` is `integer`, not `bigint`
 
-Found 2026-09-04. Both `src/db/schema.ts:57` and
-`001_initial_schema.sql:42` declare `id BIGSERIAL`, but the live column is
+Found 2026-09-04. `001_initial_schema.sql:42` declares `id BIGSERIAL`, but the live column is
 `integer` (`int4`). The live table predates that declaration, and every
 definition uses `CREATE TABLE IF NOT EXISTS` — which silently no-ops against
 an existing table and never alters it. `notifications.id` is `integer` too,

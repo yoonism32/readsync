@@ -384,8 +384,7 @@ which durable lifetime Replay would depend.
 
 #### Exact proposed files and routes
 
-- Add `src/db/migrations/020_binge_threshold.sql`; update [`src/db/schema.ts`](../src/db/schema.ts)
-  only where its bootstrap schema must match the migration.
+- Add `src/db/migrations/020_binge_threshold.sql`.
 - Modify [`src/routes/novels.ts`](../src/routes/novels.ts),
   [`src/services/ExportService.ts`](../src/services/ExportService.ts) and
   [`src/services/ImportService.ts`](../src/services/ImportService.ts).
