@@ -63,4 +63,5 @@ scripts/novelfire-profiler/
 scripts/formatting/
 
 # Lighthouse reports
-reports/readsync-full-system.svg
+reports/
+readsync-full-system.svg
