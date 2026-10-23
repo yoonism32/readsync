@@ -1,11 +1,11 @@
 # ── Stage 1: Install dependencies ───────────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:22.23.4-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
 # ── Stage 2: Development (hot reload) ───────────────────────────────────────
-FROM node:22-alpine AS dev
+FROM node:22.23.4-alpine AS dev
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -13,7 +13,7 @@ EXPOSE 3000
 CMD ["npm", "run", "dev"]
 
 # ── Stage 3: Build (compile TS + frontend) ───────────────────────────────────
-FROM node:22-alpine AS build
+FROM node:22.23.4-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 
@@ -29,7 +29,7 @@ COPY . .
 RUN npm run build:all && npm prune --production
 
 # ── Stage 4: Production (minimal image) ──────────────────────────────────────
-FROM node:22-alpine AS production
+FROM node:22.23.4-alpine AS production
 WORKDIR /app
 
 RUN addgroup -g 1001 -S appgroup && adduser -S appuser -u 1001
