@@ -210,8 +210,8 @@ List title-width experiment were preserved. The page-specific changes are:
 
 ## Related documentation
 
-- [Security remediation and release checklist](./SECURITY-REMEDIATION-2026-09-11.md)
-- [Frontend page audit and polish report](./IMPECCABLE-PAGES-AUDIT-2026-09-11.md)
-- [Roadmap](./ROADMAP.md)
-- [API reference](./API_REFERENCE.md)
-- [Architecture](./ARCHITECTURE.md)
+- [Security remediation and release checklist](../SECURITY-REMEDIATION-2026-09-11.md)
+- [Frontend page audit and polish report](../IMPECCABLE-PAGES-AUDIT-2026-09-11.md)
+- [Roadmap](../ROADMAP.md)
+- [API reference](../API_REFERENCE.md)
+- [Architecture](../ARCHITECTURE.md)

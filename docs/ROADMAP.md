@@ -8,7 +8,7 @@ critique findings live in
 [`docs/IMPECCABLE-AUDIT-2026-09-05.md`](./IMPECCABLE-AUDIT-2026-09-05.md),
 triaged into the "Impeccable audit" section below.
 
-The latest implementation record is [the 2026-09-12 changelog](./CHANGELOG-2026-09-12.md).
+The latest implementation record is [the 2026-09-12 changelog](./changelog/CHANGELOG-2026-09-12.md).
 
 > Two items below were corrected against the current codebase while writing
 > this file (see notes inline) — the source document was accurate when

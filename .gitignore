@@ -65,3 +65,15 @@ scripts/formatting/
 # Lighthouse reports
 reports/
 readsync-full-system.svg
+
+# Personal Claude Code / agent notes
+CLAUDE.local.md
+*.local.md
+
+# Test coverage and TypeScript incremental output
+coverage/
+*.tsbuildinfo
+
+# Merge leftovers
+*.orig
+*.rej

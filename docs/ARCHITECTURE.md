@@ -1,6 +1,6 @@
 # Architecture
 
-Current state of the system as of 2026-09-12. This document exists because
+Current state of the system, last checked against the source on 2026-10-26. This document exists because
 the codebase went through a full TypeScript/React rewrite and none of the
 older docs were updated to match — see the git history and
 [ROADMAP.md](./ROADMAP.md) for how it got here.
@@ -13,21 +13,39 @@ older docs were updated to match — see the git history and
 | Frontend | React 19, React Router 7, Vite, Tailwind 4, SWR | `frontend/` → served at `/app` |
 | Browser client | Userscript (Vite-built IIFE, GM-API based — works in Tampermonkey/Violentmonkey) | `userscript/` → `dist-userscript/readsync.user.js` |
 | Chapter-update bot | **Removed 2026-09-08** | see below |
-| Database | Postgres (Supabase-hosted) | 18 migrations in `src/db/migrations/` |
+| Database | Postgres (Supabase-hosted) | 20 migrations in `src/db/migrations/` |
 | Realtime | Socket.IO | wired into `src/app.ts` |
 
 The only deployed entrypoint is `dist/server.js` (compiled from
 `src/server.ts`) — confirmed by `render.yaml` (`startCommand: node
-dist/server.js`) and the Dockerfile's production stage, which copies only
-`dist/`, `public/`, and pruned `node_modules`.
+dist/server.js`) and the Dockerfile's production stage, which copies
+`dist/`, `public/`, `dist-userscript/`, `package.json` and pruned
+`node_modules`.
+
+Startup order (`src/server.ts`):
+
+1. `validateEnvironment()`, which exits if `DATABASE_URL` or `SESSION_SECRET`
+   is missing.
+2. `runMigrations()`.
+3. Listen on `PORT`.
+4. Start the backup scheduler.
+
+Unhandled rejections and uncaught exceptions are logged and sent to the
+optional alert webhook (`src/services/Alerter.ts`). Uncaught exceptions also
+exit the process, so Render restarts it. A temporary 15-second
+memory/pool/socket diagnostic log line from the 2026-09-12 OOM investigation
+is still in `server.ts`.
 
 ## Data flow: reading progress sync
 
-1. The userscript (`userscript/src/main.ts`) runs on `novelarrow.com` and
-   `novelbin.{com,me,net,org}` chapter pages, tracks scroll position, and
-   debounce-syncs to the backend.
-2. `POST /api/v1/progress` (`src/routes/progress.ts`), authenticated via a
-   per-user `api_key`, runs one DB transaction: upserts the device, upserts
+1. The userscript (`userscript/src/main.ts`) runs on `novelping.com` (current)
+   and the legacy `novelarrow.com` and `novelbin.{com,me,net,org}` novel and
+   chapter pages. It tracks scroll position and debounce-syncs to the
+   backend. See [USERSCRIPT.md](./USERSCRIPT.md).
+2. `POST /api/v1/progress` (`src/routes/progress.ts`), authenticated by
+   `validateApiKey` (a bound dashboard session, the `API_KEY` environment
+   key, or a SHA-256-hashed issued key in `users.api_key`, checked in that
+   order), runs one DB transaction: upserts the device, upserts
    the novel and `user_novel_meta`, applies a max-progress policy (rejects
    same-chapter-lower-percent / behind-chapter / restart-noise updates),
    writes a `progress_snapshots` row, and maintains a `reading_sessions` row
@@ -55,23 +73,53 @@ dist/server.js`) and the Dockerfile's production stage, which copies only
 | Storage | Postgres session store, with explicit users.id binding | Optional issued keys are stored only as SHA-256 hashes |
 | Lifecycle | Regenerate and save on login; destroy on logout | Rebuild after rotating `API_KEY`; the optional API endpoint revokes a prior issued key |
 
-The shared admin password is verified against ADMIN_PASSWORD_HASH. ADMIN_USER_ID
+Login checks `ADMIN_USERNAME` and verifies the shared admin password against
+the bcrypt `ADMIN_PASSWORD_HASH`. ADMIN_USER_ID
 selects the associated user; if unset, the database must contain exactly one user.
 All /api/v1 requests authenticate before parsing bodies. Routes with requireAuthAPI
 additionally require a dashboard session. Query/body credentials are rejected.
 Socket handshakes verify browser origin/fetch metadata and session binding;
-active sessions are rechecked periodically and logout disconnects their sockets.
+active sessions are rechecked every 60 seconds and logout disconnects their sockets.
+
+Sessions live in Postgres via `connect-pg-simple`:
+
+- Table `session` (migration 009), with expired rows pruned every 15
+  minutes.
+- The cookie `maxAge` is 30 days (`SESSION_MAX_AGE_MS`). The unrelated
+  30-minute `SESSION_IDLE_SECONDS` closes *reading* sessions.
+- In production, `trust proxy` is 1, so the Secure cookie works behind
+  Render's proxy.
 
 Migration 015 revokes old published keys and pre-binding sessions. Deploy the
-server, SPA, userscript 5.8.1 and migrations 015–018 together, then verify the
+server, SPA, userscript 5.8.1 or later (currently 5.9.1) and migrations
+015–018 together, then verify the
 environment key and dashboard session binding.
 See [the release checklist](./SECURITY-REMEDIATION-2026-09-11.md).
 
+## Security headers
+
+Set by hand in `src/app.ts`; helmet isn't used.
+
+- `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+  `X-Frame-Options: DENY`.
+- HSTS (`max-age=31536000`) in production.
+- `x-powered-by` is disabled.
+- CSP: `default-src 'self'; script-src 'self'; style-src 'self'
+  'unsafe-inline'; img-src 'self' https: data:; connect-src 'self' wss:;
+  font-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action
+  'self'`.
+
+CORS allows `ALLOWED_ORIGINS` and the reader hosts (`READER_HOSTS` in
+`src/services/ReaderUrl.ts`, with and without `www.`), with credentials.
+
 ## Rate limiting
 
-API traffic is limited to 600 requests/minute per IP/process. Restore, backup-run
-and key-issuance paths share a five-per-minute limit; login separately reserves
-attempts before awaiting password verification. These limits suit the current
+All `/api/*` traffic, including `/api/auth`, is limited to 600 requests per
+minute per IP (`express-rate-limit`, `src/app.ts`). `/api/v1/import`,
+`/api/v1/backups/run` and `/api/auth/api-key` are also limited to 5 per
+minute. Login has its own limiter, 5 attempts per IP per 15 minutes
+(`src/middleware/rateLimiter.ts`). Each attempt is reserved before the bcrypt
+check runs. These limits suit the current
 single-process deployment. A multi-instance deployment needs shared limiter state.
 
 ## The bot was removed
@@ -122,5 +170,7 @@ something the app's own queries interact with.
 - Full endpoint list and per-route auth/validation status: [API_REFERENCE.md](./API_REFERENCE.md)
 - Schema and migration history: [DATABASE.md](./DATABASE.md)
 - Env vars, Render/Docker runbook: [DEPLOYMENT.md](./DEPLOYMENT.md)
+- Userscript install, update and build: [USERSCRIPT.md](./USERSCRIPT.md)
+- Security policy and reporting: [SECURITY.md](../SECURITY.md)
 - What's tested and how to run it: [TESTING.md](./TESTING.md)
 - Open backlog: [ROADMAP.md](./ROADMAP.md)

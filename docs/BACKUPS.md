@@ -9,6 +9,29 @@ process is involved. Supabase still does the database reads and sends the data, 
 database load and outbound traffic. The dump does not modify source records, although its read locks
 can conflict with schema changes. Prefer a quiet time outside deployments.
 
+## How the automatic in-app backups work
+
+`src/services/BackupService.ts` runs inside the server process:
+
+- **Schedule:** the first check runs 60 seconds after boot, then every 6
+  hours. A new backup is written only when the last one is at least 20 hours
+  old. If the server is asleep or down, nothing runs.
+- **Where:** a private Supabase Storage bucket, `readsync-backups`, at
+  `<userId>/readsync-backup-YYYY-MM-DD.json`. A second backup on the same day
+  overwrites that day's file.
+- **Retention:** the newest 30 files are kept.
+- **Size cap:** 18 MB per backup (`BACKUP_MAX_BYTES` in `src/config.ts`).
+- **Content:** compact version-2 exports (`scope: "library-backup"`). See
+  [API_REFERENCE.md](./API_REFERENCE.md) for what they include, and restore
+  them through `POST /api/v1/import`.
+- **Off switch:** backups are disabled when `SUPABASE_URL` or
+  `SUPABASE_SERVICE_KEY` is unset.
+- **Manual run:** `POST /api/v1/backups/run`, limited to 5 per minute.
+  `GET /api/v1/backups` lists the files.
+
+The rest of this guide covers full database dumps, which this service does
+not replace.
+
 ## 1. Check the connection and PostgreSQL version
 
 In Supabase, open **Connect → Session pooler** and check the host, username and database. Use port
@@ -25,7 +48,12 @@ DUMP_URL="postgresql://postgres.<project-ref>:<password>@<region>.pooler.supabas
 Use the **database password**, not the Supabase API/service key. Keeping it in `.env` avoids putting
 it in shell history or in the repo.
 
-The examples use `postgres:17`. Check the server version in the Supabase SQL editor with `SHOW
+`DUMP_URL` is used only by this guide; the server never reads it. It's listed
+(commented out) in `.env.example`.
+
+The examples use `postgres:17`. That's separate from the `postgres:16-alpine`
+image `docker-compose.yml` uses for local development; the dump client
+version only has to match the server you dump. Check the server version in the Supabase SQL editor with `SHOW
 server_version;`. If the server uses another major version, prefer that matching Docker tag
 throughout this guide. `pg_dump` must not be older than the server's major version.
 
@@ -147,7 +175,7 @@ also omits grants (`--no-acl`).
 aren't contained in the dump.
 
 Because `--no-owner` and `--no-acl` are used, the custom-format archive drops ownership and
-permission statements, so the dump is portable across roles.Because the dump is taken as a
+permission statements, so the dump is portable across roles. Because the dump is taken as a
 privileged connection, it will typically include Supabase-managed schemas such as `auth` and
 `storage` — password hashes, refresh tokens, session tokens and OAuth client secrets. Treat the file
 accordingly.

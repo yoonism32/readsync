@@ -33,12 +33,26 @@ To build everything (backend + frontend + userscript) for production:
 npm run build:all
 ```
 
+The userscript build embeds `API_KEY` and needs `USERSCRIPT_UPDATE_TOKEN`.
+Both must be set first. Install and update instructions are in
+[docs/USERSCRIPT.md](./docs/USERSCRIPT.md).
+
+Before pushing, run what CI runs:
+
+```bash
+npm run verify
+```
+
 ## Documentation
 
-Everything else lives in [`docs/`](./docs/README.md) — architecture, the
-full API reference, database/migration history, deployment runbook, test
-coverage map, and the open roadmap.
+Everything else lives in [`docs/`](./docs/README.md): architecture, the
+full API reference, database/migration history, deployment runbook,
+userscript guide, troubleshooting, test coverage map, and the open roadmap.
+
+- [CONTRIBUTING.md](./CONTRIBUTING.md): setup, checks, conventions
+- [SECURITY.md](./SECURITY.md): how to report a vulnerability
+- [CHANGELOG.md](./CHANGELOG.md): notable changes
 
 ## License
 
-MIT
+[MIT](./LICENSE)

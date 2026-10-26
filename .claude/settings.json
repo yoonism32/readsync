@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm test)",
+      "Bash(npm run test*)",
+      "Bash(npm run typecheck)",
+      "Bash(npm run check)",
+      "Bash(npm run lint*)",
+      "Bash(npm run format)",
+      "Bash(npm run verify)",
+      "Bash(npm run build*)",
+      "Bash(npm run test --prefix frontend)",
+      "Bash(npm run lint --prefix frontend)",
+      "Bash(npm run build --prefix frontend)",
+      "Bash(npm run build --prefix userscript)",
+      "Bash(npx vitest *)",
+      "Bash(npx biome *)",
+      "Bash(npx tsc --noEmit*)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.*.local)",
+      "Read(./.env.production)",
+      "Read(./.env.development)",
+      "Read(./.env.test)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(chmod 777 *)",
+      "Bash(curl * | bash*)",
+      "Bash(wget * | bash*)",
+      "Bash(curl * | sh*)",
+      "Bash(wget * | sh*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git reset --hard*)",
+      "Bash(*DROP TABLE*)",
+      "Bash(*drop table*)",
+      "Bash(truncate *)",
+      "Bash(ssh *)",
+      "Bash(scp *)"
+    ]
+  }
+}
