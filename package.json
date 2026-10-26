@@ -1,7 +1,7 @@
 {
   "name": "readsync-api",
   "version": "1.0.0",
-  "description": "Cross-device reading progress sync for NovelBin with dashboard",
+  "description": "Cross-device reading progress sync for NovelPing with dashboard",
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
@@ -21,7 +21,7 @@
   "keywords": [
     "reading",
     "sync",
-    "novelbin",
+    "novelping",
     "userscript",
     "progress"
   ],

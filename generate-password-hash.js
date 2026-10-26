@@ -1,49 +1,4 @@
 #!/usr/bin/env node
-// /**
-//  * Password Hash Generator for ReadSync
-//  * 
-//  * Usage: node generate-password-hash.js YOUR_PASSWORD
-//  * 
-//  * This script generates a bcrypt hash for your password.
-//  * Copy the hash to your .env file as ADMIN_PASSWORD_HASH
-//  */
-
-// const bcrypt = require('bcryptjs');
-
-// // Get password from command line argument
-// const password = process.argv[2];
-
-// if (!password) {
-//     console.error('❌ Error: No password provided');
-//     console.log('');
-//     console.log('Usage: node generate-password-hash.js YOUR_PASSWORD');
-//     console.log('');
-//     console.log('Example:');
-//     console.log('  node generate-password-hash.js mySecurePassword123');
-//     console.log('');
-//     process.exit(1);
-// }
-
-// // Generate hash
-// console.log('Generating bcrypt hash...\n');
-
-// bcrypt.hash(password, 10, (err, hash) => {
-//     if (err) {
-//         console.error('Error generating hash:', err);
-//         process.exit(1);
-//     }
-
-//     console.log('Hash generated successfully!\n');
-//     console.log('Copy this line to your .env file:');
-//     console.log('─────────────────────────────────────────────────────────');
-//     console.log(`ADMIN_PASSWORD_HASH="${hash}"`);
-//     console.log('─────────────────────────────────────────────────────────');
-//     console.log('');
-//     console.log('IMPORTANT: Keep this hash secret! Do not commit to git.');
-//     console.log('');
-// });
-
-//#!/usr/bin/env node
 /**
  * Password Hash Generator for ReadSync
  *
@@ -59,6 +14,7 @@
 const bcrypt = require('bcryptjs');
 
 const ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
+const BCRYPT_MAX_BYTES = 72; // bcrypt ignores everything past 72 bytes
 const MIN_LEN = 12;
 
 function fail(msg) {
@@ -106,6 +62,9 @@ function promptHidden(question) {
           stdin.removeListener('data', onData);
           stdout.write('\n');
           process.exit(130);
+        } else if (ch === '\u0004') {    // Ctrl-D: end input like Enter
+          finish();
+          return;
         } else if (ch === '\r' || ch === '\n') {
           finish();
           return;
@@ -124,6 +83,10 @@ function promptHidden(question) {
 }
 
 async function main() {
+  if (!Number.isInteger(ROUNDS) || ROUNDS < 10 || ROUNDS > 15) {
+    fail('BCRYPT_ROUNDS must be an integer from 10 to 15.');
+  }
+
   // Refuse argv: it leaks to shell history / process list.
   if (process.argv.length > 2) {
     console.error('❌ Refusing to read the password from the command line.');
@@ -148,6 +111,10 @@ async function main() {
   } else {
     password = await readStdin();
     if (!password) fail('No password provided on stdin.');
+  }
+
+  if (Buffer.byteLength(password, 'utf8') > BCRYPT_MAX_BYTES) {
+    fail(`Password is longer than ${BCRYPT_MAX_BYTES} bytes; bcrypt would silently ignore the rest.`);
   }
 
   if (password.length < MIN_LEN) {
