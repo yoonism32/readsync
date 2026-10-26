@@ -35,7 +35,7 @@ applied migration file. See [DATABASE.md](./DATABASE.md).
 **Symptom:** the startup log warns `ADMIN_PASSWORD_HASH not set`.
 
 **Cause:** login is disabled. Generate a hash with
-`node generate-password-hash.js <password>` and set it. The
+`node generate-password-hash.js` (it prompts for the password) and set it. The
 `docker-compose.yml` dev setup ships without one.
 
 ---
@@ -88,7 +88,8 @@ built. Run `npm run build:all`.
 `Set USERSCRIPT_UPDATE_TOKEN ...`.
 
 **Cause:** both must be in the build environment or the root `.env`. CI reads
-them from repository secrets.
+them from repository secrets. For Docker, pass them as `--secret` flags (see
+[DEPLOYMENT.md](./DEPLOYMENT.md#production)).
 
 ---
 

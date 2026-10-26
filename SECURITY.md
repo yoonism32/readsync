@@ -83,9 +83,10 @@ A summary, so reporters know what is intentional. Details live in
   served only at a URL containing the secret `USERSCRIPT_UPDATE_TOKEN`. Treat
   both as one credential: if either leaks, rotate `API_KEY`, set a new token,
   rebuild and redeploy, then reinstall the userscript from the new URL.
-- `node generate-password-hash.js <password>` takes the password as an
-  argument, so it lands in your shell history. Start the command with a space
-  (with `HISTCONTROL=ignorespace`) or clear the history entry afterwards.
+- `node generate-password-hash.js` prompts for the password with echo off.
+  It also accepts it on stdin, and refuses command-line arguments so the
+  password never reaches shell history or `ps`. Passwords longer than 72
+  bytes are rejected, because bcrypt would silently ignore the rest.
 - Secrets belong in the host's environment settings (Render dashboard),
   a local `.env` (gitignored) and GitHub Actions secrets. They never belong in
   the repository. `.env.example` lists the variable names only.

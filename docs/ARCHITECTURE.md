@@ -32,9 +32,7 @@ Startup order (`src/server.ts`):
 
 Unhandled rejections and uncaught exceptions are logged and sent to the
 optional alert webhook (`src/services/Alerter.ts`). Uncaught exceptions also
-exit the process, so Render restarts it. A temporary 15-second
-memory/pool/socket diagnostic log line from the 2026-09-12 OOM investigation
-is still in `server.ts`.
+exit the process, so Render restarts it.
 
 ## Data flow: reading progress sync
 

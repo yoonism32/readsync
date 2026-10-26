@@ -28,7 +28,8 @@ It proxies `/api`, `/u`, `/health` and `/socket.io` to port 3000.
 
 **The userscript build needs `API_KEY` and `USERSCRIPT_UPDATE_TOKEN`** in the
 environment or in the root `.env`. Without them, `npm run build:all` and
-`npm run verify` fail. See [docs/USERSCRIPT.md](./docs/USERSCRIPT.md).
+`npm run verify` fail. See [docs/USERSCRIPT.md](./docs/USERSCRIPT.md). For
+Docker builds, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#production).
 
 Full env var list: [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md#environment-variables).
 

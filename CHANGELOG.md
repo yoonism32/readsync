@@ -26,6 +26,11 @@ date. Detailed write-ups for earlier periods are in
   `docs/TROUBLESHOOTING.md`.
 
 ### Changed
+- `generate-password-hash.js` no longer accepts the password as an argument.
+  It prompts with echo off or reads stdin, so the password never reaches
+  shell history. It also rejects passwords over bcrypt's 72-byte limit.
+- Docker production builds take `API_KEY` and `USERSCRIPT_UPDATE_TOKEN` as
+  BuildKit secrets. Previously a container build had no way to receive them.
 - Render's Node runtime is pinned to a patched 22 release (22.23.4).
 - Docs refreshed against the current source (2026-10-26).
 
@@ -39,6 +44,8 @@ date. Detailed write-ups for earlier periods are in
   and restore-compatible.
 
 ### Removed
+- The temporary 15-second memory/pool/socket diagnostic log from the
+  2026-09-12 OOM investigation.
 - The retired legacy explorer and unused template assets.
 - The dead `schema.ts` bootstrap and the demo API key.
 

@@ -30,11 +30,28 @@ guessable — set `USERSCRIPT_UPDATE_TOKEN` in the build environment alongside
 `Dockerfile` mirrors this for container deploys: the production stage
 copies `dist/`, `public/`, `dist-userscript/`, `package.json`, and pruned
 `node_modules`. **Docker builds need the userscript secrets too.** The build
-stage runs `npm run build:all`, which builds the userscript. `.dockerignore`
-keeps `.env` out of the build context, and the Dockerfile declares no build
-args for `API_KEY` or `USERSCRIPT_UPDATE_TOKEN`. As written, a container build
-has no way to receive them, and the userscript step fails. Render isn't
-affected, because it builds with its own environment variables. There's no `bot/` or `dist-bot/` to exclude anymore — the
+stage runs `npm run build:all`, which builds the userscript, and
+`.dockerignore` keeps `.env` out of the build context. Pass the two values in
+as BuildKit secrets. They are mounted only for that step and are never
+written to an image layer or `docker history`:
+
+```bash
+docker build --target production --no-cache-filter build \
+  --secret id=api_key,env=API_KEY \
+  --secret id=userscript_update_token,env=USERSCRIPT_UPDATE_TOKEN \
+  -t readsync .
+```
+
+Without them the build fails with `secret api_key: not found`.
+
+Keep `--no-cache-filter build`. Secrets aren't part of BuildKit's cache key,
+so without it a rebuild after rotating `API_KEY` silently reuses the
+userscript built with the old key.
+
+The finished image still contains the key, inside
+`dist-userscript/readsync.user.js`. Treat the image as secret and keep it in a
+private registry. Render isn't affected by any of this, because it builds
+with its own environment variables. There's no `bot/` or `dist-bot/` to exclude anymore — the
 bot was removed outright, see
 [ARCHITECTURE.md](./ARCHITECTURE.md#the-bot-was-removed).
 
@@ -53,7 +70,7 @@ variable is set by hand in the Render dashboard.
 | Var | Purpose |
 |---|---|
 | `ADMIN_USERNAME` | Dashboard login username, default `admin` |
-| `ADMIN_PASSWORD_HASH` | bcrypt hash — generate with `node generate-password-hash.js YOUR_PASSWORD` (see [SECURITY.md](../SECURITY.md#notes-for-operators) about shell history). Unset = dashboard login disabled, with a startup warning |
+| `ADMIN_PASSWORD_HASH` | bcrypt hash — generate with `node generate-password-hash.js`, which prompts with echo off or reads stdin, never argv. Unset = dashboard login disabled, with a startup warning |
 | `SESSION_SECRET` | `express-session` signing secret |
 | `PORT` | HTTP port (defaults to 3000) |
 | `DATABASE_URL` | Postgres connection string (Supabase) |
