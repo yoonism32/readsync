@@ -35,6 +35,15 @@ date. Detailed write-ups for earlier periods are in
 - Docs refreshed against the current source (2026-10-26).
 
 ### Fixed
+- 2026-10-26 Dependabot sweep across all three lockfiles:
+  - **Runtime:** proxy-addr 2.0.8 (critical), body-parser 2.4.0, compression
+    1.8.2 and sharp 0.35.5 (high), ip-address 10.7.4, fast-copy 4.1.0; express
+    5.3.0 comes along with them.
+  - **Build/dev:** vite 8.3.5, vitest 4.1.12, source-map-js 1.2.2,
+    undici 8.12.2, zod 4.6.7.
+  - ip-address and fast-copy are pinned in `overrides`. Releases one day
+    newer existed, and the older patched versions avoid an untested release.
+    Drop the pins once those newer versions have aged.
 - npm audit vulnerabilities in lockfiles, including vitest 4.1.11 for a
   path-traversal advisory.
 - Server URL helpers handle `chapter-auto-N` URLs.

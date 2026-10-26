@@ -64,5 +64,9 @@
   },
   "engines": {
     "node": ">=22.12.0"
+  },
+  "overrides": {
+    "fast-copy": "4.1.0",
+    "ip-address": "10.7.4"
   }
 }
