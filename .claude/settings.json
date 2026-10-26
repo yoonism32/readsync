@@ -3,24 +3,23 @@
   "permissions": {
     "allow": [
       "Bash(npm test)",
-      "Bash(npm run test*)",
+      "Bash(npm run test)",
       "Bash(npm run typecheck)",
       "Bash(npm run check)",
-      "Bash(npm run lint*)",
-      "Bash(npm run format)",
+      "Bash(npm run lint)",
       "Bash(npm run verify)",
-      "Bash(npm run build*)",
+      "Bash(npm run build)",
+      "Bash(npm run build:all)",
       "Bash(npm run test --prefix frontend)",
       "Bash(npm run lint --prefix frontend)",
       "Bash(npm run build --prefix frontend)",
       "Bash(npm run build --prefix userscript)",
-      "Bash(npx vitest *)",
-      "Bash(npx biome *)",
-      "Bash(npx tsc --noEmit*)",
-      "Bash(git status*)",
-      "Bash(git diff*)",
-      "Bash(git log*)",
-      "Bash(git show*)"
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git diff --stat)",
+      "Bash(git diff --cached)",
+      "Bash(git log --oneline)",
+      "Bash(git show --stat)"
     ],
     "deny": [
       "Read(./.env)",
@@ -43,7 +42,10 @@
       "Bash(*drop table*)",
       "Bash(truncate *)",
       "Bash(ssh *)",
-      "Bash(scp *)"
+      "Bash(scp *)",
+      "Bash(git * --output*)",
+      "Bash(git * --ext-diff*)",
+      "Bash(git * --textconv*)"
     ]
   }
 }
