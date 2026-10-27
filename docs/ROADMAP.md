@@ -779,3 +779,14 @@ fall through:
       or “just a tooltip string” feeling. If this passes design review, pair it
       with the `This week` filter and the richer data view described in the
       hourly-bento roadmap item above.
+
+- [ ] **Replace the stale "Rs" app icons with the current bookmark mark.**
+      Low priority (found 2026-10-27). `public/apple-touch-icon.png`,
+      `android-chrome-192x192.png`, `android-chrome-512x512.png` and
+      `favicon.ico` still show the original 2025 "Rs" monogram, while the tab
+      icon and header use the bookmark in `frontend/public/favicon.svg`. Nothing
+      links them, but `express.static(PUBLIC_DIR)` still serves them, and iOS
+      requests `/apple-touch-icon.png` automatically, so "Add to Home Screen"
+      shows the old logo. Fix: render the PNGs and ICO from the SVG (`sharp` is
+      already a dependency) and fill the empty `name`/`short_name` in
+      `public/site.webmanifest`.

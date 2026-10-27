@@ -77,3 +77,6 @@ coverage/
 # Merge leftovers
 *.orig
 *.rej
+
+# graphify knowledge graph output
+graphify-out/
