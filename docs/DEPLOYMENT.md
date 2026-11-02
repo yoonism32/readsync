@@ -68,7 +68,7 @@ exits without them. `render.yaml` declares only `NODE_VERSION`. Every other
 variable is set by hand in the Render dashboard.
 
 | Var | Purpose |
-|---|---|
+| --- | --- |
 | `ADMIN_USERNAME` | Dashboard login username, default `admin` |
 | `ADMIN_PASSWORD_HASH` | bcrypt hash — generate with `node generate-password-hash.js`, which prompts with echo off or reads stdin, never argv. Unset = dashboard login disabled, with a startup warning |
 | `SESSION_SECRET` | `express-session` signing secret |
@@ -88,11 +88,12 @@ variable is set by hand in the Render dashboard.
 | `ALERT_WEBHOOK_URL` | Optional. Runtime errors are POSTed here as JSON (`src/services/Alerter.ts`). Unset = errors reach stdout only, and startup logs a warning. Deliberately not required by `validateEnvironment()` — losing alerts is bad, refusing to boot because alerting isn't configured is worse. |
 | `ALERT_COOLDOWN_MS` | Per-error alert cooldown, default `900000` (15m) |
 | `ALERT_MAX_PER_HOUR` | Hourly alert ceiling across all errors, default `20` |
+| `LOG_MEMORY_USAGE` | Optional temporary OOM diagnostic. Set to `1` or `true` to log `heapUsedMB` during auto-update requests; unset/off by default. |
 
 Not read by the server, but used elsewhere:
 
 | Var | Used by |
-|---|---|
+| --- | --- |
 | `READSYNC_TEST_DATABASE_URL` | Enables the integration tests. Must be a localhost `readsync_audit` database (`__tests__/setup.ts`). See [TESTING.md](./TESTING.md) |
 | `DUMP_URL` | The manual `pg_dump` workflow in [BACKUPS.md](./BACKUPS.md) |
 

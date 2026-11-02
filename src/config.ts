@@ -142,6 +142,9 @@ export const ALERT_MAX_PER_HOUR = positiveInteger(
   process.env.ALERT_MAX_PER_HOUR,
   20,
 );
+export const LOG_MEMORY_USAGE = ['1', 'true'].includes(
+  (process.env.LOG_MEMORY_USAGE ?? '').trim().toLowerCase(),
+);
 
 export function validateEnvironment(): void {
   const required = ['DATABASE_URL', 'SESSION_SECRET'];
