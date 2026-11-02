@@ -67,6 +67,9 @@
   },
   "overrides": {
     "fast-copy": "4.1.0",
-    "ip-address": "10.7.4"
+    "ip-address": "10.7.4",
+    "nodemon": {
+      "minimatch": "11.0.1"
+    }
   }
 }
